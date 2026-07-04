@@ -1,0 +1,26 @@
+# IntelliJ
+.idea/
+*.iml
+
+# VSCode
+.vscode/
+
+# Maven
+target/
+
+# Wrapper
+!.mvn/wrapper/maven-wrapper.jar
+
+# Logs
+*.log
+
+# Mac
+.DS_Store
+
+# Env
+.env
+.env.*
+
+# Node
+node_modules/
+dist/
