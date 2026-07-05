@@ -36,4 +36,10 @@ public class Settings extends BaseEntity {
 
     @Column(name = "estimate_footer_text", columnDefinition = "TEXT")
     private String estimateFooterText;
+
+    @Column(name = "locale", nullable = false, length = 10)
+    private String locale = "pt-PT";
+
+    @Column(name = "timezone", nullable = false, length = 50)
+    private String timezone = "Europe/Lisbon";
 }

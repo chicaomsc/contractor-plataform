@@ -36,6 +36,9 @@ public class Branding extends BaseEntity {
     @Column(length = 500)
     private String tagline;
 
+    @Column(name = "accent_color", length = 7)
+    private String accentColor;
+
     @Column(name = "about_text", columnDefinition = "TEXT")
     private String aboutText;
 }

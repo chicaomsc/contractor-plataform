@@ -49,6 +49,7 @@ public class CompanyService {
                     existing.setLogoUrl(branding.getLogoUrl());
                     existing.setPrimaryColor(branding.getPrimaryColor());
                     existing.setSecondaryColor(branding.getSecondaryColor());
+                    existing.setAccentColor(branding.getAccentColor());
                     existing.setTagline(branding.getTagline());
                     existing.setAboutText(branding.getAboutText());
                     return brandingRepository.save(existing);
@@ -64,6 +65,8 @@ public class CompanyService {
                     existing.setDefaultTaxRate(settings.getDefaultTaxRate());
                     existing.setEstimateValidityDays(settings.getEstimateValidityDays());
                     existing.setEstimateFooterText(settings.getEstimateFooterText());
+                    existing.setLocale(settings.getLocale());
+                    existing.setTimezone(settings.getTimezone());
                     return settingsRepository.save(existing);
                 })
                 .orElseGet(() -> settingsRepository.save(settings));
