@@ -1,0 +1,52 @@
+package io.chicaodw.platform.common.storage;
+
+import io.chicaodw.platform.common.exception.StorageException;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.util.UUID;
+
+@Service
+@RequiredArgsConstructor
+public class LocalStorageService implements StorageService {
+
+    private final StorageProperties properties;
+
+    @Override
+    public String store(String folder, MultipartFile file) {
+        try {
+            Path targetDir = Path.of(properties.getBasePath()).resolve(folder).normalize();
+            Files.createDirectories(targetDir);
+
+            String filename = UUID.randomUUID() + extension(file.getOriginalFilename());
+            Files.copy(file.getInputStream(), targetDir.resolve(filename), StandardCopyOption.REPLACE_EXISTING);
+
+            return "/uploads/" + folder + "/" + filename;
+        } catch (IOException e) {
+            throw new StorageException("Failed to store file in folder: " + folder, e);
+        }
+    }
+
+    @Override
+    public void delete(String storedPath) {
+        if (storedPath == null || storedPath.isBlank()) return;
+        try {
+            // storedPath is "/uploads/<folder>/<filename>"; strip the "/uploads/" prefix
+            String relative = storedPath.replaceFirst("^/uploads/", "");
+            Path target = Path.of(properties.getBasePath()).resolve(relative).normalize();
+            Files.deleteIfExists(target);
+        } catch (IOException e) {
+            throw new StorageException("Failed to delete file: " + storedPath, e);
+        }
+    }
+
+    private static String extension(String filename) {
+        if (filename == null || !filename.contains(".")) return "";
+        return "." + filename.substring(filename.lastIndexOf('.') + 1).toLowerCase();
+    }
+}

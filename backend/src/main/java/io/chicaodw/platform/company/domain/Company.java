@@ -32,8 +32,20 @@ public class Company extends BaseEntity {
     @Column(nullable = false)
     private String email;
 
+    @Column(name = "trade_name")
+    private String tradeName;
+
     @Column(length = 50)
     private String phone;
+
+    @Column(length = 50)
+    private String whatsapp;
+
+    @Column(length = 500)
+    private String website;
+
+    @Column(name = "tax_number", length = 50)
+    private String taxNumber;
 
     @Column(nullable = false, length = 2)
     private String country;

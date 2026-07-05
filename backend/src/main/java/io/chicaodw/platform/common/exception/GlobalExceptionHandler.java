@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.core.AuthenticationException;
@@ -53,6 +54,14 @@ public class GlobalExceptionHandler {
         return problem;
     }
 
+    @ExceptionHandler(AccessDeniedException.class)
+    public ProblemDetail handleAccessDenied(AccessDeniedException ex) {
+        var problem = ProblemDetail.forStatus(HttpStatus.FORBIDDEN);
+        problem.setTitle("Access Denied");
+        problem.setDetail("You do not have permission to perform this action");
+        return problem;
+    }
+
     @ExceptionHandler(DisabledException.class)
     @ResponseStatus(HttpStatus.UNAUTHORIZED)
     public ProblemDetail handleDisabled(DisabledException ex) {
@@ -68,6 +77,15 @@ public class GlobalExceptionHandler {
         var problem = ProblemDetail.forStatus(HttpStatus.UNAUTHORIZED);
         problem.setTitle("Authentication Failed");
         problem.setDetail("Invalid email or password");
+        return problem;
+    }
+
+    @ExceptionHandler(StorageException.class)
+    public ProblemDetail handleStorage(StorageException ex) {
+        log.error("Storage error", ex);
+        var problem = ProblemDetail.forStatus(HttpStatus.INTERNAL_SERVER_ERROR);
+        problem.setTitle("Storage Error");
+        problem.setDetail("File operation failed");
         return problem;
     }
 

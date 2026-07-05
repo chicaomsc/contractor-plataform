@@ -41,4 +41,13 @@ public class Branding extends BaseEntity {
 
     @Column(name = "about_text", columnDefinition = "TEXT")
     private String aboutText;
+
+    @Column(name = "footer_text", columnDefinition = "TEXT")
+    private String footerText;
+
+    @Column(name = "quotation_prefix", length = 20)
+    private String quotationPrefix;
+
+    @Column(name = "signature_name")
+    private String signatureName;
 }
