@@ -25,7 +25,7 @@ class PlatformApplicationTests extends AbstractIntegrationTest {
         );
         assertThat(tables).containsExactlyInAnyOrder(
                 "brandings", "companies", "flyway_schema_history",
-                "refresh_tokens", "settings", "users"
+                "gallery_items", "refresh_tokens", "services", "settings", "users"
         );
     }
 }
