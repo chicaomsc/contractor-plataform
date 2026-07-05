@@ -1,11 +1,16 @@
 package io.chicaodw.platform.common.exception;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.DisabledException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.util.Map;
@@ -13,6 +18,7 @@ import java.util.stream.Collectors;
 
 @Slf4j
 @RestControllerAdvice
+@Order(0)
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(ResourceNotFoundException.class)
@@ -44,6 +50,24 @@ public class GlobalExceptionHandler {
         problem.setTitle("Validation Failed");
         problem.setDetail("One or more fields are invalid");
         problem.setProperty("errors", errors);
+        return problem;
+    }
+
+    @ExceptionHandler(DisabledException.class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    public ProblemDetail handleDisabled(DisabledException ex) {
+        var problem = ProblemDetail.forStatus(HttpStatus.UNAUTHORIZED);
+        problem.setTitle("Account Disabled");
+        problem.setDetail("Your account is inactive");
+        return problem;
+    }
+
+    @ExceptionHandler({BadCredentialsException.class, AuthenticationException.class})
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    public ProblemDetail handleBadCredentials(AuthenticationException ex) {
+        var problem = ProblemDetail.forStatus(HttpStatus.UNAUTHORIZED);
+        problem.setTitle("Authentication Failed");
+        problem.setDetail("Invalid email or password");
         return problem;
     }
 
