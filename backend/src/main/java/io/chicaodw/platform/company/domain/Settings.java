@@ -42,4 +42,10 @@ public class Settings extends BaseEntity {
 
     @Column(name = "timezone", nullable = false, length = 50)
     private String timezone = "Europe/Lisbon";
+
+    @Column(name = "date_format", nullable = false, length = 50)
+    private String dateFormat = "dd/MM/yyyy";
+
+    @Column(name = "number_format", nullable = false, length = 50)
+    private String numberFormat = "pt-PT";
 }

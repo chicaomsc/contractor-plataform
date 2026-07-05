@@ -1,7 +1,13 @@
 package io.chicaodw.platform.company.application;
 
+import io.chicaodw.platform.common.entity.Address;
 import io.chicaodw.platform.common.exception.BusinessRuleException;
 import io.chicaodw.platform.common.exception.ResourceNotFoundException;
+import io.chicaodw.platform.common.storage.StorageService;
+import io.chicaodw.platform.company.api.dto.BrandingResponse;
+import io.chicaodw.platform.company.api.dto.CompanyResponse;
+import io.chicaodw.platform.company.api.dto.UpdateCompanyRequest;
+import io.chicaodw.platform.company.api.mapper.CompanyMapper;
 import io.chicaodw.platform.company.domain.Branding;
 import io.chicaodw.platform.company.domain.Company;
 import io.chicaodw.platform.company.domain.Settings;
@@ -11,6 +17,7 @@ import io.chicaodw.platform.company.infrastructure.persistence.SettingsRepositor
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.UUID;
 
@@ -19,9 +26,13 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class CompanyService {
 
-    private final CompanyRepository companyRepository;
+    private final CompanyRepository  companyRepository;
     private final BrandingRepository brandingRepository;
     private final SettingsRepository settingsRepository;
+    private final StorageService     storageService;
+    private final CompanyMapper      companyMapper;
+
+    // ── Internal (used by AuthService during onboarding) ─────────────────────
 
     @Transactional(readOnly = true)
     public Company findById(UUID id) {
@@ -70,5 +81,78 @@ public class CompanyService {
                     return settingsRepository.save(existing);
                 })
                 .orElseGet(() -> settingsRepository.save(settings));
+    }
+
+    // ── Profile management (Sprint 5) ─────────────────────────────────────────
+
+    @Transactional(readOnly = true)
+    public CompanyResponse getProfile(UUID companyId) {
+        return companyMapper.toCompanyResponse(findById(companyId));
+    }
+
+    public CompanyResponse updateProfile(UUID companyId, UpdateCompanyRequest request) {
+        var company = findById(companyId);
+
+        if (request.name()      != null) company.setName(request.name());
+        if (request.tradeName() != null) company.setTradeName(request.tradeName());
+        if (request.email()     != null) company.setEmail(request.email());
+        if (request.phone()     != null) company.setPhone(request.phone());
+        if (request.whatsapp()  != null) company.setWhatsapp(request.whatsapp());
+        if (request.website()   != null) company.setWebsite(request.website());
+        if (request.taxNumber() != null) company.setTaxNumber(request.taxNumber());
+        if (request.country()   != null) company.setCountry(request.country());
+
+        if (request.address() != null) {
+            var addr    = request.address();
+            var current = company.getAddress() != null ? company.getAddress() : Address.builder().build();
+            company.setAddress(Address.builder()
+                    .street(addr.street()     != null ? addr.street()     : current.getStreet())
+                    .city(addr.city()         != null ? addr.city()       : current.getCity())
+                    .postalCode(addr.postalCode() != null ? addr.postalCode() : current.getPostalCode())
+                    .region(addr.region()     != null ? addr.region()     : current.getRegion())
+                    .country(addr.country()   != null ? addr.country()    : current.getCountry())
+                    .build());
+        }
+
+        return companyMapper.toCompanyResponse(companyRepository.save(company));
+    }
+
+    // ── Logo management ───────────────────────────────────────────────────────
+
+    public BrandingResponse uploadLogo(UUID companyId, MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new BusinessRuleException("Logo file cannot be empty");
+        }
+        String contentType = file.getContentType();
+        if (contentType == null || !contentType.startsWith("image/")) {
+            throw new BusinessRuleException("Only image files are accepted for the logo");
+        }
+
+        var branding = brandingRepository.findByCompanyId(companyId)
+                .orElseThrow(() -> new ResourceNotFoundException("Branding", companyId));
+
+        // Delete the existing logo file before storing the new one
+        if (branding.getLogoUrl() != null) {
+            storageService.delete(branding.getLogoUrl());
+        }
+
+        String folder  = "company/" + companyId + "/logo";
+        String logoUrl = storageService.store(folder, file);
+        branding.setLogoUrl(logoUrl);
+
+        return companyMapper.toBrandingResponse(brandingRepository.save(branding));
+    }
+
+    public BrandingResponse deleteLogo(UUID companyId) {
+        var branding = brandingRepository.findByCompanyId(companyId)
+                .orElseThrow(() -> new ResourceNotFoundException("Branding", companyId));
+
+        if (branding.getLogoUrl() != null) {
+            storageService.delete(branding.getLogoUrl());
+            branding.setLogoUrl(null);
+            brandingRepository.save(branding);
+        }
+
+        return companyMapper.toBrandingResponse(branding);
     }
 }
