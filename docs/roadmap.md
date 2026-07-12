@@ -1,6 +1,6 @@
 # Roadmap do Produto
 
-**Versão:** 2.2 — Sprint 7B concluída  
+**Versão:** 2.3 — Sprint 7B.5 concluída  
 **Data:** 2026-07-12  
 **Horizonte:** MVP + Pós-MVP imediato
 
@@ -28,6 +28,7 @@
 | Backend — API Pública (`/public/services`, `/public/gallery`) | Concluído |
 | Design Direction — Landing JR Pinturas | Concluído |
 | Frontend — Foundation (Next.js, tokens, layout, SEO) | Concluído |
+| Frontend — Integração pública (hooks, DTOs, preview técnico) | Concluído |
 | Frontend — Landing Page Pública | Pendente (Sprint 7C) |
 | Frontend — Painel Administrativo | Não iniciado |
 
@@ -163,12 +164,36 @@
 
 ---
 
+## Sprint 7B.5 — Public Site Integration ✅
+
+**Objectivo:** Validar a integração frontend/backend dos contratos públicos antes da landing visual.
+
+**Frontend:**
+- [x] `usePublicSite`, `usePublicServices`, `usePublicGallery`
+- [x] Query keys centralizadas
+- [x] Separação API DTO → Mapper → ViewModel → Component
+- [x] Preview técnico temporário em `/`
+- [x] Loading, erro bloqueante, falha parcial e empty states
+- [x] Branding seguro por CSS custom properties
+- [x] Testes de hooks, mappers, API client e preview
+
+**Backend:**
+- [x] Contratos públicos validados por testes de integração
+- [x] Isolamento por empresa confirmado
+- [x] Slugs com acentos normalizados no onboarding
+- [x] Before/after opcionais confirmados
+
+**Critério de saída:** `/` prova o carregamento dos três endpoints públicos e mostra dados reais em formato técnico temporário, sem criar secções definitivas da landing.
+
+---
+
 ## Sprint 7C — Landing Page Pública
 
 **Objectivo:** Implementar todas as secções de conteúdo da landing com dados reais.
 
 **Pré-requisitos bloqueantes:**
 - [x] Sprint 7B concluída
+- [x] Sprint 7B.5 concluída
 - [ ] Logo do cliente em alta resolução recebida
 - [ ] Mínimo 2 fotografias de obra para o hero
 - [ ] Paleta final validada com a logo real
@@ -316,3 +341,4 @@
 - [Release v0.6.0-design](releases/v0.6.0-design.md)
 - [ADR-006 — Estratégia de Renderização do Frontend](adr/ADR-006-frontend-rendering-strategy.md)
 - [Release v0.7.0](releases/v0.7.0.md)
+- [Release v0.7.1](releases/v0.7.1.md)

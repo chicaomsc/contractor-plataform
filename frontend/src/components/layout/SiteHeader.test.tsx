@@ -1,12 +1,12 @@
 import React from "react";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { FALLBACK_SITE } from "@/features/public-site/branding";
+import { FALLBACK_SITE_VIEW_MODEL } from "@/features/public-site/mappers/fallbacks";
 import { SiteHeader } from "./SiteHeader";
 
 describe("SiteHeader", () => {
   it("renders a generic company name fallback", () => {
-    render(<SiteHeader site={FALLBACK_SITE} />);
+    render(<SiteHeader site={FALLBACK_SITE_VIEW_MODEL} />);
 
     expect(screen.getByRole("banner")).toBeInTheDocument();
     expect(screen.getByText("Contractor Platform")).toBeInTheDocument();
@@ -15,7 +15,7 @@ describe("SiteHeader", () => {
   it("renders public phone when available", () => {
     render(
       <SiteHeader
-        site={{ ...FALLBACK_SITE, publicPhone: "+351 910 000 000" }}
+        site={{ ...FALLBACK_SITE_VIEW_MODEL, publicPhone: "+351 910 000 000" }}
       />,
     );
 

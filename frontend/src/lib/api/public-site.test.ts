@@ -17,9 +17,15 @@ afterEach(() => {
 describe("public site API", () => {
   it("requests the site endpoint by slug", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ slug: "tenant-slug", name: "Tenant" }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
+      Response.json({
+        slug: "tenant-slug",
+        name: "Tenant",
+        tradeName: null,
+        publicPhone: null,
+        whatsapp: null,
+        website: null,
+        location: null,
+        branding: null,
       }),
     );
     vi.stubGlobal("fetch", fetchMock);
@@ -47,5 +53,16 @@ describe("public site API", () => {
     );
 
     await expect(getPublicSite("missing")).rejects.toBeInstanceOf(ApiError);
+  });
+
+  it("rejects invalid public site responses", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(Response.json({ name: "Tenant" })),
+    );
+
+    await expect(getPublicSite("tenant-slug")).rejects.toMatchObject({
+      code: "invalid-response",
+    });
   });
 });

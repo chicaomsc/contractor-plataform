@@ -1,25 +1,6 @@
-import type { PublicSite } from "@/types/public-site";
+import type { PublicSiteViewModel } from "../types/view-model";
 
 const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
-
-export const FALLBACK_SITE: PublicSite = {
-  slug: "contractor-platform",
-  name: "Contractor Platform",
-  tradeName: null,
-  publicPhone: null,
-  whatsapp: null,
-  website: null,
-  location: null,
-  branding: {
-    logoUrl: null,
-    primaryColor: null,
-    secondaryColor: null,
-    accentColor: null,
-    tagline: null,
-    aboutText: null,
-    footerText: "Informação pública temporariamente indisponível.",
-  },
-};
 
 export function isSafeHexColor(
   value: string | null | undefined,
@@ -35,10 +16,12 @@ function darkenHex(hex: string, amount: number) {
   return `#${channels.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
 }
 
-export function getBrandingStyle(site: PublicSite): Record<string, string> {
-  const primary = site.branding?.primaryColor;
-  const accent = site.branding?.accentColor;
+export function getBrandingStyle(
+  site: PublicSiteViewModel | null,
+): Record<string, string> {
   const style: Record<string, string> = {};
+  const primary = site?.branding.primaryColor;
+  const accent = site?.branding.accentColor;
 
   if (isSafeHexColor(primary)) {
     style["--primary"] = primary;
@@ -51,8 +34,4 @@ export function getBrandingStyle(site: PublicSite): Record<string, string> {
   }
 
   return style;
-}
-
-export function getDisplayName(site: PublicSite) {
-  return site.tradeName ?? site.name;
 }

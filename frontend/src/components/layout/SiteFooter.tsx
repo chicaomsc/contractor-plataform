@@ -1,15 +1,14 @@
 import { Container } from "./Container";
-import { getDisplayName } from "@/features/public-site/branding";
-import type { PublicSite } from "@/types/public-site";
+import type { PublicSiteViewModel } from "@/features/public-site/types/view-model";
 
 type SiteFooterProps = {
-  site: PublicSite;
+  site: PublicSiteViewModel;
 };
 
 export function SiteFooter({ site }: SiteFooterProps) {
-  const displayName = getDisplayName(site);
+  const displayName = site.displayName;
   const year = new Date().getFullYear();
-  const footerText = site.branding?.footerText;
+  const footerText = site.footerText;
 
   return (
     <footer

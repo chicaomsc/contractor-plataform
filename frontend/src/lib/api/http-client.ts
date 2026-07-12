@@ -7,6 +7,25 @@ type RequestOptions = RequestInit & {
   timeoutMs?: number;
 };
 
+function composeAbortSignal(
+  timeoutSignal: AbortSignal,
+  requestSignal?: AbortSignal | null,
+) {
+  if (!requestSignal) {
+    return timeoutSignal;
+  }
+
+  if (requestSignal.aborted) {
+    return requestSignal;
+  }
+
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  timeoutSignal.addEventListener("abort", abort, { once: true });
+  requestSignal.addEventListener("abort", abort, { once: true });
+  return controller.signal;
+}
+
 async function parseErrorBody(
   response: Response,
 ): Promise<ApiErrorBody | null> {
@@ -27,11 +46,12 @@ export async function apiRequest<T>(
   options: RequestOptions = {},
 ): Promise<T> {
   const env = getPublicEnv();
-  const controller = new AbortController();
+  const timeoutController = new AbortController();
   const timeout = setTimeout(
-    () => controller.abort(),
+    () => timeoutController.abort(),
     options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
   );
+  const signal = composeAbortSignal(timeoutController.signal, options.signal);
 
   try {
     const response = await fetch(new URL(path, env.NEXT_PUBLIC_API_BASE_URL), {
@@ -40,13 +60,15 @@ export async function apiRequest<T>(
         Accept: "application/json",
         ...options.headers,
       },
-      signal: controller.signal,
+      signal,
     });
 
     if (!response.ok) {
       const body = await parseErrorBody(response);
       throw new ApiError(
-        body?.detail ?? body?.title ?? "Não foi possível carregar os dados.",
+        response.status === 404
+          ? "Não encontrámos este recurso público."
+          : "Não foi possível carregar os dados públicos.",
         response.status,
         body,
       );
@@ -59,10 +81,20 @@ export async function apiRequest<T>(
     }
 
     if (error instanceof DOMException && error.name === "AbortError") {
-      throw new ApiError("A API demorou demasiado a responder.", 408);
+      throw new ApiError(
+        "A API demorou demasiado a responder.",
+        408,
+        null,
+        "timeout",
+      );
     }
 
-    throw new ApiError("A API está indisponível neste momento.", 0);
+    throw new ApiError(
+      "A API está indisponível neste momento.",
+      0,
+      null,
+      "network",
+    );
   } finally {
     clearTimeout(timeout);
   }
