@@ -1,7 +1,7 @@
 # Roadmap do Produto
 
-**Versão:** 1.0 — Sprint 1  
-**Data:** 2026-07-04  
+**Versão:** 2.1 — Sprint 7A concluída (incl. refinamento)  
+**Data:** 2026-07-12  
 **Horizonte:** MVP + Pós-MVP imediato
 
 ---
@@ -11,204 +11,271 @@
 1. **Valor para o utilizador beta primeiro:** cada entrega deve resolver um problema concreto do prestador de serviço.
 2. **Infraestrutura antes de funcionalidade:** segurança, isolamento de dados e deploy devem estar prontos antes de qualquer módulo de negócio.
 3. **Sem features "por precaução":** nada entra no roadmap sem um caso de uso identificado.
-4. **Entregas verticais:** cada sprint entrega uma fatia funcional completa (backend + frontend + testes básicos), não uma camada horizontal.
+4. **Entregas verticais:** cada sprint entrega uma fatia funcional completa, não uma camada horizontal.
+5. **Design antes do código:** decisões visuais documentadas antes da implementação de frontend.
 
 ---
 
-## Estado Atual
+## Estado Actual
 
 | Item | Status |
 |---|---|
 | Estrutura de monorepo (`/backend`, `/frontend`, `/docs`, `/docker`) | Concluído |
-| Documentação arquitetural (ADRs, domínio, módulos) | Em andamento (Sprint 1) |
-| Código de produção | Não iniciado |
+| Documentação arquitetural (ADRs, domínio, módulos) | Concluído |
+| Backend — Autenticação (JWT, refresh, registro) | Concluído |
+| Backend — Módulo Company (perfil, branding, settings, logo) | Concluído |
+| Backend — Módulo Service Catalogue + Gallery | Concluído |
+| Backend — API Pública (`/public/services`, `/public/gallery`) | Concluído |
+| Design Direction — Landing JR Pinturas | Concluído |
+| Frontend — Foundation (Next.js, tokens, layout, SEO) | Pendente (Sprint 7B) |
+| Frontend — Landing Page Pública | Pendente (Sprint 7C) |
+| Frontend — Painel Administrativo | Não iniciado |
 
 ---
 
-## Sprint 1 — Fundação Arquitetural
+## Sprint 1 — Fundação Arquitetural ✅
 
-**Objetivo:** Zero código de produção. Toda a equipe alinhada na arquitetura antes de qualquer implementação.
+**Objectivo:** Zero código de produção. Toda a equipa alinhada na arquitectura antes de qualquer implementação.
 
-**Artefatos:**
+**Artefactos:**
 - [x] ADR-000: Visão e Escopo
-- [x] ADR-001: Estilo de Arquitetura
+- [x] ADR-001: Estilo de Arquitectura
 - [x] Modelo de Domínio
 - [x] Diagrama de Módulos
-- [x] Roadmap (este documento)
+- [x] Roadmap inicial
 
-**Critério de saída:** Documentos revisados e aprovados. Estrutura de pastas do monorepo criada.
+**Status:** Concluída
 
 ---
 
-## Sprint 2 — Infraestrutura e Autenticação
+## Sprint 2 — Infraestrutura e Autenticação ✅
 
-**Objetivo:** Sistema rodando end-to-end com autenticação funcional. Nenhuma feature de negócio ainda.
+**Objectivo:** Sistema rodando end-to-end com autenticação funcional.
 
 **Backend:**
-- [ ] Projeto Spring Boot inicializado com Java 25
-- [ ] Configuração de datasource PostgreSQL
-- [ ] Flyway com migration inicial (`V1__init_schema.sql`)
-- [ ] Módulo `shared`: exceções base, `ApiResponse<T>`, handler global
-- [ ] Módulo `auth`: login, geração de JWT, `JwtAuthenticationFilter`
-- [ ] Endpoint `POST /api/v1/auth/login`
-- [ ] Seed de empresa e utilizador admin para desenvolvimento local
+- [x] Projecto Spring Boot com Java 25
+- [x] Configuração PostgreSQL + Flyway
+- [x] Módulo `auth`: registo, login, JWT (HS256), refresh tokens (opacos UUID)
+- [x] `JwtPrincipal` stateless (sem DB lookup por request)
+- [x] `GlobalExceptionHandler` com ProblemDetail (RFC 9457)
+- [x] Testcontainers (padrão static initializer + @DynamicPropertySource)
 
-**Frontend:**
-- [ ] Projeto React + Vite + TypeScript inicializado
-- [ ] Configuração de rotas (React Router)
-- [ ] Estrutura de pastas `landing/` e `admin/`
-- [ ] Tela de login funcional consumindo `/api/v1/auth/login`
-- [ ] Guard de rota para área administrativa
-- [ ] Armazenamento seguro do JWT (httpOnly cookie ou memory + refresh)
-
-**Infraestrutura:**
-- [ ] `Dockerfile` para o backend
-- [ ] `docker-compose.yml` para desenvolvimento local (app + banco)
-- [ ] Variáveis de ambiente documentadas (`.env.example`)
-
-**Critério de saída:** Login funcionando em ambiente local. JWT gerado e validado. Rota protegida acessível apenas com token válido.
+**Status:** Concluída
 
 ---
 
-## Sprint 3 — Módulo Company (Configuração da Empresa)
+## Sprint 3 — Módulo Company ✅
 
-**Objetivo:** O prestador consegue configurar a sua empresa, branding e settings no painel administrativo.
+**Objectivo:** Perfil de empresa, branding e configurações.
 
 **Backend:**
-- [ ] Módulo `company`: CRUD de `Company`, `Branding`, `Settings`
-- [ ] Migration para tabelas `companies`, `brandings`, `settings`
-- [ ] Integração com Supabase Storage para upload de logo
-- [ ] Endpoints: `GET/PUT /api/v1/companies/me`, `GET/PUT /api/v1/companies/me/branding`, `GET/PUT /api/v1/companies/me/settings`
+- [x] `GET/PUT /company/me`, `GET/PUT /branding/me`, `GET/PUT /settings/me`
+- [x] `POST/DELETE /company/logo`
+- [x] `StorageService` (Strategy Pattern) com `LocalStorageService`
+- [x] Apenas OWNER pode modificar
 
-**Frontend:**
-- [ ] Página "Configurações da Empresa" no painel admin
-- [ ] Upload e preview de logo
-- [ ] Formulário de branding (cores, slogan, sobre)
-- [ ] Formulário de settings (moeda, impostos, validade de orçamentos)
-
-**Critério de saída:** Admin consegue configurar a empresa completa e ver as alterações persistidas.
+**Status:** Concluída
 
 ---
 
-## Sprint 4 — Catálogo (Serviços e Galeria)
+## Sprint 4 — Autenticação (continuação) ✅
 
-**Objetivo:** O prestador gere os serviços oferecidos e as imagens da galeria.
+> Nota: as sprints internas de desenvolvimento não seguiram exactamente a numeração do roadmap original. Sprints 2–4 foram executadas em sequência com foco no backend.
+
+**Status:** Absorvida pelas sprints 2–3.
+
+---
+
+## Sprint 5 — Catálogo de Serviços e Galeria ✅
+
+**Objectivo:** Gestão de serviços e galeria de portfólio.
 
 **Backend:**
-- [ ] Módulo `catalog`: CRUD de `Service` e `GalleryItem`
-- [ ] Migration para tabelas `services`, `gallery_items`
-- [ ] Upload de imagens para Supabase Storage
-- [ ] Reordenação de itens (drag-and-drop order)
+- [x] `Service` entity com slug único por empresa
+- [x] `GalleryItem` entity com antes/depois
+- [x] Admin APIs: `GET/POST/PUT/DELETE/PATCH /services`, `GET/POST/PUT/DELETE/PATCH /gallery`
+- [x] Upload de imagens antes/depois
+- [x] API Pública: `GET /public/services?slug=...`, `GET /public/gallery?slug=...`
+- [x] `ServiceSlugGenerator` (slug único por empresa)
+- [x] `GalleryImageService` (validação e armazenamento)
+- [x] 146 testes — 0 falhas
 
-**Frontend:**
-- [ ] Página de gestão de serviços (listar, criar, editar, desativar)
-- [ ] Página de gestão de galeria (listar, fazer upload, remover)
-- [ ] Preview das imagens carregadas
-
-**Critério de saída:** Admin consegue gerir catálogo completo. Imagens carregadas no Supabase acessíveis via URL pública.
-
----
-
-## Sprint 5 — Landing Page Pública
-
-**Objetivo:** Qualquer pessoa consegue visitar a landing page da empresa via slug.
-
-**Backend:**
-- [ ] Módulo `public`: endpoints sem autenticação
-- [ ] `GET /public/{slug}` — perfil e branding
-- [ ] `GET /public/{slug}/services` — serviços ativos
-- [ ] `GET /public/{slug}/gallery` — galeria ativa
-
-**Frontend:**
-- [ ] Landing page dinâmica consumindo API pública
-- [ ] Secções: Hero, Sobre, Serviços, Galeria, Contacto
-- [ ] Responsividade (mobile-first)
-- [ ] SEO básico (meta tags dinâmicas via slug)
-
-**Critério de saída:** Landing page acessível via `/{slug}` com dados reais do cliente beta.
+**Status:** Concluída
 
 ---
 
-## Sprint 6 — Clientes e Orçamentos (Parte 1)
+## Sprint 7A — Design Direction ✅
 
-**Objetivo:** O prestador gere a carteira de clientes e cria orçamentos.
+**Objectivo:** Definir direcção visual, wireframes e design system antes de implementar o frontend.
+
+**Artefactos produzidos:**
+- [x] `docs/ui/visual-direction.md` — 3 direcções visuais, recomendação: "Obra em Ordem"
+- [x] `docs/ui/content-structure.md` — estrutura de secções justificada
+- [x] `docs/ui/landing-wireframe.md` — wireframes ASCII mobile, tablet, desktop
+- [x] `docs/ui/design-system.md` — tokens semânticos, tipografia, espaçamento, componentes
+- [x] `docs/ui/responsive-behavior.md` — estratégia mobile-first, breakpoints
+- [x] `docs/ui/accessibility.md` — WCAG 2.2 AA, ARIA, semântica
+- [x] `docs/ui/component-inventory.md` — inventário de componentes (sem código)
+- [x] `docs/releases/v0.6.0-design.md` — documentação da release
+
+**Refinamento (Fase 2):**
+- [x] `docs/ui/content-guide.md` — guia de voz, pt-PT, regras de escrita
+- [x] `docs/ui/motion.md` — tokens de animação, regras de movimento
+- [x] `docs/ui/component-principles.md` — 12 princípios obrigatórios
+- [x] `docs/ui/component-architecture.md` — hierarquia e naming de componentes
+- [x] `docs/ui/design-system.md` v1.1 — Tokens First, novos tokens, sem HEX em specs
+- [x] `docs/ui/visual-direction.md` — capítulo multi-tenant adicionado
+- [x] `docs/ui/component-inventory.md` v1.1 — regras de naming genérico
+
+**Direcção escolhida:** B — "Obra em Ordem"  
+**Código produzido:** Nenhum.
+
+**Critério de saída:** ✅ Todos os documentos consistentes e completos.
+
+---
+
+## Sprint 7B — Frontend Foundation (próxima)
+
+**Objectivo:** Scaffolding técnico do frontend. Sem landing content — apenas a fundação reutilizável.
+
+**Sem pré-requisitos de cliente.** Esta sprint é viável imediatamente.
+
+**Frontend:**
+- [ ] Setup Next.js 15 + TypeScript + Tailwind CSS
+- [ ] Tokens CSS do design system (`lib/tokens.css`)
+- [ ] `RootLayout`, `SiteLayout`
+- [ ] `SiteHeader` + `NavDrawer` (mobile)
+- [ ] `SiteFooter`
+- [ ] `WhatsAppFAB`
+- [ ] SEO base: metadata, Open Graph, Twitter Card
+- [ ] `sitemap.xml` dinâmico por slug
+- [ ] `robots.txt`
+- [ ] Integração da API pública (fetch tipado, `CompanyPublicData`)
+- [ ] Página 404 (`not-found.tsx`)
+
+**Backend (adição necessária):**
+- [ ] `GET /public/company?slug={slug}` — endpoint público de perfil da empresa
+
+**Critério de saída:** Qualquer URL `/{slug}` carrega um site funcional com header, footer e page chrome correctos. Secções de conteúdo ainda não implementadas.
+
+---
+
+## Sprint 7C — Landing Page Pública
+
+**Objectivo:** Implementar todas as secções de conteúdo da landing com dados reais.
+
+**Pré-requisitos bloqueantes:**
+- [ ] Sprint 7B concluída
+- [ ] Logo do cliente em alta resolução recebida
+- [ ] Mínimo 2 fotografias de obra para o hero
+- [ ] Paleta final validada com a logo real
+- [ ] Mínimo 4 pares antes/depois disponíveis
+
+**Frontend:**
+- [ ] `HeroSection`
+- [ ] `TrustStrip` + `StatCounter`
+- [ ] `ServiceSection` + fetch de `/public/services`
+- [ ] `BeforeAfterSection` + `BeforeAfterComparison` + fetch de `/public/gallery`
+- [ ] `ProcessSection`
+- [ ] `AboutSection`
+- [ ] `CoverageSection`
+- [ ] `ContactSection` + `ContactForm`
+- [ ] Responsividade mobile-first end-to-end
+- [ ] Acessibilidade WCAG 2.2 AA (Lighthouse ≥ 90)
+- [ ] Performance (LCP < 2.5s, WebP, lazy loading)
+
+**Critério de saída:** Landing page acessível via `/{slug}` com dados reais. Passa Lighthouse Accessibility ≥ 90 e Performance ≥ 80.
+
+---
+
+## Sprint 8 — Painel Administrativo (frontend)
+
+**Objectivo:** Interface de gestão da empresa, serviços e galeria.
+
+**Frontend:**
+- [ ] Autenticação (login, logout, refresh)
+- [ ] Layout do painel (sidebar, header)
+- [ ] Gestão de perfil da empresa
+- [ ] Gestão de branding e logo
+- [ ] Gestão de serviços (CRUD + reordenar)
+- [ ] Gestão de galeria (CRUD + upload de imagens)
+- [ ] Configurações da conta
+
+**Critério de saída:** Admin consegue gerir o conteúdo da landing sem tocar em código.
+
+---
+
+## Sprint 9 — Clientes e Orçamentos
+
+**Objectivo:** Gestão de carteira de clientes e criação de orçamentos.
 
 **Backend:**
 - [ ] Módulo `customer`: CRUD de `Customer`
-- [ ] Migration para tabela `customers`
 - [ ] Módulo `estimate`: criação de `Estimate` com `EstimateItem`
-- [ ] Migration para tabelas `estimates`, `estimate_items`
-- [ ] Geração de `referenceNumber` sequencial por empresa
-- [ ] Cálculo de totais
+- [ ] `referenceNumber` sequencial por empresa
+- [ ] Cálculo de totais com IVA
 
 **Frontend:**
 - [ ] Página de gestão de clientes
 - [ ] Formulário de criação/edição de orçamento
-- [ ] Adição/remoção de itens no orçamento
-- [ ] Visualização de totais em tempo real
+- [ ] Adição/remoção de itens
 
-**Critério de saída:** Admin consegue criar um orçamento completo com múltiplos itens para um cliente.
+**Critério de saída:** Admin cria orçamento completo para um cliente.
 
 ---
 
-## Sprint 7 — Materiais e PDF
+## Sprint 10 — PDF e Materiais
 
-**Objetivo:** Orçamentos incluem materiais e podem ser exportados em PDF.
+**Objectivo:** Orçamentos com materiais, exportáveis em PDF.
 
 **Backend:**
 - [ ] `Material` associado a `EstimateItem`
-- [ ] Migration para tabela `materials`
-- [ ] Geração de PDF (`POST /api/v1/estimates/{id}/pdf`)
-- [ ] Template de PDF com branding da empresa (logo, cores, rodapé)
+- [ ] Geração de PDF com branding da empresa
+- [ ] `POST /estimates/{id}/pdf`
 
 **Frontend:**
-- [ ] Gestão de materiais por item de orçamento
-- [ ] Botão de download do PDF no orçamento
-- [ ] Preview do orçamento antes de exportar
+- [ ] Gestão de materiais por item
+- [ ] Preview e download do PDF
 
-**Critério de saída:** PDF gerado com branding correto, todos os itens, materiais e totais. Download funcional no browser.
+**Critério de saída:** PDF gerado com logo, cores, itens e totais correctos.
 
 ---
 
-## Sprint 8 — Hardening e Deploy
+## Sprint 11 — Hardening e Deploy
 
-**Objetivo:** Sistema estável, seguro e deployado nas plataformas de produção.
+**Objectivo:** Sistema estável, seguro e em produção.
 
 **Backend:**
-- [ ] Validação de inputs em todos os endpoints
 - [ ] Rate limiting no login
 - [ ] Logs estruturados (JSON)
-- [ ] Health check endpoint (`/actuator/health`)
-- [ ] Deploy no Railway com variáveis de ambiente de produção
+- [ ] Deploy no Railway com variáveis de produção
 
 **Frontend:**
-- [ ] Deploy no Vercel com variáveis de produção
-- [ ] Tratamento de erros globais (página 404, error boundary)
-- [ ] Loading states e feedback visual consistente
+- [ ] Deploy no Vercel
+- [ ] Tratamento de erros globais (404, error boundary)
+- [ ] Loading states consistentes
 
 **Infra:**
-- [ ] PostgreSQL gerenciado no Railway
-- [ ] Backup automático do banco configurado
+- [ ] PostgreSQL gerenciado
+- [ ] Backup automático
 - [ ] CORS configurado para domínio de produção
 
-**Critério de saída:** Sistema funcionando em produção com o cliente beta. Todos os fluxos do MVP testados manualmente.
+**Critério de saída:** Sistema em produção com o cliente beta. Fluxos do MVP testados manualmente.
 
 ---
 
 ## Pós-MVP — Backlog Prioritário
 
-Itens confirmados para após o lançamento, sem sprint definida ainda:
-
 | Funcionalidade | Justificativa |
 |---|---|
-| Transições de status de orçamento com notificação por email | Comunicação com o cliente final |
 | Depoimentos na landing page | Prova social para conversão |
-| Dashboard com métricas básicas (orçamentos por status, receita prevista) | Visibilidade para o prestador |
+| Transições de status de orçamento com notificação por email | Comunicação com o cliente final |
+| Dashboard com métricas (orçamentos por status, receita prevista) | Visibilidade para o prestador |
 | Auto-cadastro (multi-tenant self-service) | Escalar além do cliente beta |
 | CRM leve (histórico de interações por cliente) | Retenção e relacionamento |
+| WhatsApp API (envio de orçamento via WhatsApp) | Canal preferencial em Portugal |
 | Integração de pagamento (Stripe) | Monetização |
 | Agenda/calendário de execução | Gestão operacional |
-| WhatsApp API (envio de orçamento via WhatsApp) | Canal preferencial em Portugal/Brasil |
 | App mobile (React Native ou PWA) | Mobilidade para o prestador em campo |
 
 ---
@@ -217,17 +284,30 @@ Itens confirmados para após o lançamento, sem sprint definida ainda:
 
 | Dependência | Risco | Mitigação |
 |---|---|---|
-| Supabase Storage | Serviço externo fora do controlo | Interface de storage abstraída — troca por S3/R2 não quebra domínio |
-| Railway (backend) | Custo pode aumentar com uso | Dockerfile portável — migração para outro provider é viável |
-| Vercel (frontend) | Build limits no plano gratuito | App estática é leve; fallback para Netlify ou self-hosted |
-| Java 25 (LTS) | Versão recente, suporte de ecossistema | Usar apenas features estáveis; avaliar downgrade para Java 21 LTS se necessário |
-| Geração de PDF | Bibliotecas Java (iText, OpenPDF, Flying Saucer) requerem avaliação de licença | Decidir biblioteca na Sprint 7; Flying Saucer (LGPL) é candidato principal |
+| Fotografias reais da JR Pinturas | Sem fotos, o hero e galeria não funcionam | Documentado em `content-structure.md`; fallbacks especificados |
+| Logo validado com paleta | Paleta proposta pode não funcionar com a logo real | Tokens marcados como "sujeitos a validação"; ajuste antes da Sprint 7B |
+| Supabase Storage | Serviço externo fora do controlo | Interface de storage abstraída — troca por S3/R2 não quebra o domínio |
+| Railway (backend) | Custo pode aumentar com uso | Dockerfile portável |
+| Java 25 (LTS) | Versão recente, ecossistema em adaptação | Usar apenas features estáveis |
+| Geração de PDF | Bibliotecas Java requerem avaliação de licença | Decidir na Sprint 10; Flying Saucer (LGPL) candidato principal |
 
 ---
 
 ## Referências
 
 - [ADR-000 — Visão e Escopo](adr/ADR-000-vision-and-scope.md)
-- [ADR-001 — Estilo de Arquitetura](adr/ADR-001-architecture-style.md)
+- [ADR-001 — Estilo de Arquitectura](adr/ADR-001-architecture-style.md)
 - [Modelo de Domínio](architecture/domain-model.md)
 - [Diagrama de Módulos](architecture/module-diagram.md)
+- [Direcção Visual](ui/visual-direction.md)
+- [Estrutura de Conteúdo](ui/content-structure.md)
+- [Wireframes](ui/landing-wireframe.md)
+- [Design System](ui/design-system.md)
+- [Responsividade](ui/responsive-behavior.md)
+- [Acessibilidade](ui/accessibility.md)
+- [Inventário de Componentes](ui/component-inventory.md)
+- [Guia de Conteúdo](ui/content-guide.md)
+- [Motion](ui/motion.md)
+- [Princípios de Componentes](ui/component-principles.md)
+- [Arquitectura de Componentes](ui/component-architecture.md)
+- [Release v0.6.0-design](releases/v0.6.0-design.md)
