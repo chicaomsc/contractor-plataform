@@ -82,6 +82,15 @@ class PublicApiIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.branding.signatureName").doesNotExist());
     }
 
+    @Test
+    void publicSite_slugWithAccents_isNormalizedOnOnboarding() throws Exception {
+        var auth = registerCompany("accent-" + System.nanoTime() + "@example.com", "Pintáções São João");
+
+        mockMvc.perform(get("/public/sites/{companySlug}", auth.company().slug()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.slug").value(org.hamcrest.Matchers.startsWith("pintacoes-sao-joao")));
+    }
+
     // ── GET /public/sites/{companySlug}/services ──────────────────────────────
 
     @Test
@@ -123,6 +132,19 @@ class PublicApiIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$[0].createdAt").doesNotExist());
     }
 
+    @Test
+    void publicServices_preservesCompanyIsolation() throws Exception {
+        createService("Serviço Empresa A", 0, true);
+
+        var other = registerCompany("other-services-" + System.nanoTime() + "@example.com", "Other Services Co");
+        createService(other.accessToken(), "Serviço Empresa B", 0, true);
+
+        mockMvc.perform(get("/public/sites/{companySlug}/services", companySlug))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.name == 'Serviço Empresa A')]").isNotEmpty())
+                .andExpect(jsonPath("$[?(@.name == 'Serviço Empresa B')]").isEmpty());
+    }
+
     // ── GET /public/sites/{companySlug}/gallery ───────────────────────────────
 
     @Test
@@ -161,21 +183,65 @@ class PublicApiIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$[0].createdAt").doesNotExist());
     }
 
+    @Test
+    void publicGallery_allowsOptionalBeforeAfterImages() throws Exception {
+        createGalleryItem("Obra Sem Imagens", 0, false, true);
+
+        mockMvc.perform(get("/public/sites/{companySlug}/gallery", companySlug))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].title").value("Obra Sem Imagens"))
+                .andExpect(jsonPath("$[0].beforeImageUrl").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$[0].afterImageUrl").value(org.hamcrest.Matchers.nullValue()));
+    }
+
+    @Test
+    void publicGallery_preservesCompanyIsolation() throws Exception {
+        createGalleryItem("Obra Empresa A", 0, false, true);
+
+        var other = registerCompany("other-gallery-" + System.nanoTime() + "@example.com", "Other Gallery Co");
+        createGalleryItem(other.accessToken(), "Obra Empresa B", 0, false, true);
+
+        mockMvc.perform(get("/public/sites/{companySlug}/gallery", companySlug))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.title == 'Obra Empresa A')]").isNotEmpty())
+                .andExpect(jsonPath("$[?(@.title == 'Obra Empresa B')]").isEmpty());
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
 
+    private AuthResponse registerCompany(String email, String companyName) throws Exception {
+        var req = new RegisterRequest("Test Owner", email, "securePass1", companyName, "PT");
+
+        String body = mockMvc.perform(post("/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+
+        return objectMapper.readValue(body, AuthResponse.class);
+    }
+
     private void createService(String name, int displayOrder, boolean active) throws Exception {
+        createService(accessToken, name, displayOrder, active);
+    }
+
+    private void createService(String token, String name, int displayOrder, boolean active) throws Exception {
         var req = new CreateServiceRequest(name, null, null, null, displayOrder, active);
         mockMvc.perform(post("/services")
-                        .header("Authorization", "Bearer " + accessToken)
+                        .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isCreated());
     }
 
     private void createGalleryItem(String title, int displayOrder, boolean featured, boolean active) throws Exception {
+        createGalleryItem(accessToken, title, displayOrder, featured, active);
+    }
+
+    private void createGalleryItem(String token, String title, int displayOrder, boolean featured, boolean active) throws Exception {
         var req = new CreateGalleryRequest(title, null, displayOrder, featured, active);
         mockMvc.perform(post("/gallery")
-                        .header("Authorization", "Bearer " + accessToken)
+                        .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isCreated());

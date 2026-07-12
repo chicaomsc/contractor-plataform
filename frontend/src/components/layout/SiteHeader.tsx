@@ -2,16 +2,15 @@ import Image from "next/image";
 import Link from "next/link";
 import { Phone } from "lucide-react";
 import { Container } from "./Container";
-import { getDisplayName } from "@/features/public-site/branding";
-import type { PublicSite } from "@/types/public-site";
+import type { PublicSiteViewModel } from "@/features/public-site/types/view-model";
 
 type SiteHeaderProps = {
-  site: PublicSite;
+  site: PublicSiteViewModel;
 };
 
 export function SiteHeader({ site }: SiteHeaderProps) {
-  const displayName = getDisplayName(site);
-  const logoUrl = site.branding?.logoUrl;
+  const displayName = site.displayName;
+  const logoUrl = site.branding.logoUrl;
 
   return (
     <header
