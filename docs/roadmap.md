@@ -1,6 +1,6 @@
 # Roadmap do Produto
 
-**Versão:** 2.3 — Sprint 7B.5 concluída  
+**Versão:** 2.4 — Spike 7B.1 concluído  
 **Data:** 2026-07-12  
 **Horizonte:** MVP + Pós-MVP imediato
 
@@ -29,6 +29,7 @@
 | Design Direction — Landing JR Pinturas | Concluído |
 | Frontend — Foundation (Next.js, tokens, layout, SEO) | Concluído |
 | Frontend — Integração pública (hooks, DTOs, preview técnico) | Concluído |
+| Spike — Impeccable no comparador antes/depois | Concluído (REJECT) |
 | Frontend — Landing Page Pública | Pendente (Sprint 7C) |
 | Frontend — Painel Administrativo | Não iniciado |
 
@@ -187,6 +188,26 @@
 
 ---
 
+## Spike 7B.1 — Avaliação controlada do Impeccable ✅
+
+**Objectivo:** Avaliar o Impeccable em apenas um componente isolado antes da Sprint 7C.
+
+**Frontend:**
+- [x] Rota de laboratório `/_lab/before-after`
+- [x] `BeforeAfterComparisonBaseline`
+- [x] `BeforeAfterComparisonRefinedCandidate`
+- [x] Fixtures locais sem imagens externas
+- [x] Testes comportamentais para as duas versões
+- [x] Rota não indexável e fora do sitemap
+
+**Resultado:** REJECT.
+
+**Justificativa:** O Impeccable não estava disponível como dependência, CLI, plugin ou connector executável neste ambiente. A adoção foi rejeitada por falta de avaliação reproduzível e auditável.
+
+**Critério de saída:** Spike documentado em `docs/spikes/SPIKE-001-impeccable-before-after.md` e release `docs/releases/v0.7.2-spike.md`, sem iniciar a Sprint 7C.
+
+---
+
 ## Sprint 7C — Landing Page Pública
 
 **Objectivo:** Implementar todas as secções de conteúdo da landing com dados reais.
@@ -194,6 +215,7 @@
 **Pré-requisitos bloqueantes:**
 - [x] Sprint 7B concluída
 - [x] Sprint 7B.5 concluída
+- [x] Spike 7B.1 concluído sem adoção do Impeccable
 - [ ] Logo do cliente em alta resolução recebida
 - [ ] Mínimo 2 fotografias de obra para o hero
 - [ ] Paleta final validada com a logo real
@@ -342,3 +364,5 @@
 - [ADR-006 — Estratégia de Renderização do Frontend](adr/ADR-006-frontend-rendering-strategy.md)
 - [Release v0.7.0](releases/v0.7.0.md)
 - [Release v0.7.1](releases/v0.7.1.md)
+- [Spike 001 — Impeccable antes/depois](spikes/SPIKE-001-impeccable-before-after.md)
+- [Release v0.7.2-spike](releases/v0.7.2-spike.md)

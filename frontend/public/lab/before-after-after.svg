@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900" role="img" aria-labelledby="title desc">
+  <title id="title">Fixture depois</title>
+  <desc id="desc">Superficie de parede depois da intervencao, usada apenas para testes de laboratorio.</desc>
+  <rect width="1200" height="900" fill="rgb(248 246 242)"/>
+  <rect x="0" y="650" width="1200" height="250" fill="rgb(232 229 223)"/>
+  <path d="M80 180h1040v420H80z" fill="rgb(255 255 255)" stroke="rgb(28 28 26)" stroke-width="10"/>
+  <path d="M180 290h840M180 390h840M180 490h620" stroke="rgb(28 28 26)" stroke-width="10" stroke-linecap="square" opacity="0.22"/>
+  <rect x="80" y="180" width="28" height="420" fill="rgb(232 80 10)"/>
+  <rect x="82" y="602" width="1036" height="22" fill="rgb(28 28 26)" opacity="0.08"/>
+</svg>
