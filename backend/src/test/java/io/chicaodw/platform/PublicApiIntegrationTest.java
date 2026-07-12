@@ -52,18 +52,48 @@ class PublicApiIntegrationTest extends AbstractIntegrationTest {
         companySlug = authResponse.company().slug();
     }
 
-    // ── GET /public/services ──────────────────────────────────────────────────
+    // ── GET /public/sites/{companySlug} ───────────────────────────────────────
+
+    @Test
+    void publicSite_noAuth_returnsPublicCompanyData() throws Exception {
+        mockMvc.perform(get("/public/sites/{companySlug}", companySlug))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.slug").value(companySlug))
+                .andExpect(jsonPath("$.name").value("Public API Test Co"))
+                .andExpect(jsonPath("$.branding").exists());
+    }
+
+    @Test
+    void publicSite_unknownSlug_returns404() throws Exception {
+        mockMvc.perform(get("/public/sites/{companySlug}", "nonexistent-company-slug-xyz"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void publicSite_responseHasNoSensitiveFields() throws Exception {
+        mockMvc.perform(get("/public/sites/{companySlug}", companySlug))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.taxNumber").doesNotExist())
+                .andExpect(jsonPath("$.email").doesNotExist())
+                .andExpect(jsonPath("$.id").doesNotExist())
+                .andExpect(jsonPath("$.companyId").doesNotExist())
+                .andExpect(jsonPath("$.branding.companyId").doesNotExist())
+                .andExpect(jsonPath("$.branding.quotationPrefix").doesNotExist())
+                .andExpect(jsonPath("$.branding.signatureName").doesNotExist());
+    }
+
+    // ── GET /public/sites/{companySlug}/services ──────────────────────────────
 
     @Test
     void publicServices_noAuth_returns200() throws Exception {
-        mockMvc.perform(get("/public/services").param("slug", companySlug))
+        mockMvc.perform(get("/public/sites/{companySlug}/services", companySlug))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray());
     }
 
     @Test
     void publicServices_unknownSlug_returns404() throws Exception {
-        mockMvc.perform(get("/public/services").param("slug", "nonexistent-company-slug-xyz"))
+        mockMvc.perform(get("/public/sites/{companySlug}/services", "nonexistent-company-slug-xyz"))
                 .andExpect(status().isNotFound());
     }
 
@@ -73,7 +103,7 @@ class PublicApiIntegrationTest extends AbstractIntegrationTest {
         createService("Serviço Inactivo",  2, false);
         createService("Serviço Activo B",  0, true);
 
-        mockMvc.perform(get("/public/services").param("slug", companySlug))
+        mockMvc.perform(get("/public/sites/{companySlug}/services", companySlug))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].name").value("Serviço Activo B"))
                 .andExpect(jsonPath("$[1].name").value("Serviço Activo A"))
@@ -85,7 +115,7 @@ class PublicApiIntegrationTest extends AbstractIntegrationTest {
     void publicServices_responseHasNoSensitiveFields() throws Exception {
         createService("Serviço Público", 0, true);
 
-        mockMvc.perform(get("/public/services").param("slug", companySlug))
+        mockMvc.perform(get("/public/sites/{companySlug}/services", companySlug))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].name").exists())
                 .andExpect(jsonPath("$[0].slug").exists())
@@ -93,18 +123,18 @@ class PublicApiIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$[0].createdAt").doesNotExist());
     }
 
-    // ── GET /public/gallery ───────────────────────────────────────────────────
+    // ── GET /public/sites/{companySlug}/gallery ───────────────────────────────
 
     @Test
     void publicGallery_noAuth_returns200() throws Exception {
-        mockMvc.perform(get("/public/gallery").param("slug", companySlug))
+        mockMvc.perform(get("/public/sites/{companySlug}/gallery", companySlug))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray());
     }
 
     @Test
     void publicGallery_unknownSlug_returns404() throws Exception {
-        mockMvc.perform(get("/public/gallery").param("slug", "nonexistent-company-slug-xyz"))
+        mockMvc.perform(get("/public/sites/{companySlug}/gallery", "nonexistent-company-slug-xyz"))
                 .andExpect(status().isNotFound());
     }
 
@@ -114,7 +144,7 @@ class PublicApiIntegrationTest extends AbstractIntegrationTest {
         createGalleryItem("Obra Inactiva", 1, false, false);
         createGalleryItem("Obra Destaque", 2, true,  true);
 
-        mockMvc.perform(get("/public/gallery").param("slug", companySlug))
+        mockMvc.perform(get("/public/sites/{companySlug}/gallery", companySlug))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].title").value("Obra Destaque"))
                 .andExpect(jsonPath("$[?(@.title == 'Obra Inactiva')]").isEmpty());
@@ -124,7 +154,7 @@ class PublicApiIntegrationTest extends AbstractIntegrationTest {
     void publicGallery_responseHasNoSensitiveFields() throws Exception {
         createGalleryItem("Obra Pública", 0, false, true);
 
-        mockMvc.perform(get("/public/gallery").param("slug", companySlug))
+        mockMvc.perform(get("/public/sites/{companySlug}/gallery", companySlug))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].title").exists())
                 .andExpect(jsonPath("$[0].companyId").doesNotExist())

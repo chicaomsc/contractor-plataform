@@ -30,6 +30,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.text.Normalizer;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.UUID;
@@ -180,10 +181,15 @@ public class AuthService {
     }
 
     private String generateUniqueSlug(String name) {
-        String base = name.toLowerCase(Locale.ROOT)
+        String base = Normalizer.normalize(name, Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "")
+                .toLowerCase(Locale.ROOT)
                 .replaceAll("[^a-z0-9 -]", "")
                 .trim()
-                .replaceAll(" +", "-");
+                .replaceAll("[ -]+", "-");
+        if (base.isBlank()) {
+            base = "company";
+        }
         String slug = base;
         int n = 1;
         while (companyRepository.existsBySlug(slug)) {
