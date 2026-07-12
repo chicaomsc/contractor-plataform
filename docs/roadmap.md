@@ -1,6 +1,6 @@
 # Roadmap do Produto
 
-**Versão:** 2.1 — Sprint 7A concluída (incl. refinamento)  
+**Versão:** 2.2 — Sprint 7B concluída  
 **Data:** 2026-07-12  
 **Horizonte:** MVP + Pós-MVP imediato
 
@@ -27,7 +27,7 @@
 | Backend — Módulo Service Catalogue + Gallery | Concluído |
 | Backend — API Pública (`/public/services`, `/public/gallery`) | Concluído |
 | Design Direction — Landing JR Pinturas | Concluído |
-| Frontend — Foundation (Next.js, tokens, layout, SEO) | Pendente (Sprint 7B) |
+| Frontend — Foundation (Next.js, tokens, layout, SEO) | Concluído |
 | Frontend — Landing Page Pública | Pendente (Sprint 7C) |
 | Frontend — Painel Administrativo | Não iniciado |
 
@@ -134,29 +134,32 @@
 
 ---
 
-## Sprint 7B — Frontend Foundation (próxima)
+## Sprint 7B — Frontend Foundation ✅
 
 **Objectivo:** Scaffolding técnico do frontend. Sem landing content — apenas a fundação reutilizável.
 
 **Sem pré-requisitos de cliente.** Esta sprint é viável imediatamente.
 
 **Frontend:**
-- [ ] Setup Next.js 15 + TypeScript + Tailwind CSS
-- [ ] Tokens CSS do design system (`lib/tokens.css`)
-- [ ] `RootLayout`, `SiteLayout`
-- [ ] `SiteHeader` + `NavDrawer` (mobile)
-- [ ] `SiteFooter`
-- [ ] `WhatsAppFAB`
-- [ ] SEO base: metadata, Open Graph, Twitter Card
-- [ ] `sitemap.xml` dinâmico por slug
-- [ ] `robots.txt`
-- [ ] Integração da API pública (fetch tipado, `CompanyPublicData`)
-- [ ] Página 404 (`not-found.tsx`)
+- [x] Setup Next.js App Router + TypeScript + Tailwind CSS
+- [x] Tokens CSS do design system
+- [x] `RootLayout` e `PublicLayout`
+- [x] `SiteHeader`
+- [x] `SiteFooter`
+- [x] SEO base: metadata, Open Graph, viewport
+- [x] `sitemap.xml`
+- [x] `robots.txt`
+- [x] Integração da API pública com cliente REST tipado
+- [x] Página 404 (`not-found.tsx`)
+- [x] Estados globais: loading, error, global error e fallback de API
+- [x] Testes básicos e CI frontend
 
-**Backend (adição necessária):**
-- [ ] `GET /public/company?slug={slug}` — endpoint público de perfil da empresa
+**Backend:**
+- [x] `GET /public/sites/{companySlug}` — endpoint público de perfil da empresa
+- [x] `GET /public/sites/{companySlug}/services`
+- [x] `GET /public/sites/{companySlug}/gallery`
 
-**Critério de saída:** Qualquer URL `/{slug}` carrega um site funcional com header, footer e page chrome correctos. Secções de conteúdo ainda não implementadas.
+**Critério de saída:** `/` carrega header, placeholder técnico e footer com dados públicos por slug quando a API está disponível. Secções de conteúdo ainda não implementadas.
 
 ---
 
@@ -165,7 +168,7 @@
 **Objectivo:** Implementar todas as secções de conteúdo da landing com dados reais.
 
 **Pré-requisitos bloqueantes:**
-- [ ] Sprint 7B concluída
+- [x] Sprint 7B concluída
 - [ ] Logo do cliente em alta resolução recebida
 - [ ] Mínimo 2 fotografias de obra para o hero
 - [ ] Paleta final validada com a logo real
@@ -311,3 +314,5 @@
 - [Princípios de Componentes](ui/component-principles.md)
 - [Arquitectura de Componentes](ui/component-architecture.md)
 - [Release v0.6.0-design](releases/v0.6.0-design.md)
+- [ADR-006 — Estratégia de Renderização do Frontend](adr/ADR-006-frontend-rendering-strategy.md)
+- [Release v0.7.0](releases/v0.7.0.md)

@@ -6,6 +6,9 @@ import io.chicaodw.platform.common.exception.ResourceNotFoundException;
 import io.chicaodw.platform.common.storage.StorageService;
 import io.chicaodw.platform.company.api.dto.BrandingResponse;
 import io.chicaodw.platform.company.api.dto.CompanyResponse;
+import io.chicaodw.platform.company.api.dto.PublicSiteBrandingResponse;
+import io.chicaodw.platform.company.api.dto.PublicSiteLocationResponse;
+import io.chicaodw.platform.company.api.dto.PublicSiteResponse;
 import io.chicaodw.platform.company.api.dto.UpdateCompanyRequest;
 import io.chicaodw.platform.company.api.mapper.CompanyMapper;
 import io.chicaodw.platform.company.domain.Branding;
@@ -44,6 +47,36 @@ public class CompanyService {
     public Company findBySlug(String slug) {
         return companyRepository.findBySlug(slug)
                 .orElseThrow(() -> new ResourceNotFoundException("Company", slug));
+    }
+
+    @Transactional(readOnly = true)
+    public PublicSiteResponse getPublicSite(String slug) {
+        var company = findBySlug(slug);
+        var branding = brandingRepository.findByCompanyId(company.getId()).orElse(null);
+        var address = company.getAddress();
+
+        return new PublicSiteResponse(
+                company.getSlug(),
+                company.getName(),
+                company.getTradeName(),
+                company.getPhone(),
+                company.getWhatsapp(),
+                company.getWebsite(),
+                address != null
+                        ? new PublicSiteLocationResponse(address.getCity(), address.getRegion(), address.getCountry())
+                        : null,
+                branding != null
+                        ? new PublicSiteBrandingResponse(
+                                branding.getLogoUrl(),
+                                branding.getPrimaryColor(),
+                                branding.getSecondaryColor(),
+                                branding.getAccentColor(),
+                                branding.getTagline(),
+                                branding.getAboutText(),
+                                branding.getFooterText()
+                        )
+                        : null
+        );
     }
 
     public Company create(Company company) {
