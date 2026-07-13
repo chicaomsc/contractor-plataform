@@ -31,7 +31,7 @@ export function TrustStrip({ hasWhatsApp, hasPhone }: TrustStripProps) {
   return (
     <section
       aria-labelledby="trust-title"
-      className="bg-[var(--surface-dark)] py-8 text-[var(--surface-dark-fg)]"
+      className="bg-[var(--surface-dark)] py-7 text-[var(--surface-dark-fg)] md:py-8"
     >
       <Container>
         <h2 id="trust-title" className="sr-only">
@@ -41,10 +41,14 @@ export function TrustStrip({ hasWhatsApp, hasPhone }: TrustStripProps) {
           {items.map(({ label, Icon }) => (
             <div
               key={label}
-              className="border-y border-[var(--surface-dark-fg)]/20 py-5 md:border-y-0 md:border-l md:first:border-l-0 md:pl-6"
+              className="border-t border-[var(--surface-dark-fg)]/18 py-5 first:border-t-0 md:border-l md:border-t-0 md:first:border-l-0 md:pl-6"
             >
-              <dt className="flex items-start gap-3 text-sm font-semibold">
-                <Icon size={20} aria-hidden="true" />
+              <dt className="flex items-start gap-3 text-sm font-semibold leading-6">
+                <Icon
+                  size={20}
+                  aria-hidden="true"
+                  className="mt-0.5 shrink-0 text-primary"
+                />
                 <span>{label}</span>
               </dt>
             </div>

@@ -32,9 +32,9 @@ export function ProcessSection() {
       labelledBy="process-title"
       className="bg-[var(--surface-dark)] text-[var(--surface-dark-fg)]"
     >
-      <Container className="space-y-10">
+      <Container className="space-y-12">
         <header className="max-w-3xl space-y-4">
-          <SectionLabel>Processo</SectionLabel>
+          <SectionLabel tone="inverse">Processo</SectionLabel>
           <h2
             id="process-title"
             className="m-0 font-display text-3xl font-bold md:text-4xl"
@@ -47,18 +47,18 @@ export function ProcessSection() {
           {processSteps.map((step, index) => (
             <li
               key={step.title}
-              className="space-y-4 border-t border-[var(--surface-dark-fg)]/25 pt-6"
+              className="group space-y-4 border-t border-[var(--surface-dark-fg)]/25 pt-6"
             >
               <span
                 aria-hidden="true"
-                className="font-display text-5xl font-bold text-primary"
+                className="font-display text-5xl font-bold text-[var(--primary-on-dark)]"
               >
                 {index + 1}
               </span>
               <h3 className="m-0 font-display text-2xl font-semibold">
                 {step.title}
               </h3>
-              <p className="m-0 text-sm leading-6 text-[var(--surface-dark-fg)]/75">
+              <p className="m-0 text-sm leading-6 text-[var(--surface-dark-fg)]/80">
                 {step.description}
               </p>
             </li>

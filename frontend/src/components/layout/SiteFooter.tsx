@@ -21,10 +21,10 @@ export function SiteFooter({ site, navLinks }: SiteFooterProps) {
   return (
     <footer
       role="contentinfo"
-      className="border-t border-border bg-background py-10 text-foreground"
+      className="border-t border-border bg-background py-12 text-foreground"
     >
-      <Container className="grid gap-8 text-sm md:grid-cols-[1fr_auto]">
-        <div className="space-y-4">
+      <Container className="grid gap-10 text-sm md:grid-cols-[1fr_auto]">
+        <div className="space-y-5">
           <p className="m-0 font-display text-lg font-semibold">
             {displayName}
           </p>
@@ -38,14 +38,14 @@ export function SiteFooter({ site, navLinks }: SiteFooterProps) {
           </p>
         </div>
 
-        <div className="grid gap-4 md:text-right">
+        <div className="grid gap-5 md:text-right">
           <nav aria-label="Links do rodapé">
             <ul className="grid gap-2 md:justify-items-end">
               {navLinks.map((link) => (
                 <li key={link.href}>
                   <a
                     href={link.href}
-                    className="font-semibold hover:text-primary"
+                    className="font-semibold transition-colors duration-[var(--duration-fast)] hover:text-primary"
                   >
                     {link.label}
                   </a>
@@ -55,13 +55,30 @@ export function SiteFooter({ site, navLinks }: SiteFooterProps) {
           </nav>
           <div className="grid gap-2">
             {whatsappHref ? (
-              <a href={whatsappHref} target="_blank" rel="noopener noreferrer">
+              <a
+                href={whatsappHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="transition-colors duration-[var(--duration-fast)] hover:text-primary"
+              >
                 WhatsApp
               </a>
             ) : null}
-            {phoneHref ? <a href={phoneHref}>{site.publicPhone}</a> : null}
+            {phoneHref ? (
+              <a
+                href={phoneHref}
+                className="transition-colors duration-[var(--duration-fast)] hover:text-primary"
+              >
+                {site.publicPhone}
+              </a>
+            ) : null}
             {site.website ? (
-              <a href={site.website} target="_blank" rel="noopener noreferrer">
+              <a
+                href={site.website}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="transition-colors duration-[var(--duration-fast)] hover:text-primary"
+              >
                 Website
               </a>
             ) : null}

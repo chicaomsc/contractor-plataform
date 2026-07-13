@@ -1,6 +1,6 @@
 # Roadmap do Produto
 
-**Versão:** 2.5 — Sprint 7C concluída  
+**Versão:** 2.6 — Sprint 7D concluída  
 **Data:** 2026-07-12  
 **Horizonte:** MVP + Pós-MVP imediato
 
@@ -31,6 +31,7 @@
 | Frontend — Integração pública (hooks, DTOs, preview técnico) | Concluído |
 | Spike — Impeccable no comparador antes/depois | Concluído (REJECT) |
 | Frontend — Landing Page Pública | Concluído |
+| Frontend — Landing Polish & Production Readiness | Concluído |
 | Frontend — Painel Administrativo | Não iniciado |
 
 ---
@@ -231,6 +232,24 @@
 **Nota:** logo, fotografias e pares antes/depois reais deixaram de ser bloqueantes técnicos. Quando ausentes, a landing degrada com fallbacks neutros ou omite seções opcionais.
 
 **Critério de saída:** `/` renderiza a landing pública final para o slug configurado, consumindo os três endpoints públicos, sem regra de negócio no Next.js e sem conteúdo hardcoded do tenant.
+
+---
+
+## Sprint 7D — Landing Polish & Production Readiness ✅
+
+**Objectivo:** Refinar a landing existente para produção sem adicionar funcionalidades, endpoints, novas secções, ViewModels ou alterações no backend.
+
+**Frontend:**
+- [x] Revisão visual completa da landing existente
+- [x] Ajustes de tipografia, espaçamento e ritmo editorial
+- [x] Microinterações subtis em header, links, botões e CTAs
+- [x] Contraste AA reforçado nos tokens e no branding público
+- [x] Header, hero, serviços, galeria, processo, sobre, área, contacto e footer refinados
+- [x] Validação responsiva em 320, 375, 768, 1024, 1440 e 1920 px
+- [x] Lighthouse local em build de produção dentro das metas
+- [x] Documentação de release em `docs/releases/v0.8.1-polish.md`
+
+**Critério de saída:** Landing pronta para produção visual, com Lighthouse 100/100/100/100 no cenário local validado, gates frontend/backend verdes e sem novas funcionalidades.
 
 ---
 

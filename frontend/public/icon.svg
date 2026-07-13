@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Contractor Platform">
+  <rect width="64" height="64" fill="#f8f6f2" />
+  <path d="M14 42h36v8H14z" fill="#1c1c1a" />
+  <path d="M14 14h36v10H14z" fill="#1c1c1a" />
+  <path d="M14 24h10v18H14z" fill="#b43f08" />
+</svg>

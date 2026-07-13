@@ -23,9 +23,9 @@ export function AboutSection({ site, image }: AboutSectionProps) {
   return (
     <Section id="sobre" labelledBy="about-title">
       <Container>
-        <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
+        <div className="grid gap-10 lg:grid-cols-[0.86fr_1.14fr] lg:items-center lg:gap-14">
           {imageUrl ? (
-            <div className="relative aspect-[4/3] bg-surface-muted lg:aspect-[5/4]">
+            <div className="relative aspect-[4/3] overflow-hidden border-l-[5px] border-primary bg-surface-muted lg:aspect-[5/4]">
               <Image
                 src={imageUrl}
                 alt={

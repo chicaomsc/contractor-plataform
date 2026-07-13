@@ -32,7 +32,7 @@ export const metadata: Metadata = {
     siteName: "Contractor Platform",
   },
   icons: {
-    icon: "/favicon.ico",
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
   },
 };
 
@@ -45,6 +45,13 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="pt-PT" className={`${barlow.variable} ${dmSans.variable}`}>
+      <head>
+        <meta
+          name="description"
+          content="Presença digital pública para prestadores de serviço."
+        />
+        <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+      </head>
       <body>
         <Providers>{children}</Providers>
       </body>
