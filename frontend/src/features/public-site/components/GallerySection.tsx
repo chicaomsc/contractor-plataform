@@ -28,16 +28,18 @@ export function GallerySection({
 
   return (
     <Section id="trabalhos" labelledBy="gallery-title" variant="muted">
-      <Container className="space-y-10">
-        <header className="max-w-3xl space-y-4">
-          <SectionLabel>Trabalhos</SectionLabel>
-          <h2
-            id="gallery-title"
-            className="m-0 font-display text-3xl font-bold md:text-4xl"
-          >
-            Antes e depois
-          </h2>
-          <p className="text-[var(--muted-foreground)]">
+      <Container className="space-y-12">
+        <header className="grid gap-6 lg:grid-cols-[0.72fr_1fr] lg:items-end">
+          <div className="max-w-2xl space-y-4">
+            <SectionLabel>Trabalhos</SectionLabel>
+            <h2
+              id="gallery-title"
+              className="m-0 font-display text-3xl font-bold md:text-4xl"
+            >
+              Antes e depois
+            </h2>
+          </div>
+          <p className="m-0 max-w-2xl text-base leading-7 text-[var(--muted-foreground)]">
             Fotografias públicas carregadas pela empresa. Quando o par está
             completo, a comparação fica disponível no desktop e empilhada em
             ecrãs menores.

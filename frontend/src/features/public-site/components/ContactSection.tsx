@@ -17,9 +17,9 @@ export function ContactSection({ site }: ContactSectionProps) {
       aria-labelledby="contact-title"
       className="bg-[var(--surface-dark)] py-16 text-[var(--surface-dark-fg)] md:py-20 lg:py-24"
     >
-      <Container className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-end">
-        <div className="space-y-5">
-          <p className="m-0 text-xs font-semibold uppercase tracking-[0.12em] text-primary">
+      <Container className="grid gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-end">
+        <div className="max-w-3xl space-y-5">
+          <p className="m-0 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--primary-on-dark)]">
             Contacto
           </p>
           <h2
@@ -28,19 +28,19 @@ export function ContactSection({ site }: ContactSectionProps) {
           >
             Peça um orçamento sem compromisso
           </h2>
-          <p className="max-w-2xl text-[var(--surface-dark-fg)]/75">
+          <p className="max-w-2xl text-base leading-7 text-[var(--surface-dark-fg)]/80">
             Use os contactos públicos configurados pela empresa. O pedido segue
             diretamente pelo canal disponível, sem formulários intermédios.
           </p>
         </div>
 
-        <div className="grid gap-3">
+        <div className="grid gap-3 border-t border-[var(--surface-dark-fg)]/20 pt-6 lg:border-t-0 lg:pt-0">
           {whatsappHref ? (
             <a
               href={whatsappHref}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex min-h-12 items-center justify-center gap-3 bg-primary px-6 py-4 text-sm font-semibold text-primary-foreground no-underline hover:bg-primary-hover"
+              className="inline-flex min-h-12 items-center justify-center gap-3 bg-primary px-6 py-4 text-sm font-semibold text-primary-foreground no-underline transition-colors duration-[var(--duration-fast)] hover:bg-primary-hover active:bg-[var(--primary-active)]"
             >
               <MessageCircle size={20} aria-hidden="true" />
               Enviar pelo WhatsApp
@@ -49,7 +49,7 @@ export function ContactSection({ site }: ContactSectionProps) {
           {phoneHref ? (
             <a
               href={phoneHref}
-              className="inline-flex min-h-12 items-center justify-center gap-3 border-2 border-[var(--surface-dark-fg)] px-6 py-4 text-sm font-semibold no-underline hover:bg-[var(--surface-dark-fg)] hover:text-[var(--surface-dark)]"
+              className="inline-flex min-h-12 items-center justify-center gap-3 border-2 border-[var(--surface-dark-fg)] px-6 py-4 text-sm font-semibold no-underline transition-colors duration-[var(--duration-fast)] hover:bg-[var(--surface-dark-fg)] hover:text-[var(--surface-dark)] active:bg-[var(--surface-dark-fg)] active:text-[var(--surface-dark)]"
             >
               <Phone size={20} aria-hidden="true" />
               Telefonar
@@ -60,7 +60,7 @@ export function ContactSection({ site }: ContactSectionProps) {
               href={site.website}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex min-h-12 items-center justify-center gap-3 border border-[var(--surface-dark-fg)]/35 px-6 py-4 text-sm font-semibold no-underline hover:border-[var(--surface-dark-fg)]"
+              className="inline-flex min-h-12 items-center justify-center gap-3 border border-[var(--surface-dark-fg)]/35 px-6 py-4 text-sm font-semibold no-underline transition-colors duration-[var(--duration-fast)] hover:border-[var(--surface-dark-fg)]"
             >
               <ExternalLink size={20} aria-hidden="true" />
               Website

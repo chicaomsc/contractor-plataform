@@ -21,7 +21,7 @@ export function ServiceAreaSection({ site }: ServiceAreaSectionProps) {
 
   return (
     <Section id="area" labelledBy="area-title" variant="muted">
-      <Container className="grid gap-8 lg:grid-cols-[0.7fr_1.3fr] lg:items-start">
+      <Container className="grid gap-8 lg:grid-cols-[0.72fr_1.28fr] lg:items-start">
         <div className="space-y-4">
           <SectionLabel>Área</SectionLabel>
           <h2
@@ -31,7 +31,7 @@ export function ServiceAreaSection({ site }: ServiceAreaSectionProps) {
             Onde trabalhamos
           </h2>
         </div>
-        <div className="border-l-[3px] border-primary bg-background p-6">
+        <div className="border-l-[3px] border-primary bg-background p-6 md:p-8">
           <p className="m-0 flex items-start gap-3 text-lg font-semibold">
             <MapPin size={22} aria-hidden="true" className="mt-1 shrink-0" />
             {site.locationLabel}
@@ -46,7 +46,7 @@ export function ServiceAreaSection({ site }: ServiceAreaSectionProps) {
               href={whatsappHref}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-5 inline-flex min-h-11 items-center border-2 border-foreground px-5 py-3 text-sm font-semibold no-underline hover:bg-foreground hover:text-surface"
+              className="mt-5 inline-flex min-h-11 items-center border-2 border-foreground px-5 py-3 text-sm font-semibold no-underline transition-colors duration-[var(--duration-fast)] hover:bg-foreground hover:text-surface active:bg-foreground active:text-surface"
             >
               Perguntar disponibilidade
             </a>

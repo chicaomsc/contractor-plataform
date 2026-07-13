@@ -15,7 +15,7 @@ export function Container({
   return (
     <div
       className={cn(
-        "mx-auto w-full min-w-0 px-5 md:px-8 lg:px-16",
+        "mx-auto w-full min-w-0 px-6 md:px-8 lg:px-16",
         size === "wide"
           ? "max-w-[min(var(--container-max),100%)]"
           : "max-w-[min(48rem,100%)]",

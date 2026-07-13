@@ -65,14 +65,14 @@ export function BeforeAfterComparisonBaseline({
     <article
       aria-labelledby={title ? titleId : undefined}
       aria-describedby={description ? descriptionId : undefined}
-      className="space-y-5"
+      className="space-y-6"
     >
       {(title || description) && (
-        <header className="max-w-2xl space-y-2">
+        <header className="max-w-2xl space-y-2 border-l-[3px] border-primary pl-4">
           {title && (
             <TitleTag
               id={titleId}
-              className="font-display text-2xl font-semibold"
+              className="m-0 font-display text-2xl font-semibold leading-tight"
             >
               {title}
             </TitleTag>
@@ -80,7 +80,7 @@ export function BeforeAfterComparisonBaseline({
           {description && (
             <p
               id={descriptionId}
-              className="text-sm text-[var(--muted-foreground)]"
+              className="m-0 text-sm leading-6 text-[var(--muted-foreground)]"
             >
               {description}
             </p>
@@ -108,7 +108,7 @@ export function BeforeAfterComparisonBaseline({
                 width={1200}
                 height={900}
                 sizes="100vw"
-                className="aspect-[4/3] w-full object-cover"
+                className="aspect-[4/3] w-full border border-border object-cover"
               />
             </figure>
             <figure className="space-y-2">
@@ -121,7 +121,7 @@ export function BeforeAfterComparisonBaseline({
                 width={1200}
                 height={900}
                 sizes="100vw"
-                className="aspect-[4/3] w-full object-cover"
+                className="aspect-[4/3] w-full border border-border object-cover"
               />
             </figure>
           </div>
@@ -182,7 +182,7 @@ export function BeforeAfterComparisonBaseline({
               style={{ left: `${position}%` }}
             >
               <span className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-primary" />
-              <span className="absolute left-1/2 top-1/2 grid h-11 w-11 -translate-x-1/2 -translate-y-1/2 place-items-center border border-foreground bg-surface text-sm font-semibold">
+              <span className="absolute left-1/2 top-1/2 grid h-11 w-11 -translate-x-1/2 -translate-y-1/2 place-items-center border border-foreground bg-surface text-sm font-semibold transition-transform duration-[var(--duration-fast)] hover:scale-105">
                 ↔
               </span>
             </div>

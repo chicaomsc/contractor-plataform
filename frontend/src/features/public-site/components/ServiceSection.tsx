@@ -19,16 +19,18 @@ export function ServiceSection({
 
   return (
     <Section id="servicos" labelledBy="services-title" variant="default">
-      <Container className="space-y-10">
-        <header className="max-w-3xl space-y-4">
-          <SectionLabel>Serviços</SectionLabel>
-          <h2
-            id="services-title"
-            className="m-0 font-display text-3xl font-bold md:text-4xl"
-          >
-            O que fazemos
-          </h2>
-          <p className="text-[var(--muted-foreground)]">
+      <Container className="space-y-12">
+        <header className="grid gap-6 lg:grid-cols-[0.72fr_1fr] lg:items-end">
+          <div className="max-w-2xl space-y-4">
+            <SectionLabel>Serviços</SectionLabel>
+            <h2
+              id="services-title"
+              className="m-0 font-display text-3xl font-bold md:text-4xl"
+            >
+              O que fazemos
+            </h2>
+          </div>
+          <p className="m-0 max-w-2xl text-base leading-7 text-[var(--muted-foreground)]">
             Serviços publicados pela empresa, apresentados sem promessas que não
             estejam nos dados públicos.
           </p>
@@ -53,7 +55,7 @@ export function ServiceSection({
                 href={whatsappHref}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-4 inline-flex min-h-11 items-center bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground no-underline hover:bg-primary-hover"
+                className="mt-4 inline-flex min-h-11 items-center bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground no-underline transition-colors duration-[var(--duration-fast)] hover:bg-primary-hover active:bg-[var(--primary-active)]"
               >
                 Contactar pelo WhatsApp
               </a>
@@ -62,19 +64,19 @@ export function ServiceSection({
         ) : null}
 
         {services.length > 0 ? (
-          <ol className="grid gap-x-10 border-y border-border md:grid-cols-2 lg:grid-cols-3">
+          <ol className="divide-y divide-border border-y border-border">
             {services.map((service, index) => (
               <li
                 key={service.id}
-                className="grid gap-3 border-b border-border py-7 md:[&:nth-last-child(-n+2)]:border-b-0 lg:[&:nth-last-child(-n+3)]:border-b-0"
+                className="group grid gap-4 py-7 transition-colors duration-[var(--duration-fast)] md:grid-cols-[4rem_minmax(0,0.85fr)_minmax(0,1.15fr)] md:items-baseline md:py-8"
               >
-                <span className="font-display text-sm font-semibold text-primary">
+                <span className="font-display text-sm font-semibold text-primary transition-colors duration-[var(--duration-fast)] md:text-base">
                   {String(index + 1).padStart(2, "0")}
                 </span>
-                <h3 className="m-0 font-display text-2xl font-semibold">
+                <h3 className="m-0 font-display text-2xl font-semibold leading-tight transition-colors duration-[var(--duration-fast)] group-hover:text-primary">
                   {service.name}
                 </h3>
-                <p className="m-0 text-sm leading-6 text-[var(--muted-foreground)]">
+                <p className="m-0 max-w-2xl text-sm leading-6 text-[var(--muted-foreground)] md:justify-self-end">
                   {service.summary ?? "Sem descrição pública disponível."}
                 </p>
               </li>
