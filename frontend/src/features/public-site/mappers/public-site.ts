@@ -41,6 +41,8 @@ export function mapPublicSiteDto(dto: PublicSiteDto): PublicSiteViewModel {
       hasValidPrimaryColor: isSafeHexColor(dto.branding?.primaryColor),
       hasValidAccentColor: isSafeHexColor(dto.branding?.accentColor),
     },
+    tagline: dto.branding?.tagline ?? null,
+    aboutText: dto.branding?.aboutText ?? null,
     footerText: dto.branding?.footerText ?? null,
   };
 }
@@ -67,6 +69,10 @@ export function mapPublicGalleryItemDto(
     id: dto.id,
     title: dto.title,
     description: dto.description,
+    beforeImageUrl: dto.beforeImageUrl,
+    afterImageUrl: dto.afterImageUrl,
+    beforeAlt: dto.beforeImageUrl ? `${dto.title} antes da intervenção` : null,
+    afterAlt: dto.afterImageUrl ? `${dto.title} depois da intervenção` : null,
     displayOrder: dto.displayOrder,
     featured: dto.featured,
     hasBeforeImage,

@@ -6,6 +6,7 @@ export type BeforeAfterComparisonProps = {
   title?: string | null;
   description?: string | null;
   initialPosition?: number;
+  titleHeadingLevel?: "h2" | "h3";
 };
 
 export type CompleteBeforeAfterComparisonProps = Required<

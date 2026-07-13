@@ -1,14 +1,13 @@
 # Inventário de Componentes — Contractor Platform
 
-**Sprint:** 7A — Design Direction  
-**Versão:** 1.1  
+**Sprint:** 7A — Design Direction / Atualização 7C  
+**Versão:** 1.2  
 **Data:** 2026-07-12  
-**Estado:** Especificação pré-implementação — nenhum código criado
+**Estado:** Especificação + implementação inicial da landing pública
 
 ---
 
-> Este documento lista e especifica componentes futuros. Nenhum código foi escrito.  
-> A implementação ocorre nas Sprints 7B e 7C.
+> Este documento lista a especificação original e a implementação inicial da landing pública concluída na Sprint 7C.
 
 ---
 
@@ -169,9 +168,9 @@ Ver [component-architecture.md](component-architecture.md) para a hierarquia com
 
 ---
 
-### `WhatsAppFAB`
+### `MobileWhatsAppAction`
 
-**Responsabilidade:** Botão circular flutuante de WhatsApp em mobile. Fixo no canto inferior direito.
+**Responsabilidade:** CTA flutuante discreto de WhatsApp em mobile. Fixo no canto inferior direito.
 
 **Variações:** nenhuma (apenas visível em mobile).
 
@@ -243,20 +242,20 @@ Ver [component-architecture.md](component-architecture.md) para a hierarquia com
 
 ---
 
-### `ServiceList`
+### `ServiceSection`
 
-**Responsabilidade:** Lista de serviços activos da empresa, consumindo a API pública.
+**Responsabilidade:** Lista editorial de serviços activos da empresa, consumindo ViewModels da API pública.
 
 **Variações:**
-- `list` — layout de lista vertical (mobile)
-- `grid` — grelha de 2–3 colunas (tablet/desktop)
-- `empty` — estado vazio com CTA de WhatsApp
+- `editorial` — lista numerada com linhas e ritmo tipográfico
+- `empty` — estado vazio com CTA de WhatsApp quando disponível
 
 **Propriedades essenciais:**
-- `services: PublicServiceResponse[]` — dados da API
-- `layout?: 'list' | 'grid'`
+- `services: PublicServiceViewModel[]`
+- `whatsapp: string | null`
+- `isPartialError?: boolean`
 
-**Server ou Client:** Server Component (dados fetched no servidor).
+**Server ou Client:** Server Component de apresentação; dados e TanStack Query ficam no boundary client da feature pública.
 
 **Acessibilidade:**
 - `<h2>O que fazemos</h2>`
