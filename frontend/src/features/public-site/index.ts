@@ -1,5 +1,6 @@
 export { PublicSiteIntegrationShell } from "./components/PublicSiteIntegrationShell";
-export { PublicSiteIntegrationPreview } from "./components/PublicSiteIntegrationPreview";
+export { PublicLandingPage } from "./components/PublicLandingPage";
+export { publicLandingNavLinks } from "./components/PublicSiteIntegrationShell";
 export {
   usePublicGallery,
   usePublicServices,

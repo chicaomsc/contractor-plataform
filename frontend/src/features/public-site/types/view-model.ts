@@ -15,6 +15,8 @@ export type PublicSiteViewModel = {
   website: string | null;
   locationLabel: string | null;
   branding: BrandingTokenViewModel;
+  tagline: string | null;
+  aboutText: string | null;
   footerText: string | null;
 };
 
@@ -30,6 +32,10 @@ export type PublicGalleryItemViewModel = {
   id: string;
   title: string;
   description: string | null;
+  beforeImageUrl: string | null;
+  afterImageUrl: string | null;
+  beforeAlt: string | null;
+  afterAlt: string | null;
   displayOrder: number;
   featured: boolean;
   hasBeforeImage: boolean;

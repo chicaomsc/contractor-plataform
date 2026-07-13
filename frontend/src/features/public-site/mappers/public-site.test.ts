@@ -29,6 +29,8 @@ describe("public site mappers", () => {
 
     expect(vm.displayName).toBe("Empresa Teste");
     expect(vm.locationLabel).toBe("Porto, Norte, PT");
+    expect(vm.tagline).toBeNull();
+    expect(vm.aboutText).toBeNull();
     expect(vm.branding.primaryColor).toBe("#123456");
     expect(vm.branding.accentColor).toBeNull();
     expect(getBrandingStyle(vm)).toMatchObject({ "--primary": "#123456" });
@@ -66,6 +68,8 @@ describe("public site mappers", () => {
         featured: false,
       }),
     ).toMatchObject({
+      beforeImageUrl: "https://cdn.test/before.jpg",
+      beforeAlt: "Obra antes da intervenção",
       hasBeforeImage: true,
       hasAfterImage: false,
       hasCompleteBeforeAfterPair: false,

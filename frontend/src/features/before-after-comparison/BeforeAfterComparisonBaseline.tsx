@@ -19,6 +19,7 @@ export function BeforeAfterComparisonBaseline({
   title,
   description,
   initialPosition = 50,
+  titleHeadingLevel = "h2",
 }: BeforeAfterComparisonProps) {
   const titleId = useId();
   const descriptionId = useId();
@@ -34,6 +35,7 @@ export function BeforeAfterComparisonBaseline({
     afterAlt,
   };
   const images = hasCompleteComparisonImages(imageInput) ? imageInput : null;
+  const TitleTag = titleHeadingLevel;
 
   function updateFromPointer(event: PointerEvent<HTMLDivElement>) {
     const rect = frameRef.current?.getBoundingClientRect();
@@ -68,9 +70,12 @@ export function BeforeAfterComparisonBaseline({
       {(title || description) && (
         <header className="max-w-2xl space-y-2">
           {title && (
-            <h2 id={titleId} className="font-display text-2xl font-semibold">
+            <TitleTag
+              id={titleId}
+              className="font-display text-2xl font-semibold"
+            >
               {title}
-            </h2>
+            </TitleTag>
           )}
           {description && (
             <p

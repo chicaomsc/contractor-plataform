@@ -1,21 +1,62 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
-import { Phone } from "lucide-react";
+import { Menu, MessageCircle, Phone, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Container } from "./Container";
 import type { PublicSiteViewModel } from "@/features/public-site/types/view-model";
+import type { NavLink } from "@/features/public-site/components/landing-types";
+import {
+  getPhoneHref,
+  getWhatsAppHref,
+} from "@/features/public-site/utils/contact";
+import { cn } from "@/lib/utils/cn";
 
 type SiteHeaderProps = {
   site: PublicSiteViewModel;
+  navLinks: NavLink[];
 };
 
-export function SiteHeader({ site }: SiteHeaderProps) {
+export function SiteHeader({ site, navLinks }: SiteHeaderProps) {
   const displayName = site.displayName;
   const logoUrl = site.branding.logoUrl;
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
+  const whatsappHref = getWhatsAppHref(site.whatsapp);
+  const phoneHref = getPhoneHref(site.publicPhone);
+
+  useEffect(() => {
+    const onScroll = () => setIsScrolled(window.scrollY > 64);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => {
+    if (!isMenuOpen) {
+      return;
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [isMenuOpen]);
 
   return (
     <header
       role="banner"
-      className="min-h-[var(--header-height-mobile)] border-b border-border bg-background md:min-h-[var(--header-height-desktop)]"
+      className={cn(
+        "sticky top-0 z-30 border-b border-border bg-background transition-[min-height]",
+        isScrolled
+          ? "min-h-[var(--header-height-mobile)] shadow-sm"
+          : "min-h-[var(--header-height-mobile)] md:min-h-[var(--header-height-desktop)]",
+      )}
     >
       <Container className="flex min-h-[inherit] items-center justify-between gap-6">
         <Link
@@ -36,23 +77,107 @@ export function SiteHeader({ site }: SiteHeaderProps) {
           )}
         </Link>
 
-        <nav aria-label="Navegação principal" className="hidden md:block">
-          <span className="text-sm text-[var(--muted-foreground)]">
-            Fundação técnica
-          </span>
+        <nav aria-label="Navegação principal" className="hidden lg:block">
+          <ul className="flex items-center gap-8">
+            {navLinks.map((link) => (
+              <li key={link.href}>
+                <a
+                  href={link.href}
+                  className="inline-flex min-h-11 items-center text-sm font-semibold no-underline hover:text-primary"
+                >
+                  {link.label}
+                </a>
+              </li>
+            ))}
+          </ul>
         </nav>
 
-        {site.publicPhone ? (
-          <a
-            href={`tel:${site.publicPhone.replace(/\s/g, "")}`}
-            className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold no-underline hover:text-primary"
+        <div className="flex items-center gap-2">
+          {whatsappHref ? (
+            <a
+              href={whatsappHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hidden min-h-11 items-center gap-2 bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground no-underline hover:bg-primary-hover sm:inline-flex"
+            >
+              <MessageCircle size={18} aria-hidden="true" />
+              WhatsApp
+            </a>
+          ) : null}
+          {!whatsappHref && phoneHref ? (
+            <a
+              href={phoneHref}
+              aria-label={`Telefonar para ${site.publicPhone}`}
+              className="hidden min-h-11 items-center gap-2 text-sm font-semibold no-underline hover:text-primary sm:inline-flex"
+            >
+              <Phone size={18} aria-hidden="true" />
+              <span>{site.publicPhone}</span>
+            </a>
+          ) : null}
+          <button
+            type="button"
+            aria-label={isMenuOpen ? "Fechar menu" : "Abrir menu"}
+            aria-expanded={isMenuOpen}
+            aria-controls="mobile-navigation"
+            onClick={() => setIsMenuOpen((value) => !value)}
+            className="inline-flex h-11 w-11 items-center justify-center border border-border bg-background lg:hidden"
           >
-            <Phone size={18} aria-hidden="true" />
-            <span className="hidden sm:inline">{site.publicPhone}</span>
-            <span className="sr-only">Telefonar para {displayName}</span>
-          </a>
-        ) : null}
+            {isMenuOpen ? (
+              <X size={22} aria-hidden="true" />
+            ) : (
+              <Menu size={22} aria-hidden="true" />
+            )}
+          </button>
+        </div>
       </Container>
+
+      <div
+        id="mobile-navigation"
+        role="dialog"
+        aria-label="Menu principal"
+        hidden={!isMenuOpen}
+        className={cn(
+          "border-t border-border bg-background lg:hidden",
+          isMenuOpen ? "block" : "hidden",
+        )}
+      >
+        <Container className="py-4">
+          <nav aria-label="Navegação móvel">
+            <ul className="grid gap-1">
+              {navLinks.map((link) => (
+                <li key={link.href}>
+                  <a
+                    href={link.href}
+                    onClick={() => setIsMenuOpen(false)}
+                    className="flex min-h-12 items-center border-b border-border text-base font-semibold no-underline"
+                  >
+                    {link.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </nav>
+          {whatsappHref ? (
+            <a
+              href={whatsappHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground no-underline hover:bg-primary-hover"
+            >
+              <MessageCircle size={18} aria-hidden="true" />
+              Contactar pelo WhatsApp
+            </a>
+          ) : phoneHref ? (
+            <a
+              href={phoneHref}
+              className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 border-2 border-foreground px-5 py-3 text-sm font-semibold no-underline"
+            >
+              <Phone size={18} aria-hidden="true" />
+              Telefonar
+            </a>
+          ) : null}
+        </Container>
+      </div>
     </header>
   );
 }

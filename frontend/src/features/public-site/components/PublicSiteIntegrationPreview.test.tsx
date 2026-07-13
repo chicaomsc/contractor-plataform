@@ -25,6 +25,8 @@ const site: PublicSiteViewModel = {
     hasValidPrimaryColor: true,
     hasValidAccentColor: false,
   },
+  tagline: null,
+  aboutText: null,
   footerText: null,
 };
 
@@ -43,6 +45,10 @@ const gallery: PublicGalleryItemViewModel[] = [
     id: "gallery-1",
     title: "Obra Pública",
     description: null,
+    beforeImageUrl: "https://cdn.test/before.jpg",
+    afterImageUrl: "https://cdn.test/after.jpg",
+    beforeAlt: "Obra Pública antes da intervenção",
+    afterAlt: "Obra Pública depois da intervenção",
     displayOrder: 0,
     featured: true,
     hasBeforeImage: true,

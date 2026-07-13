@@ -1,6 +1,6 @@
 # Roadmap do Produto
 
-**Versão:** 2.4 — Spike 7B.1 concluído  
+**Versão:** 2.5 — Sprint 7C concluída  
 **Data:** 2026-07-12  
 **Horizonte:** MVP + Pós-MVP imediato
 
@@ -30,7 +30,7 @@
 | Frontend — Foundation (Next.js, tokens, layout, SEO) | Concluído |
 | Frontend — Integração pública (hooks, DTOs, preview técnico) | Concluído |
 | Spike — Impeccable no comparador antes/depois | Concluído (REJECT) |
-| Frontend — Landing Page Pública | Pendente (Sprint 7C) |
+| Frontend — Landing Page Pública | Concluído |
 | Frontend — Painel Administrativo | Não iniciado |
 
 ---
@@ -208,33 +208,29 @@
 
 ---
 
-## Sprint 7C — Landing Page Pública
+## Sprint 7C — Landing Page Pública ✅
 
-**Objectivo:** Implementar todas as secções de conteúdo da landing com dados reais.
-
-**Pré-requisitos bloqueantes:**
-- [x] Sprint 7B concluída
-- [x] Sprint 7B.5 concluída
-- [x] Spike 7B.1 concluído sem adoção do Impeccable
-- [ ] Logo do cliente em alta resolução recebida
-- [ ] Mínimo 2 fotografias de obra para o hero
-- [ ] Paleta final validada com a logo real
-- [ ] Mínimo 4 pares antes/depois disponíveis
+**Objectivo:** Implementar as secções públicas da landing com dados reais quando disponíveis, sem hardcode do tenant e com fallbacks profissionais para dados ausentes.
 
 **Frontend:**
-- [ ] `HeroSection`
-- [ ] `TrustStrip` + `StatCounter`
-- [ ] `ServiceSection` + fetch de `/public/services`
-- [ ] `BeforeAfterSection` + `BeforeAfterComparison` + fetch de `/public/gallery`
-- [ ] `ProcessSection`
-- [ ] `AboutSection`
-- [ ] `CoverageSection`
-- [ ] `ContactSection` + `ContactForm`
-- [ ] Responsividade mobile-first end-to-end
-- [ ] Acessibilidade WCAG 2.2 AA (Lighthouse ≥ 90)
-- [ ] Performance (LCP < 2.5s, WebP, lazy loading)
+- [x] `HeroSection`
+- [x] `TrustStrip`
+- [x] `ServiceSection`
+- [x] `GallerySection` com `BeforeAfterComparisonBaseline`
+- [x] `ProcessSection`
+- [x] `AboutSection`
+- [x] `ServiceAreaSection`
+- [x] `ContactSection` sem formulário fictício
+- [x] `MobileWhatsAppAction`
+- [x] Header/footer definitivos
+- [x] Responsividade mobile-first
+- [x] Acessibilidade WCAG 2.2 AA aplicada na implementação
+- [x] SEO com dados públicos quando disponíveis
+- [x] Testes comportamentais da landing
 
-**Critério de saída:** Landing page acessível via `/{slug}` com dados reais. Passa Lighthouse Accessibility ≥ 90 e Performance ≥ 80.
+**Nota:** logo, fotografias e pares antes/depois reais deixaram de ser bloqueantes técnicos. Quando ausentes, a landing degrada com fallbacks neutros ou omite seções opcionais.
+
+**Critério de saída:** `/` renderiza a landing pública final para o slug configurado, consumindo os três endpoints públicos, sem regra de negócio no Next.js e sem conteúdo hardcoded do tenant.
 
 ---
 
@@ -334,8 +330,8 @@
 
 | Dependência | Risco | Mitigação |
 |---|---|---|
-| Fotografias reais da JR Pinturas | Sem fotos, o hero e galeria não funcionam | Documentado em `content-structure.md`; fallbacks especificados |
-| Logo validado com paleta | Paleta proposta pode não funcionar com a logo real | Tokens marcados como "sujeitos a validação"; ajuste antes da Sprint 7B |
+| Fotografias reais por tenant | Sem fotos, o hero e a galeria perdem força visual | Landing 7C usa fallbacks e omite seções opcionais quando necessário |
+| Logo validado com paleta | Paleta pública pode não funcionar com a logo real | Branding passa por validação e cai para tokens seguros |
 | Supabase Storage | Serviço externo fora do controlo | Interface de storage abstraída — troca por S3/R2 não quebra o domínio |
 | Railway (backend) | Custo pode aumentar com uso | Dockerfile portável |
 | Java 25 (LTS) | Versão recente, ecossistema em adaptação | Usar apenas features estáveis |

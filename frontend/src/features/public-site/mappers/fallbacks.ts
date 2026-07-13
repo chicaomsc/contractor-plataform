@@ -15,5 +15,7 @@ export const FALLBACK_SITE_VIEW_MODEL: PublicSiteViewModel = {
     hasValidPrimaryColor: false,
     hasValidAccentColor: false,
   },
+  tagline: null,
+  aboutText: null,
   footerText: "Informação pública temporariamente indisponível.",
 };

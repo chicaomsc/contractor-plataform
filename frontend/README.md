@@ -22,7 +22,7 @@ NEXT_PUBLIC_COMPANY_SLUG=jr-pinturas
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 ```
 
-`NEXT_PUBLIC_COMPANY_SLUG` define o tenant inicial. No futuro, o slug poderá ser resolvido por domínio/host, mas essa lógica não faz parte da Sprint 7B.
+`NEXT_PUBLIC_COMPANY_SLUG` define o tenant inicial. No futuro, o slug poderá ser resolvido por domínio/host, mas essa lógica ainda não faz parte do frontend.
 
 ## Execução
 
@@ -39,7 +39,19 @@ Frontend:
 npm run dev
 ```
 
-Se a API estiver indisponível, o frontend mostra erro bloqueante para o site público. Se apenas serviços ou galeria falharem, o header/footer e os dados principais continuam renderizados com aviso parcial.
+Se a API estiver indisponível, o frontend mostra erro bloqueante para o site público. Se apenas serviços ou galeria falharem, o header/footer, hero e dados principais continuam renderizados com aviso parcial.
+
+A rota `/` renderiza a landing pública final:
+
+- header e footer definitivos;
+- hero orientado por dados públicos;
+- barra de confiança sem métricas inventadas;
+- serviços em apresentação editorial;
+- galeria antes/depois com comparador acessível;
+- processo de trabalho genérico;
+- sobre e área geográfica apenas quando houver dados públicos;
+- contacto por WhatsApp, telefone ou website público;
+- CTA fixo de WhatsApp no mobile quando houver número válido.
 
 ## Build
 
@@ -82,6 +94,26 @@ API DTO -> Mapper -> ViewModel -> Component
 ```
 
 Componentes não consomem DTOs brutos. Hooks TanStack Query ficam em `src/features/public-site/hooks`, query keys em `src/features/public-site/api/query-keys.ts`, e mappers em `src/features/public-site/mappers`.
+
+A transformação para apresentação fica em `src/features/public-site/mappers` e `src/features/public-site/utils`. Componentes recebem ViewModels já normalizados e não duplicam validações de domínio do backend.
+
+## Landing pública
+
+Componentes principais:
+
+- `HeroSection`
+- `TrustStrip`
+- `ServiceSection`
+- `GallerySection`
+- `ProcessSection`
+- `AboutSection`
+- `ServiceAreaSection`
+- `ContactSection`
+- `MobileWhatsAppAction`
+
+O preview técnico da Sprint 7B.5 permanece isolado no código de testes, mas não é usado pela rota pública.
+
+O formulário de contacto não foi implementado porque não existe endpoint backend público para envio.
 
 ## Fronteira Next.js e Spring Boot
 
