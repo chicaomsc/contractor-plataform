@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, Image, Palette, Settings, Wrench } from "lucide-react";
+import { Building2, Image, Images, Palette, Settings, Wrench } from "lucide-react";
 import Link from "next/link";
 import {
   useBranding,
@@ -177,6 +177,13 @@ export function DashboardHome() {
             >
               <Wrench size={18} aria-hidden="true" />
               Gerenciar serviços
+            </Link>
+            <Link
+              href="/dashboard/gallery"
+              className="flex items-center gap-3 border border-border px-4 py-3 text-sm font-semibold no-underline hover:border-primary"
+            >
+              <Images size={18} aria-hidden="true" />
+              Gerenciar galeria
             </Link>
             <Link
               href="/dashboard/settings"

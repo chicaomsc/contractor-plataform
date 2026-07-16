@@ -61,8 +61,9 @@ A rota `/login` inicia sessão contra a autenticação existente do backend. A �
 - edição de Branding via `GET/PUT /branding/me`;
 - edição de Settings via `GET/PUT /settings/me`.
 - gestão de Services via endpoints administrativos existentes.
+- gestão de Gallery via endpoints administrativos existentes.
 
-Gallery é consumida no dashboard apenas para contagem. A gestão de galeria ainda não faz parte do frontend.
+Alterações em Services e Gallery refletem na landing pública pelos endpoints públicos existentes do backend.
 
 ## Build
 
@@ -105,6 +106,7 @@ Rotas disponíveis:
 - `/dashboard/branding`
 - `/dashboard/settings`
 - `/dashboard/services`
+- `/dashboard/gallery`
 
 O dashboard consome apenas endpoints existentes do Spring Boot. Não há Route Handlers, Server Actions, mocks permanentes ou backend paralelo no Next.js.
 
@@ -119,6 +121,21 @@ Gestão de serviços:
 - `PATCH /services/{id}/reorder` para ordenação.
 
 A ordenação no frontend usa mover para cima e mover para baixo. Drag and drop não foi adicionado porque não existe infraestrutura dessa interação no projeto.
+
+Gestão de galeria:
+
+- `GET /gallery` para listagem;
+- `POST /gallery` para criação de item;
+- `PUT /gallery/{id}` para edição e ativação/desativação;
+- `DELETE /gallery/{id}` para exclusão;
+- `PATCH /gallery/{id}/feature` para destaque;
+- `PATCH /gallery/{id}/reorder` para ordenação;
+- `POST /gallery/{id}/before-image` para upload before;
+- `POST /gallery/{id}/after-image` para upload after;
+- `DELETE /gallery/{id}/before-image` para remover before;
+- `DELETE /gallery/{id}/after-image` para remover after.
+
+O par before/after usa o modelo existente do backend: um item de galeria com dois slots de imagem. Não há crop, editor de imagem, compressão ou filtros no frontend.
 
 ## Integração pública
 
