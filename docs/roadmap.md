@@ -1,6 +1,6 @@
 # Roadmap do Produto
 
-**Versão:** 2.11 — Sprint 8C concluída  
+**Versão:** 2.12 — Sprint 9 concluída  
 **Data:** 2026-07-16  
 **Horizonte:** MVP + Pós-MVP imediato
 
@@ -37,7 +37,8 @@
 | Dashboard Foundation | Concluído |
 | Services Management | Concluído |
 | Gallery Management | Concluído |
-| Frontend — Painel Administrativo completo | Em progresso |
+| MVP Hardening | Concluído |
+| Frontend — Painel Administrativo completo | Concluído |
 
 ---
 
@@ -430,7 +431,27 @@
 
 ---
 
-## Sprint 9 — Clientes e Orçamentos
+## Sprint 9 — MVP Hardening ✅
+
+**Objectivo:** estabilizar o MVP completo antes do Estimate Builder.
+
+**Entregue:**
+- [x] Playwright E2E com fluxo principal e smoke tests
+- [x] Revisão de autenticação e sessão
+- [x] Testes de isolamento cross-tenant no backend
+- [x] Política explícita de upload PNG/JPEG/WebP até 5 MB
+- [x] Segurança de storage contra path traversal
+- [x] Security headers em Next.js e Spring Boot
+- [x] Build sem dependência obrigatória de Google Fonts
+- [x] Correção responsiva do logout no drawer mobile
+- [x] CI com smoke E2E e build backend
+- [x] Documentação em `docs/security/*`
+
+**Status:** Concluída
+
+---
+
+## Sprint 10 — Clientes e Orçamentos
 
 **Objectivo:** Gestão de carteira de clientes e criação de orçamentos.
 
@@ -449,7 +470,7 @@
 
 ---
 
-## Sprint 10 — PDF e Materiais
+## Sprint 11 — PDF e Materiais
 
 **Objectivo:** Orçamentos com materiais, exportáveis em PDF.
 
@@ -466,9 +487,9 @@
 
 ---
 
-## Sprint 11 — Hardening e Deploy
+## Sprint 12 — Deploy e Operação
 
-**Objectivo:** Sistema estável, seguro e em produção.
+**Objectivo:** Sistema em produção com operação mínima.
 
 **Backend:**
 - [ ] Rate limiting no login
@@ -545,3 +566,8 @@
 - [Release v0.9.0-dashboard-foundation](releases/v0.9.0-dashboard-foundation.md)
 - [Release v0.9.1-services-management](releases/v0.9.1-services-management.md)
 - [Release v0.9.2-gallery-management](releases/v0.9.2-gallery-management.md)
+- [Release v0.9.3-mvp-hardening](releases/v0.9.3-mvp-hardening.md)
+- [Security — Authentication Review](security/authentication-review.md)
+- [Security — Tenant Isolation](security/tenant-isolation.md)
+- [Security — Upload Policy](security/upload-policy.md)
+- [Security — Dependency Audit](security/dependency-audit.md)

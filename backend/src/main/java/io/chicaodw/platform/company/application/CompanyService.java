@@ -3,6 +3,7 @@ package io.chicaodw.platform.company.application;
 import io.chicaodw.platform.common.entity.Address;
 import io.chicaodw.platform.common.exception.BusinessRuleException;
 import io.chicaodw.platform.common.exception.ResourceNotFoundException;
+import io.chicaodw.platform.common.storage.ImageUploadPolicy;
 import io.chicaodw.platform.common.storage.StorageService;
 import io.chicaodw.platform.company.api.dto.BrandingResponse;
 import io.chicaodw.platform.company.api.dto.CompanyResponse;
@@ -33,6 +34,7 @@ public class CompanyService {
     private final BrandingRepository brandingRepository;
     private final SettingsRepository settingsRepository;
     private final StorageService     storageService;
+    private final ImageUploadPolicy  imageUploadPolicy;
     private final CompanyMapper      companyMapper;
 
     // ── Internal (used by AuthService during onboarding) ─────────────────────
@@ -153,13 +155,7 @@ public class CompanyService {
     // ── Logo management ───────────────────────────────────────────────────────
 
     public BrandingResponse uploadLogo(UUID companyId, MultipartFile file) {
-        if (file == null || file.isEmpty()) {
-            throw new BusinessRuleException("Logo file cannot be empty");
-        }
-        String contentType = file.getContentType();
-        if (contentType == null || !contentType.startsWith("image/")) {
-            throw new BusinessRuleException("Only image files are accepted for the logo");
-        }
+        imageUploadPolicy.validate(file);
 
         var branding = brandingRepository.findByCompanyId(companyId)
                 .orElseThrow(() -> new ResourceNotFoundException("Branding", companyId));

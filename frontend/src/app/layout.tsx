@@ -1,21 +1,7 @@
 import type { Metadata, Viewport } from "next";
-import { Barlow, DM_Sans } from "next/font/google";
 import type { ReactNode } from "react";
 import { Providers } from "@/providers/providers";
 import "./globals.css";
-
-const barlow = Barlow({
-  subsets: ["latin"],
-  display: "swap",
-  variable: "--font-display",
-  weight: ["600", "700", "800"],
-});
-
-const dmSans = DM_Sans({
-  subsets: ["latin"],
-  display: "swap",
-  variable: "--font-body",
-});
 
 export const metadata: Metadata = {
   metadataBase: new URL(
@@ -44,7 +30,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="pt-PT" className={`${barlow.variable} ${dmSans.variable}`}>
+    <html lang="pt-PT">
       <head>
         <meta
           name="description"

@@ -5,10 +5,21 @@ import { useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 
 const MAX_UPLOAD_SIZE_BYTES = 5 * 1024 * 1024;
+const ALLOWED_UPLOAD_TYPES = new Map([
+  ["image/png", [".png"]],
+  ["image/jpeg", [".jpg", ".jpeg"]],
+  ["image/webp", [".webp"]],
+]);
 
 export function validateGalleryImageFile(file: File) {
-  if (!file.type.startsWith("image/")) {
-    return "Formato inválido. Envie um arquivo de imagem.";
+  const allowedExtensions = ALLOWED_UPLOAD_TYPES.get(file.type);
+  const fileName = file.name.toLowerCase();
+
+  if (
+    !allowedExtensions ||
+    !allowedExtensions.some((extension) => fileName.endsWith(extension))
+  ) {
+    return "Formato inválido. Envie uma imagem PNG, JPEG ou WebP.";
   }
 
   if (file.size > MAX_UPLOAD_SIZE_BYTES) {
@@ -70,7 +81,7 @@ export function UploadArea({
       <input
         ref={inputRef}
         type="file"
-        accept="image/*"
+        accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
         className="sr-only"
         onChange={(event) => void handleFile(event.target.files?.[0] ?? null)}
       />
