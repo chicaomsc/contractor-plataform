@@ -68,7 +68,7 @@ class SettingsServiceTest {
     @Test
     void updateSettings_fullUpdate_persistsAllFields() {
         var request  = new UpdateSettingsRequest("USD", new BigDecimal("20.00"),
-                60, "Rodapé atualizado", "en-US", "America/New_York", "MM/dd/yyyy", "en-US");
+                60, "Rodapé atualizado", "en-US", "America/New_York", "MM/dd/yyyy", "en-US", new BigDecimal("40.00"));
         var expected = settingsResponse(companyId, "USD");
 
         when(settingsRepository.findByCompanyId(companyId)).thenReturn(Optional.of(settings));
@@ -83,7 +83,7 @@ class SettingsServiceTest {
     @Test
     void updateSettings_partialUpdate_onlyChangesProvidedFields() {
         var request = new UpdateSettingsRequest(null, new BigDecimal("6.00"),
-                null, null, null, null, null, null);
+                null, null, null, null, null, null, null);
 
         when(settingsRepository.findByCompanyId(companyId)).thenReturn(Optional.of(settings));
         when(settingsRepository.save(settings)).thenReturn(settings);
@@ -101,12 +101,12 @@ class SettingsServiceTest {
         when(settingsRepository.findByCompanyId(companyId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> settingsService.updateSettings(companyId,
-                new UpdateSettingsRequest(null, null, null, null, null, null, null, null)))
+                new UpdateSettingsRequest(null, null, null, null, null, null, null, null, null)))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
     private static SettingsResponse settingsResponse(UUID companyId, String currency) {
         return new SettingsResponse(UUID.randomUUID(), companyId, currency,
-                BigDecimal.ZERO, 30, null, "pt-PT", "Europe/Lisbon", "dd/MM/yyyy", "pt-PT");
+                BigDecimal.ZERO, 30, null, "pt-PT", "Europe/Lisbon", "dd/MM/yyyy", "pt-PT", new BigDecimal("50.00"));
     }
 }

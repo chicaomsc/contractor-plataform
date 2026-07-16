@@ -13,5 +13,6 @@ public record SettingsResponse(
         String     locale,
         String     timezone,
         String     dateFormat,
-        String     numberFormat
+        String     numberFormat,
+        BigDecimal upfrontPercentage
 ) {}

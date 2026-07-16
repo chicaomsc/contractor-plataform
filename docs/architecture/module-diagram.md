@@ -130,8 +130,10 @@ Módulo de catálogo público da empresa.
 Módulo de gestão de clientes.
 
 **Responsabilidades:**
-- CRUD de `Customer`
-- Pesquisa e listagem de clientes da empresa
+- CRUD de `Customer` (exclusão é soft-delete — `active = false`, ver [ADR de domínio](domain-model.md))
+- Listagem de clientes da empresa
+- Expõe `CustomerService.assertAssignable(companyId, customerId)`, usado pelo módulo `estimate` para validar ownership e estado ativo sem expor o repositório
+- Endpoints (Sprint 10A): `GET/POST /customers`, `GET/PUT/DELETE /customers/{id}`
 
 **Dependências:** `shared`, `auth`
 
@@ -139,18 +141,18 @@ Módulo de gestão de clientes.
 
 ### `io.chicaodw.platform.estimate`
 
-Módulo de orçamentação — o de maior complexidade de negócio no MVP.
+Módulo de orçamentação — o de maior complexidade de negócio no MVP. Implementado na Sprint 10A (domínio + API; PDF fica para a Sprint 11).
 
 **Responsabilidades:**
-- CRUD completo de `Estimate`, `EstimateItem` e `Material`
-- Geração de `referenceNumber` sequencial por empresa
-- Cálculo de totais (`subtotal`, `taxAmount`, `total`)
-- Transições de `status` com validação de invariantes
-- Geração de PDF do orçamento
-- Endpoints: `/api/v1/estimates/...`
+- CRUD completo de `Estimate`, com `EstimateItem` e `Material` como entidades filhas do agregado (cascade ALL + orphanRemoval — sem repositórios próprios)
+- Geração de `number` sequencial por empresa (`EstimateNumberGenerator`, ver [ADR-007](../adr/ADR-007-estimate-numbering-strategy.md))
+- Cálculo de totais (`EstimateCalculationService`, serviço de domínio puro — sem Spring, sem acesso a banco)
+- Transições de `status` com validação de invariantes (`EstimateStatusTransitionService`, também puro)
+- Endpoints: `GET/POST /estimates`, `GET/PUT/DELETE /estimates/{id}`, `PATCH /estimates/{id}/status`
+- Geração de PDF do orçamento — **fora do escopo da Sprint 10A**, planeada para a Sprint 11
 
-**Dependências:** `shared`, `auth`, `customer` (somente para leitura do Customer)  
-**Nota:** O módulo `estimate` não acessa o repositório de `Customer` diretamente. Resolve o cliente via ID e delega a validação à interface exposta pelo módulo `customer`.
+**Dependências:** `shared`, `auth`, `customer` (via `CustomerService.assertAssignable`), `servicecatalog` (via `ServiceCatalogService.existsForCompany`, para validar o `serviceId` opcional de um `EstimateItem`), `company` (leitura de `Settings`/`Branding` para os snapshots de criação)  
+**Nota:** O módulo `estimate` não acessa os repositórios de `Customer` ou `Service` diretamente — resolve ambos via ID e delega a validação às application services expostas por `customer` e `servicecatalog`, respectivamente.
 
 ---
 

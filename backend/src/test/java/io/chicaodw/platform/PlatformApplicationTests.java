@@ -17,15 +17,16 @@ class PlatformApplicationTests extends AbstractIntegrationTest {
     }
 
     @Test
-    void flywayAppliedV1AndV2() {
-        // Verify both migrations ran: uuid-ossp extension + 4 domain tables
+    void flywayAppliedAllMigrations() {
+        // Verify all migrations ran: uuid-ossp extension + domain tables through V8
         var tables = jdbc.queryForList(
                 "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename",
                 String.class
         );
         assertThat(tables).containsExactlyInAnyOrder(
-                "brandings", "companies", "flyway_schema_history",
-                "gallery_items", "refresh_tokens", "services", "settings", "users"
+                "brandings", "companies", "customers", "estimate_items", "estimate_number_sequences",
+                "estimates", "flyway_schema_history", "gallery_items", "materials",
+                "refresh_tokens", "services", "settings", "users"
         );
     }
 }

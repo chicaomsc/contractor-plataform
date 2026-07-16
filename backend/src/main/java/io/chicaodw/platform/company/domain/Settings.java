@@ -48,4 +48,7 @@ public class Settings extends BaseEntity {
 
     @Column(name = "number_format", nullable = false, length = 50)
     private String numberFormat = "pt-PT";
+
+    @Column(name = "upfront_percentage", nullable = false, precision = 5, scale = 2)
+    private BigDecimal upfrontPercentage = new BigDecimal("50.00");
 }

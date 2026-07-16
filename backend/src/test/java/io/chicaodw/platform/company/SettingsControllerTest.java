@@ -65,7 +65,7 @@ class SettingsControllerTest extends AbstractControllerTest {
     @Test
     void updateSettings_invalidCurrencyLength_returns400() throws Exception {
         var body = objectMapper.writeValueAsString(
-                new UpdateSettingsRequest("EU", null, null, null, null, null, null, null));
+                new UpdateSettingsRequest("EU", null, null, null, null, null, null, null, null));
 
         mockMvc.perform(put("/settings/me")
                         .with(authentication(ownerAuth()))
@@ -77,7 +77,7 @@ class SettingsControllerTest extends AbstractControllerTest {
 
     @Test
     void updateSettings_partialUpdate_returns200() throws Exception {
-        var request  = new UpdateSettingsRequest(null, new BigDecimal("6.00"), null, null, null, null, null, null);
+        var request  = new UpdateSettingsRequest(null, new BigDecimal("6.00"), null, null, null, null, null, null, null);
         var response = settingsResponse("EUR");
 
         when(settingsService.updateSettings(eq(COMPANY_ID), any())).thenReturn(response);
@@ -93,7 +93,7 @@ class SettingsControllerTest extends AbstractControllerTest {
     @Test
     void updateSettings_fullUpdate_returns200() throws Exception {
         var request  = new UpdateSettingsRequest("USD", new BigDecimal("20.00"),
-                60, "Rodapé", "en-US", "America/New_York", "MM/dd/yyyy", "en-US");
+                60, "Rodapé", "en-US", "America/New_York", "MM/dd/yyyy", "en-US", new BigDecimal("40.00"));
         var response = settingsResponse("USD");
 
         when(settingsService.updateSettings(eq(COMPANY_ID), any())).thenReturn(response);
@@ -110,6 +110,6 @@ class SettingsControllerTest extends AbstractControllerTest {
 
     private static SettingsResponse settingsResponse(String currency) {
         return new SettingsResponse(UUID.randomUUID(), COMPANY_ID, currency,
-                BigDecimal.ZERO, 30, null, "pt-PT", "Europe/Lisbon", "dd/MM/yyyy", "pt-PT");
+                BigDecimal.ZERO, 30, null, "pt-PT", "Europe/Lisbon", "dd/MM/yyyy", "pt-PT", new BigDecimal("50.00"));
     }
 }

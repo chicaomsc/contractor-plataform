@@ -1,6 +1,6 @@
 # Roadmap do Produto
 
-**Versão:** 2.12 — Sprint 9 concluída  
+**Versão:** 2.13 — Sprint 10A concluída  
 **Data:** 2026-07-16  
 **Horizonte:** MVP + Pós-MVP imediato
 
@@ -39,6 +39,7 @@
 | Gallery Management | Concluído |
 | MVP Hardening | Concluído |
 | Frontend — Painel Administrativo completo | Concluído |
+| Backend — Módulo Customer + Estimate (domínio, cálculos, API) | Concluído |
 
 ---
 
@@ -451,39 +452,47 @@
 
 ---
 
-## Sprint 10 — Clientes e Orçamentos
+## Sprint 10A — Estimate Domain & API ✅
 
-**Objectivo:** Gestão de carteira de clientes e criação de orçamentos.
+**Objectivo:** Domínio e API REST de orçamentos — a única fonte de verdade para cálculos financeiros passa a ser o backend. Sem frontend, sem PDF nesta etapa.
 
 **Backend:**
-- [ ] Módulo `customer`: CRUD de `Customer`
-- [ ] Módulo `estimate`: criação de `Estimate` com `EstimateItem`
-- [ ] `referenceNumber` sequencial por empresa
-- [ ] Cálculo de totais com IVA
+- [x] Módulo `customer`: CRUD de `Customer` (exclusão é soft-delete — `active = false`)
+- [x] Módulo `estimate`: `Estimate`, `EstimateItem`, `Material` (Material pertence diretamente ao Estimate, não ao EstimateItem)
+- [x] `number` sequencial por empresa, gerado atomicamente (`INSERT ... ON CONFLICT DO UPDATE ... RETURNING`) — ver [ADR-007](adr/ADR-007-estimate-numbering-strategy.md)
+- [x] Cálculo de totais com IVA e adiantamento (`EstimateCalculationService`, domínio puro, `BigDecimal` scale 2 `HALF_UP`)
+- [x] Snapshots de `currency`/`vatRate`/`upfrontPercentage` no `Estimate` — alterar `Settings` depois não afeta orçamentos existentes
+- [x] Máquina de estados de `EstimateStatus` com transições validadas (`EstimateStatusTransitionService`)
+- [x] `Settings.upfrontPercentage` (migration V6) — snapshot default para novos orçamentos
+- [x] Migrations V6–V8, isolamento multi-tenant testado (cross-tenant customer/estimate/service)
+- [x] `PATCH /estimates/{id}/status`, `GET /estimates` com filtros `status`/`customerId`
+- [x] OpenAPI atualizado, 265 testes (unitários + integração) verdes
 
-**Frontend:**
-- [ ] Página de gestão de clientes
-- [ ] Formulário de criação/edição de orçamento
-- [ ] Adição/remoção de itens
+**Fora do escopo desta etapa (ver Sprint 11):**
+- [ ] Página de gestão de clientes (frontend)
+- [ ] Formulário de criação/edição de orçamento (frontend)
+- [ ] Geração de PDF
 
-**Critério de saída:** Admin cria orçamento completo para um cliente.
+**Critério de saída:** Admin consegue criar, listar, editar e mudar o status de um orçamento completo via API, com isolamento multi-tenant e cálculos garantidos pelo backend. ✅ Atingido — ver [Release v1.0.0](releases/v1.0.0-estimate-domain-api.md).
+
+**Status:** Concluída (backend). Frontend de orçamento adiado para a Sprint 11 junto com PDF.
 
 ---
 
-## Sprint 11 — PDF e Materiais
+## Sprint 11 — Frontend de Orçamentos, PDF e Materiais
 
-**Objectivo:** Orçamentos com materiais, exportáveis em PDF.
+**Objectivo:** Painel administrativo para clientes e orçamentos (consumindo a API da Sprint 10A), exportação de orçamentos em PDF.
 
 **Backend:**
-- [ ] `Material` associado a `EstimateItem`
 - [ ] Geração de PDF com branding da empresa
 - [ ] `POST /estimates/{id}/pdf`
 
 **Frontend:**
-- [ ] Gestão de materiais por item
+- [ ] Página de gestão de clientes
+- [ ] Formulário de criação/edição de orçamento (itens e materiais — `Material` já pertence diretamente ao `Estimate`, ver [ADR/domain-model](architecture/domain-model.md))
 - [ ] Preview e download do PDF
 
-**Critério de saída:** PDF gerado com logo, cores, itens e totais correctos.
+**Critério de saída:** Admin cria orçamento completo para um cliente pelo painel e exporta em PDF com logo, cores, itens e totais correctos.
 
 ---
 
@@ -535,7 +544,7 @@
 | Supabase Storage | Serviço externo fora do controlo | Interface de storage abstraída — troca por S3/R2 não quebra o domínio |
 | Railway (backend) | Custo pode aumentar com uso | Dockerfile portável |
 | Java 25 (LTS) | Versão recente, ecossistema em adaptação | Usar apenas features estáveis |
-| Geração de PDF | Bibliotecas Java requerem avaliação de licença | Decidir na Sprint 10; Flying Saucer (LGPL) candidato principal |
+| Geração de PDF | Bibliotecas Java requerem avaliação de licença | Decidir na Sprint 11; Flying Saucer (LGPL) candidato principal |
 
 ---
 
@@ -571,3 +580,5 @@
 - [Security — Tenant Isolation](security/tenant-isolation.md)
 - [Security — Upload Policy](security/upload-policy.md)
 - [Security — Dependency Audit](security/dependency-audit.md)
+- [ADR-007 — Estratégia de Numeração de Orçamentos](adr/ADR-007-estimate-numbering-strategy.md)
+- [Release v1.0.0 — Estimate Domain & API](releases/v1.0.0-estimate-domain-api.md)

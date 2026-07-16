@@ -15,6 +15,8 @@ public interface ServiceRepository extends JpaRepository<Service, UUID> {
 
     Optional<Service> findByIdAndCompanyId(UUID id, UUID companyId);
 
+    boolean existsByIdAndCompanyId(UUID id, UUID companyId);
+
     boolean existsByCompanyIdAndSlug(UUID companyId, String slug);
 
     List<Service> findByCompanyIdAndActiveTrueOrderByDisplayOrderAsc(UUID companyId);

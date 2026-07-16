@@ -15,6 +15,18 @@ import io.chicaodw.platform.company.domain.Settings;
 import io.chicaodw.platform.company.infrastructure.persistence.BrandingRepository;
 import io.chicaodw.platform.company.infrastructure.persistence.CompanyRepository;
 import io.chicaodw.platform.company.infrastructure.persistence.SettingsRepository;
+import io.chicaodw.platform.customer.api.dto.CreateCustomerRequest;
+import io.chicaodw.platform.customer.api.dto.UpdateCustomerRequest;
+import io.chicaodw.platform.customer.application.CustomerService;
+import io.chicaodw.platform.customer.infrastructure.persistence.CustomerRepository;
+import io.chicaodw.platform.estimate.api.dto.ChangeEstimateStatusRequest;
+import io.chicaodw.platform.estimate.api.dto.CreateEstimateRequest;
+import io.chicaodw.platform.estimate.api.dto.EstimateItemRequest;
+import io.chicaodw.platform.estimate.api.dto.UpdateEstimateRequest;
+import io.chicaodw.platform.estimate.application.EstimateService;
+import io.chicaodw.platform.estimate.domain.EstimateStatus;
+import io.chicaodw.platform.estimate.domain.EstimateUnit;
+import io.chicaodw.platform.estimate.infrastructure.persistence.EstimateRepository;
 import io.chicaodw.platform.gallery.api.dto.CreateGalleryRequest;
 import io.chicaodw.platform.gallery.api.dto.UpdateGalleryRequest;
 import io.chicaodw.platform.gallery.application.GalleryService;
@@ -52,6 +64,10 @@ class TenantIsolationIntegrationTest extends AbstractIntegrationTest {
     @Autowired SettingsService settingsService;
     @Autowired ServiceCatalogService serviceCatalogService;
     @Autowired GalleryService galleryService;
+    @Autowired CustomerService customerService;
+    @Autowired CustomerRepository customerRepository;
+    @Autowired EstimateService estimateService;
+    @Autowired EstimateRepository estimateRepository;
 
     @MockitoBean StorageService storageService;
 
@@ -90,7 +106,7 @@ class TenantIsolationIntegrationTest extends AbstractIntegrationTest {
     @Test
     void settings_updatesOnlyRequestedCompany() {
         settingsService.updateSettings(companyA, new UpdateSettingsRequest(
-                "GBP", BigDecimal.ONE, null, null, null, null, null, null));
+                "GBP", BigDecimal.ONE, null, null, null, null, null, null, null));
 
         assertThat(settingsRepository.findByCompanyId(companyA).orElseThrow().getDefaultCurrency()).isEqualTo("GBP");
         assertThat(settingsRepository.findByCompanyId(companyB).orElseThrow().getDefaultCurrency()).isEqualTo("USD");
@@ -153,6 +169,85 @@ class TenantIsolationIntegrationTest extends AbstractIntegrationTest {
         galleryService.uploadBeforeImage(companyA, itemA.id(), pngFile());
 
         verify(storageService).store(eq("company/" + companyA + "/gallery"), any());
+    }
+
+    @Test
+    void customers_areIsolatedForListGetUpdateAndDelete() {
+        var customerA = customerService.createCustomer(companyA,
+                new CreateCustomerRequest("Cliente A", "a@example.com", null, null, null, null));
+        var customerB = customerService.createCustomer(companyB,
+                new CreateCustomerRequest("Cliente B", "b@example.com", null, null, null, null));
+
+        assertThat(customerService.listCustomers(companyA)).extracting("id").containsExactly(customerA.id());
+        assertThat(customerService.listCustomers(companyB)).extracting("id").containsExactly(customerB.id());
+
+        assertThatThrownBy(() -> customerService.getCustomer(companyB, customerA.id()))
+                .isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> customerService.updateCustomer(companyB, customerA.id(),
+                new UpdateCustomerRequest("Cross tenant", null, null, null, null, null, null)))
+                .isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> customerService.deactivateCustomer(companyB, customerA.id()))
+                .isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> customerService.assertAssignable(companyB, customerA.id()))
+                .isInstanceOf(ResourceNotFoundException.class);
+
+        assertThat(customerRepository.findById(customerA.id()).orElseThrow().getName()).isEqualTo("Cliente A");
+    }
+
+    @Test
+    void estimates_areIsolatedForListGetUpdateDeleteAndStatus() {
+        var customerA = createCustomer(companyA, "Cliente A");
+        var customerB = createCustomer(companyB, "Cliente B");
+        var estimateA = estimateService.createEstimate(companyA, createEstimateRequest(customerA));
+        var estimateB = estimateService.createEstimate(companyB, createEstimateRequest(customerB));
+
+        assertThat(estimateService.listEstimates(companyA, null, null)).extracting("id").containsExactly(estimateA.id());
+        assertThat(estimateService.listEstimates(companyB, null, null)).extracting("id").containsExactly(estimateB.id());
+
+        assertThatThrownBy(() -> estimateService.getEstimate(companyB, estimateA.id()))
+                .isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> estimateService.updateEstimate(companyB, estimateA.id(),
+                new UpdateEstimateRequest(null, "Cross tenant", null, null, null, null, null, null, null, null, null, null)))
+                .isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> estimateService.changeStatus(companyB, estimateA.id(),
+                new ChangeEstimateStatusRequest(EstimateStatus.SENT)))
+                .isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> estimateService.deleteEstimate(companyB, estimateA.id()))
+                .isInstanceOf(ResourceNotFoundException.class);
+
+        assertThat(estimateRepository.findById(estimateA.id()).orElseThrow().getTitle()).isEqualTo("Painting job");
+    }
+
+    @Test
+    void estimateCreation_rejectsCustomerFromAnotherCompany() {
+        var customerB = createCustomer(companyB, "Cliente B");
+
+        assertThatThrownBy(() -> estimateService.createEstimate(companyA, createEstimateRequest(customerB)))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void estimateCreation_rejectsServiceIdFromAnotherCompany() {
+        var customerA = createCustomer(companyA, "Cliente A");
+        var serviceB = serviceCatalogService.createService(companyB,
+                new CreateServiceRequest("Pintura", null, null, null, 0, true));
+
+        var item = new EstimateItemRequest(serviceB.id(), "Labor", java.math.BigDecimal.ONE, EstimateUnit.UNIT, java.math.BigDecimal.TEN, null);
+        var request = new CreateEstimateRequest(customerA, "Painting job", null, null, null, null, null, null,
+                null, null, java.util.List.of(item), java.util.List.of());
+
+        assertThatThrownBy(() -> estimateService.createEstimate(companyA, request))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    private java.util.UUID createCustomer(java.util.UUID companyId, String name) {
+        return customerService.createCustomer(companyId,
+                new CreateCustomerRequest(name, name.toLowerCase().replace(" ", ".") + "@example.com", null, null, null, null)).id();
+    }
+
+    private CreateEstimateRequest createEstimateRequest(java.util.UUID customerId) {
+        return new CreateEstimateRequest(customerId, "Painting job", null, null, null, null, null, null,
+                null, null, java.util.List.of(), java.util.List.of());
     }
 
     private Company createCompany(String name, String slug) {
