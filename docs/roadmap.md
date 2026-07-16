@@ -1,7 +1,7 @@
 # Roadmap do Produto
 
-**Versão:** 2.6 — Sprint 7D concluída  
-**Data:** 2026-07-12  
+**Versão:** 2.8 — Sprint 7F concluída  
+**Data:** 2026-07-16  
 **Horizonte:** MVP + Pós-MVP imediato
 
 ---
@@ -32,6 +32,8 @@
 | Spike — Impeccable no comparador antes/depois | Concluído (REJECT) |
 | Frontend — Landing Page Pública | Concluído |
 | Frontend — Landing Polish & Production Readiness | Concluído |
+| Real Tenant Validation — JR Pinturas | Concluído |
+| Production Visual QA — JR Pinturas | Concluído |
 | Frontend — Painel Administrativo | Não iniciado |
 
 ---
@@ -253,6 +255,62 @@
 
 ---
 
+## Sprint 7E — Real Tenant Validation (JR Pinturas) ✅
+
+**Objectivo:** Validar a plataforma com um tenant real, sem criar landing específica e sem especializar componentes, ViewModels ou regras de frontend para JR Pinturas.
+
+**Fonte de verdade:**
+- [x] `assets/tenants/jr-pinturas/content.md`
+- [x] `assets/tenants/jr-pinturas/logo/jr-logo.png`
+
+**Execução:**
+- [x] Conteúdo disponível inventariado
+- [x] Lacunas documentadas: website, redes sociais, morada completa, fotografias e pares antes/depois
+- [x] Company populada via backend
+- [x] Branding populado via backend
+- [x] Settings populado via backend
+- [x] Services populados via backend
+- [x] Gallery validada como vazia por ausência de fotografias reais
+- [x] Logo real carregado pela landing pública
+- [x] Responsividade validada em 375, 768 e 1440 px
+- [x] Screenshots em `frontend/screenshots/jr-pinturas-*.png`
+
+**Correções genéricas realizadas:**
+- [x] `/uploads/**` público no backend para assets que o próprio storage retorna
+- [x] Resource handler para servir uploads locais
+- [x] CORS configurável para frontend público local
+- [x] Normalização de URLs relativas de assets no mapper público do frontend
+- [x] Ajuste responsivo genérico do hero em mobile
+
+**Critério de saída:** JR Pinturas renderiza pela landing multi-tenant existente, com dados chegando pelos endpoints e ViewModels públicos, sem hardcode permanente do tenant.
+
+---
+
+## Sprint 7F — Production Visual QA ✅
+
+**Objectivo:** Validar e refinar visualmente a landing em nível de produção usando os ativos reais do tenant JR Pinturas, sem criar funcionalidades, especializar componentes ou alterar backend, ViewModels, Design System ou arquitectura.
+
+**Fonte de verdade:**
+- [x] `assets/tenants/jr-pinturas/content.md`
+- [x] `assets/tenants/jr-pinturas/logo/jr-logo.png`
+
+**Execução:**
+- [x] Branding validado: logo, cores, contraste, header e footer
+- [x] Hero validado com fallback genérico por ausência de fotografia pública
+- [x] Galeria validada como empty state por ausência de imagens reais e pares antes/depois
+- [x] Ritmo visual, alinhamentos, espaçamentos, CTAs, foco, hover e navegação revisados
+- [x] Responsividade validada em 320, 375, 390, 768, 1024, 1440 e 1920 px
+- [x] Screenshots em `frontend/screenshots/production-qa/jr-pinturas-*.png`
+- [x] Lighthouse local em build de produção: Performance 95, Accessibility 100, Best Practices 100, SEO 100
+- [x] Release documentada em `docs/releases/v0.8.3-production-qa.md`
+
+**Correção genérica realizada:**
+- [x] O fallback de fotografia do hero deixa de ocupar a primeira posição no mobile quando não há imagem pública, preservando a hierarquia textual e mantendo o fallback visível sem regra específica para JR Pinturas.
+
+**Critério de saída:** Landing validada visualmente para produção com tenant real, mantendo renderização multi-tenant por DTOs, mappers e ViewModels existentes.
+
+---
+
 ## Sprint 8 — Painel Administrativo (frontend)
 
 **Objectivo:** Interface de gestão da empresa, serviços e galeria.
@@ -381,3 +439,4 @@
 - [Release v0.7.1](releases/v0.7.1.md)
 - [Spike 001 — Impeccable antes/depois](spikes/SPIKE-001-impeccable-before-after.md)
 - [Release v0.7.2-spike](releases/v0.7.2-spike.md)
+- [Release v0.8.3-production-qa](releases/v0.8.3-production-qa.md)

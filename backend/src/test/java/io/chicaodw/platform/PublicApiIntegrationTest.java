@@ -12,6 +12,10 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -61,6 +65,14 @@ class PublicApiIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.slug").value(companySlug))
                 .andExpect(jsonPath("$.name").value("Public API Test Co"))
                 .andExpect(jsonPath("$.branding").exists());
+    }
+
+    @Test
+    void publicSite_allowsConfiguredFrontendOrigin() throws Exception {
+        mockMvc.perform(get("/public/sites/{companySlug}", companySlug)
+                        .header("Origin", "http://localhost:3000"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:3000"));
     }
 
     @Test
@@ -192,6 +204,18 @@ class PublicApiIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$[0].title").value("Obra Sem Imagens"))
                 .andExpect(jsonPath("$[0].beforeImageUrl").value(org.hamcrest.Matchers.nullValue()))
                 .andExpect(jsonPath("$[0].afterImageUrl").value(org.hamcrest.Matchers.nullValue()));
+    }
+
+    @Test
+    void uploadedAssets_noAuth_arePubliclyReadable() throws Exception {
+        Path storageFile = Path.of("storage/public-api-test.txt");
+        Files.createDirectories(storageFile.getParent());
+        Files.writeString(storageFile, "public asset");
+
+        mockMvc.perform(get("/uploads/public-api-test.txt"))
+                .andExpect(status().isOk());
+
+        Files.deleteIfExists(storageFile);
     }
 
     @Test
