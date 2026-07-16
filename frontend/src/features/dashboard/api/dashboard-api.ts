@@ -2,12 +2,14 @@ import { adminApiRequest } from "@/lib/api/admin-http-client";
 import {
   brandingDtoSchema,
   companyDtoSchema,
+  galleryDtoSchema,
   galleryItemsDtoSchema,
   servicesDtoSchema,
   settingsDtoSchema,
   type BrandingDto,
   type CompanyDto,
   type GalleryDto,
+  type GalleryFormInput,
   type ServiceDto,
   type ServiceFormInput,
   type SettingsDto,
@@ -136,4 +138,110 @@ export async function fetchGallery(accessToken: string): Promise<GalleryDto[]> {
     accessToken,
   });
   return galleryItemsDtoSchema.parse(response);
+}
+
+export async function createGalleryItem(
+  accessToken: string,
+  payload: GalleryFormInput,
+): Promise<GalleryDto> {
+  const response = await adminApiRequest<unknown>("/gallery", {
+    method: "POST",
+    accessToken,
+    body: JSON.stringify(payload),
+  });
+  return galleryDtoSchema.parse(response);
+}
+
+export async function updateGalleryItem(
+  accessToken: string,
+  galleryItemId: string,
+  payload: GalleryFormInput,
+): Promise<GalleryDto> {
+  const response = await adminApiRequest<unknown>(
+    `/gallery/${galleryItemId}`,
+    {
+      method: "PUT",
+      accessToken,
+      body: JSON.stringify(payload),
+    },
+  );
+  return galleryDtoSchema.parse(response);
+}
+
+export async function deleteGalleryItem(
+  accessToken: string,
+  galleryItemId: string,
+): Promise<void> {
+  await adminApiRequest<void>(`/gallery/${galleryItemId}`, {
+    method: "DELETE",
+    accessToken,
+  });
+}
+
+export async function featureGalleryItem(
+  accessToken: string,
+  galleryItemId: string,
+  featured: boolean,
+): Promise<GalleryDto> {
+  const response = await adminApiRequest<unknown>(
+    `/gallery/${galleryItemId}/feature`,
+    {
+      method: "PATCH",
+      accessToken,
+      body: JSON.stringify({ featured }),
+    },
+  );
+  return galleryDtoSchema.parse(response);
+}
+
+export async function reorderGalleryItem(
+  accessToken: string,
+  galleryItemId: string,
+  displayOrder: number,
+): Promise<GalleryDto> {
+  const response = await adminApiRequest<unknown>(
+    `/gallery/${galleryItemId}/reorder`,
+    {
+      method: "PATCH",
+      accessToken,
+      body: JSON.stringify({ displayOrder }),
+    },
+  );
+  return galleryDtoSchema.parse(response);
+}
+
+export async function uploadGalleryImage(
+  accessToken: string,
+  galleryItemId: string,
+  slot: "before" | "after",
+  file: File,
+): Promise<GalleryDto> {
+  const formData = new FormData();
+  formData.set("file", file);
+
+  const response = await adminApiRequest<unknown>(
+    `/gallery/${galleryItemId}/${slot}-image`,
+    {
+      method: "POST",
+      accessToken,
+      body: formData,
+      timeoutMs: 30000,
+    },
+  );
+  return galleryDtoSchema.parse(response);
+}
+
+export async function deleteGalleryImage(
+  accessToken: string,
+  galleryItemId: string,
+  slot: "before" | "after",
+): Promise<GalleryDto> {
+  const response = await adminApiRequest<unknown>(
+    `/gallery/${galleryItemId}/${slot}-image`,
+    {
+      method: "DELETE",
+      accessToken,
+    },
+  );
+  return galleryDtoSchema.parse(response);
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  galleryFormSchema,
   updateBrandingSchema,
   updateCompanySchema,
   serviceFormSchema,
@@ -115,6 +116,34 @@ describe("dashboard admin schemas", () => {
       description: null,
       icon: null,
       displayOrder: 2,
+      active: false,
+    });
+  });
+
+  it("validates gallery form fields and normalizes optional values", () => {
+    expect(() =>
+      galleryFormSchema.parse({
+        title: "",
+        description: "",
+        displayOrder: "0",
+        featured: false,
+        active: true,
+      }),
+    ).toThrow();
+
+    expect(
+      galleryFormSchema.parse({
+        title: "Sala renovada",
+        description: "",
+        displayOrder: "3",
+        featured: true,
+        active: false,
+      }),
+    ).toMatchObject({
+      title: "Sala renovada",
+      description: null,
+      displayOrder: 3,
+      featured: true,
       active: false,
     });
   });

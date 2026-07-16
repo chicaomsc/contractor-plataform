@@ -152,6 +152,17 @@ export const serviceFormSchema = z.object({
   active: z.boolean(),
 });
 
+export const galleryFormSchema = z.object({
+  title: z.string().min(1, "Indique o título da imagem.").max(255),
+  description: nullableTextInput(4000),
+  displayOrder: z.preprocess(
+    emptyToNull,
+    z.coerce.number().min(0, "A ordem não pode ser negativa.").nullable(),
+  ),
+  featured: z.boolean(),
+  active: z.boolean(),
+});
+
 export const servicesDtoSchema = z.array(serviceDtoSchema);
 export const galleryItemsDtoSchema = z.array(galleryDtoSchema);
 
@@ -164,3 +175,4 @@ export type UpdateCompanyInput = z.infer<typeof updateCompanySchema>;
 export type UpdateBrandingInput = z.infer<typeof updateBrandingSchema>;
 export type UpdateSettingsInput = z.infer<typeof updateSettingsSchema>;
 export type ServiceFormInput = z.infer<typeof serviceFormSchema>;
+export type GalleryFormInput = z.infer<typeof galleryFormSchema>;

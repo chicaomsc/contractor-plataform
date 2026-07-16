@@ -1,6 +1,6 @@
 # Roadmap do Produto
 
-**Versão:** 2.10 — Sprint 8B concluída  
+**Versão:** 2.11 — Sprint 8C concluída  
 **Data:** 2026-07-16  
 **Horizonte:** MVP + Pós-MVP imediato
 
@@ -36,6 +36,7 @@
 | Production Visual QA — JR Pinturas | Concluído |
 | Dashboard Foundation | Concluído |
 | Services Management | Concluído |
+| Gallery Management | Concluído |
 | Frontend — Painel Administrativo completo | Em progresso |
 
 ---
@@ -373,7 +374,45 @@
 
 ---
 
-## Sprint 8C — Painel Administrativo (frontend)
+## Sprint 8C — Gallery Management ✅
+
+**Objectivo:** Construir um Media Manager simples, consistente e reutilizável para administrar as imagens utilizadas na landing pública, sem alterar backend, endpoints, arquitetura ou regras de negócio.
+
+**Frontend:**
+- [x] Rota `/dashboard/gallery`
+- [x] Listagem de itens da galeria
+- [x] Criação de item
+- [x] Upload de imagens before e after
+- [x] Preview de pares before/after
+- [x] Exclusão com confirmação
+- [x] Edição de metadados
+- [x] Ativação e desativação
+- [x] Definir e remover destaque
+- [x] Ordenação por mover para cima e mover para baixo
+- [x] Validação local de formato e tamanho máximo de arquivo
+- [x] Estados de loading, saving, uploading, success, error, retry e empty
+- [x] Componentes reutilizáveis para grid, card, formulário, upload, preview, badges, estado vazio e diálogo de exclusão
+- [x] Testes de schema, ordenação e validação de arquivo
+- [x] Screenshots em `frontend/screenshots/gallery-management/`
+- [x] Release documentada em `docs/releases/v0.9.2-gallery-management.md`
+
+**Endpoints consumidos:**
+- [x] `GET /gallery`
+- [x] `POST /gallery`
+- [x] `PUT /gallery/{id}`
+- [x] `DELETE /gallery/{id}`
+- [x] `PATCH /gallery/{id}/feature`
+- [x] `PATCH /gallery/{id}/reorder`
+- [x] `POST /gallery/{id}/before-image`
+- [x] `POST /gallery/{id}/after-image`
+- [x] `DELETE /gallery/{id}/before-image`
+- [x] `DELETE /gallery/{id}/after-image`
+
+**Critério de saída:** Admin consegue gerir a galeria por endpoints existentes, e a landing pública reflete imagens ativas e destacadas sem código específico de tenant e sem implementar crop, editor de imagem, compressão, filtros, clientes, orçamentos, analytics ou agenda.
+
+---
+
+## Sprint 8D — Painel Administrativo (frontend)
 
 **Objectivo:** Interface de gestão da empresa, serviços e galeria.
 
@@ -384,7 +423,7 @@
 - [x] Gestão de branding
 - [ ] Gestão de logo
 - [x] Gestão de serviços (CRUD + reordenar)
-- [ ] Gestão de galeria (CRUD + upload de imagens)
+- [x] Gestão de galeria (CRUD + upload de imagens)
 - [x] Configurações da conta
 
 **Critério de saída:** Admin consegue gerir o conteúdo da landing sem tocar em código.
@@ -505,3 +544,4 @@
 - [Release v0.8.3-production-qa](releases/v0.8.3-production-qa.md)
 - [Release v0.9.0-dashboard-foundation](releases/v0.9.0-dashboard-foundation.md)
 - [Release v0.9.1-services-management](releases/v0.9.1-services-management.md)
+- [Release v0.9.2-gallery-management](releases/v0.9.2-gallery-management.md)
