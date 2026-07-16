@@ -75,4 +75,45 @@ describe("public site mappers", () => {
       hasCompleteBeforeAfterPair: false,
     });
   });
+
+  it("resolves relative upload URLs against the public API base URL", () => {
+    process.env.NEXT_PUBLIC_API_BASE_URL = "http://localhost:8081";
+    process.env.NEXT_PUBLIC_COMPANY_SLUG = "empresa-teste";
+
+    const site = mapPublicSiteDto({
+      slug: "empresa-teste",
+      name: "Empresa Teste",
+      tradeName: null,
+      publicPhone: null,
+      whatsapp: null,
+      website: null,
+      location: null,
+      branding: {
+        logoUrl: "/uploads/company/logo.png",
+        primaryColor: null,
+        secondaryColor: null,
+        accentColor: null,
+        tagline: null,
+        aboutText: null,
+        footerText: null,
+      },
+    });
+
+    const gallery = mapPublicGalleryItemDto({
+      id: "gallery-1",
+      title: "Obra",
+      description: null,
+      beforeImageUrl: "/uploads/company/before.jpg",
+      afterImageUrl: null,
+      displayOrder: 0,
+      featured: false,
+    });
+
+    expect(site.branding.logoUrl).toBe(
+      "http://localhost:8081/uploads/company/logo.png",
+    );
+    expect(gallery.beforeImageUrl).toBe(
+      "http://localhost:8081/uploads/company/before.jpg",
+    );
+  });
 });

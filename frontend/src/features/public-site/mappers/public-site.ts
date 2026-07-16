@@ -15,6 +15,28 @@ function compactLocation(parts: Array<string | null>) {
   return label.length > 0 ? label : null;
 }
 
+function resolvePublicAssetUrl(url: string | null) {
+  if (!url) {
+    return null;
+  }
+
+  if (/^https?:\/\//i.test(url)) {
+    return url;
+  }
+
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+
+  if (!apiBaseUrl) {
+    return url;
+  }
+
+  try {
+    return new URL(url, apiBaseUrl).toString();
+  } catch {
+    return url;
+  }
+}
+
 export function mapPublicSiteDto(dto: PublicSiteDto): PublicSiteViewModel {
   return {
     slug: dto.slug,
@@ -31,7 +53,7 @@ export function mapPublicSiteDto(dto: PublicSiteDto): PublicSiteViewModel {
         ])
       : null,
     branding: {
-      logoUrl: dto.branding?.logoUrl ?? null,
+      logoUrl: resolvePublicAssetUrl(dto.branding?.logoUrl ?? null),
       primaryColor: isSafeHexColor(dto.branding?.primaryColor)
         ? dto.branding.primaryColor
         : null,
@@ -69,8 +91,8 @@ export function mapPublicGalleryItemDto(
     id: dto.id,
     title: dto.title,
     description: dto.description,
-    beforeImageUrl: dto.beforeImageUrl,
-    afterImageUrl: dto.afterImageUrl,
+    beforeImageUrl: resolvePublicAssetUrl(dto.beforeImageUrl),
+    afterImageUrl: resolvePublicAssetUrl(dto.afterImageUrl),
     beforeAlt: dto.beforeImageUrl ? `${dto.title} antes da intervenção` : null,
     afterAlt: dto.afterImageUrl ? `${dto.title} depois da intervenção` : null,
     displayOrder: dto.displayOrder,
