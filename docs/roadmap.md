@@ -1,6 +1,6 @@
 # Roadmap do Produto
 
-**Versão:** 2.8 — Sprint 7F concluída  
+**Versão:** 2.9 — Sprint 8A concluída  
 **Data:** 2026-07-16  
 **Horizonte:** MVP + Pós-MVP imediato
 
@@ -34,7 +34,8 @@
 | Frontend — Landing Polish & Production Readiness | Concluído |
 | Real Tenant Validation — JR Pinturas | Concluído |
 | Production Visual QA — JR Pinturas | Concluído |
-| Frontend — Painel Administrativo | Não iniciado |
+| Dashboard Foundation | Concluído |
+| Frontend — Painel Administrativo completo | Em progresso |
 
 ---
 
@@ -311,18 +312,50 @@
 
 ---
 
-## Sprint 8 — Painel Administrativo (frontend)
+## Sprint 8A — Dashboard Foundation ✅
+
+**Objectivo:** Construir a fundação da área autenticada sem criar novas funcionalidades de negócio e sem alterar backend, endpoints, arquitectura ou autenticação existente.
+
+**Frontend:**
+- [x] Login frontend consumindo `POST /auth/login`
+- [x] Proteção de `/dashboard` com middleware e guard client-side
+- [x] Layout administrativo com sidebar, header, breadcrumb, user menu e logout
+- [x] Responsividade desktop/mobile
+- [x] Dashboard Home com empresa, branding, status, contagens e última atualização
+- [x] Tela completa de edição de Company
+- [x] Tela completa de edição de Branding com preview em tempo real
+- [x] Tela completa de edição de Settings
+- [x] Estados de loading, saving, success, error e retry
+- [x] Testes de schemas/helpers administrativos
+- [x] Screenshots em `frontend/screenshots/dashboard-foundation/`
+- [x] Release documentada em `docs/releases/v0.9.0-dashboard-foundation.md`
+
+**Endpoints consumidos:**
+- [x] `POST /auth/login`
+- [x] `GET /auth/me`
+- [x] `GET/PUT /company/me`
+- [x] `GET/PUT /branding/me`
+- [x] `GET/PUT /settings/me`
+- [x] `GET /services` apenas para contagem
+- [x] `GET /gallery` apenas para contagem
+
+**Critério de saída:** Área autenticada base disponível, com edição de Company, Branding e Settings por endpoints existentes, sem antecipar Services, Gallery, Customers, Estimates, Analytics, Agenda ou dashboards financeiros/operacionais.
+
+---
+
+## Sprint 8B — Painel Administrativo (frontend)
 
 **Objectivo:** Interface de gestão da empresa, serviços e galeria.
 
 **Frontend:**
-- [ ] Autenticação (login, logout, refresh)
-- [ ] Layout do painel (sidebar, header)
-- [ ] Gestão de perfil da empresa
-- [ ] Gestão de branding e logo
+- [x] Autenticação básica (login, logout, sessão)
+- [x] Layout do painel (sidebar, header)
+- [x] Gestão de perfil da empresa
+- [x] Gestão de branding
+- [ ] Gestão de logo
 - [ ] Gestão de serviços (CRUD + reordenar)
 - [ ] Gestão de galeria (CRUD + upload de imagens)
-- [ ] Configurações da conta
+- [x] Configurações da conta
 
 **Critério de saída:** Admin consegue gerir o conteúdo da landing sem tocar em código.
 
@@ -440,3 +473,4 @@
 - [Spike 001 — Impeccable antes/depois](spikes/SPIKE-001-impeccable-before-after.md)
 - [Release v0.7.2-spike](releases/v0.7.2-spike.md)
 - [Release v0.8.3-production-qa](releases/v0.8.3-production-qa.md)
+- [Release v0.9.0-dashboard-foundation](releases/v0.9.0-dashboard-foundation.md)
