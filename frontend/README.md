@@ -53,6 +53,16 @@ A rota `/` renderiza a landing pública final:
 - contacto por WhatsApp, telefone ou website público;
 - CTA fixo de WhatsApp no mobile quando houver número válido.
 
+A rota `/login` inicia sessão contra a autenticação existente do backend. A área `/dashboard` é protegida e renderiza a fundação administrativa:
+
+- layout com sidebar, header, breadcrumb, user menu e logout;
+- dashboard home com empresa, status, branding, contagem de serviços e contagem de imagens;
+- edição de Company via `GET/PUT /company/me`;
+- edição de Branding via `GET/PUT /branding/me`;
+- edição de Settings via `GET/PUT /settings/me`.
+
+Services e Gallery são consumidos no dashboard apenas para contagens. A gestão dessas áreas ainda não faz parte do frontend.
+
 ## Build
 
 ```bash
@@ -78,6 +88,25 @@ npm run test
 - `src/providers`: providers client-side mínimos
 - `src/styles`: tokens visuais
 - `src/types`: contratos TypeScript da API pública
+
+## Dashboard administrativo
+
+Fluxo autenticado:
+
+```text
+/login -> POST /auth/login -> sessão local -> /dashboard -> GET /auth/me
+```
+
+Rotas disponíveis:
+
+- `/dashboard`
+- `/dashboard/company`
+- `/dashboard/branding`
+- `/dashboard/settings`
+
+O dashboard consome apenas endpoints existentes do Spring Boot. Não há Route Handlers, Server Actions, mocks permanentes ou backend paralelo no Next.js.
+
+Contratos administrativos ficam em `src/features/dashboard/types`, chamadas HTTP em `src/features/dashboard/api`, hooks TanStack Query em `src/features/dashboard/hooks`, e componentes em `src/features/dashboard/components`.
 
 ## Integração pública
 
