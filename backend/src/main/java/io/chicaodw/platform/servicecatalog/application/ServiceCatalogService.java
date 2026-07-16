@@ -75,6 +75,12 @@ public class ServiceCatalogService {
                                 .stream().map(serviceMapper::toPublicResponse).toList();
     }
 
+    /** Used by other modules (e.g. estimate) to validate an optional catalogue reference without exposing the entity. */
+    @Transactional(readOnly = true)
+    public boolean existsForCompany(UUID companyId, UUID id) {
+        return serviceRepository.existsByIdAndCompanyId(id, companyId);
+    }
+
     // ── Internal helper ───────────────────────────────────────────────────────
 
     private Service findByIdAndCompany(UUID id, UUID companyId) {

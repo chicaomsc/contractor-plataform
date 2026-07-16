@@ -38,6 +38,7 @@ public class SettingsService {
         if (request.timezone()             != null) settings.setTimezone(request.timezone());
         if (request.dateFormat()           != null) settings.setDateFormat(request.dateFormat());
         if (request.numberFormat()         != null) settings.setNumberFormat(request.numberFormat());
+        if (request.upfrontPercentage()    != null) settings.setUpfrontPercentage(request.upfrontPercentage());
 
         return companyMapper.toSettingsResponse(settingsRepository.save(settings));
     }

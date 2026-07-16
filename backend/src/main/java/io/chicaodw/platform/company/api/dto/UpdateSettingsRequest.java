@@ -15,5 +15,6 @@ public record UpdateSettingsRequest(
         @Size(max = 10)                                  String locale,
         @Size(max = 50)                                  String timezone,
         @Size(max = 50)                                  String dateFormat,
-        @Size(max = 50)                                  String numberFormat
+        @Size(max = 50)                                  String numberFormat,
+        @DecimalMin("0") @DecimalMax("100")              BigDecimal upfrontPercentage
 ) {}

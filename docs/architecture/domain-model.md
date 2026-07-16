@@ -133,74 +133,96 @@ Representa um cliente da empresa. Não é um utilizador do sistema.
 Customer
 ├── id: UUID
 ├── companyId: UUID               -- FK → Company
-├── name: String
-├── email: String
-├── phone: String
+├── name: String                  -- obrigatório
+├── email: String                 -- opcional (mas ver invariante de contacto abaixo)
+├── phone: String                 -- opcional (mas ver invariante de contacto abaixo)
+├── taxNumber: String              -- opcional, não único (nem globalmente, nem por empresa)
 ├── address: Address (value object)
-├── notes: String                 -- anotações internas
+├── notes: String                 -- anotações internas, opcional
+├── active: Boolean                -- default true; soft-delete (ver invariante 8)
 ├── createdAt: Instant
 └── updatedAt: Instant
 ```
+
+**Decisão (Sprint 10A):** `Customer` é referenciado por `Estimate` apenas por FK (`customerId`), sem snapshot dos seus dados. Alterar o nome/morada de um cliente depois de criado um orçamento reflete-se retroativamente ao consultar esse orçamento — risco aceite conscientemente para o MVP (ver release v1.0.0-estimate-domain-api.md). Caso isto se torne um problema real (ex: divergência visível no PDF gerado na Sprint 11), a mitigação é adicionar um snapshot mínimo (`customerNameSnapshot`, `customerContactSnapshot`) sem remodelar o agregado.
 
 ---
 
 ### Agregado: Estimate (Orçamento)
 
-Raiz do agregado de orçamento. Centraliza a proposta comercial enviada a um cliente.
+**Atualizado na Sprint 10A** — o desenho abaixo substitui a versão original deste documento (Sprint 1), que era apenas indicativa. Ver [Release v1.0.0 — Estimate Domain & API](../releases/v1.0.0-estimate-domain-api.md) para o racional completo.
+
+Raiz do agregado de orçamento. Centraliza a proposta comercial enviada a um cliente. `EstimateItem` e `Material` são entidades filhas sem ciclo de vida próprio (cascade ALL + orphanRemoval — nunca existem sem um `Estimate`).
 
 ```
 Estimate
 ├── id: UUID
 ├── companyId: UUID               -- FK → Company
-├── customerId: UUID              -- FK → Customer
-├── referenceNumber: String       -- número legível (ex: "ORC-2026-0042")
-├── title: String                 -- descrição sumária do trabalho
-├── status: Enum(DRAFT, SENT, ACCEPTED, REJECTED, EXPIRED)
-├── validUntil: LocalDate
-├── taxRate: BigDecimal           -- percentual aplicado (pode diferir do Settings)
-├── discountAmount: BigDecimal
-├── notes: String                 -- observações ao cliente
-├── internalNotes: String         -- notas internas (não aparecem no PDF)
+├── customerId: UUID              -- FK → Customer (sem snapshot, ver nota acima)
+├── number: String                 -- número legível, único por empresa (ex: "ORC-2026-0001") — ver ADR-007
+├── title: String
+├── description: String            -- opcional
+├── status: Enum(DRAFT, SENT, APPROVED, REJECTED, EXPIRED, CANCELLED, COMPLETED)
+├── issueDate: LocalDate            -- definido pelo backend na criação, nunca editável
+├── validUntil: LocalDate           -- opcional; default = issueDate + Settings.estimateValidityDays
+├── expectedStartDate: LocalDate    -- opcional
+├── estimatedDurationDays: Integer  -- opcional
+├── notes: String                  -- opcional, visível ao cliente
+├── terms: String                  -- opcional, condições comerciais
+│
+│   -- Snapshots (nunca relidos de Settings/Branding após a criação)
+├── currency: String                -- ISO 4217, copiado de Settings.defaultCurrency
+├── vatRate: BigDecimal             -- copiado de Settings.defaultTaxRate, salvo override do cliente
+├── upfrontPercentage: BigDecimal   -- copiado de Settings.upfrontPercentage, salvo override do cliente
+│
+│   -- Totais calculados pelo backend (nunca aceites do cliente)
+├── laborSubtotal: BigDecimal
+├── materialSubtotal: BigDecimal
+├── subtotal: BigDecimal            -- = laborSubtotal + materialSubtotal
+├── vatAmount: BigDecimal           -- = subtotal × vatRate / 100
+├── total: BigDecimal               -- = subtotal + vatAmount
+├── upfrontAmount: BigDecimal       -- = total × upfrontPercentage / 100
+├── remainingAmount: BigDecimal     -- = total - upfrontAmount
 ├── createdAt: Instant
 └── updatedAt: Instant
 ```
 
-**Valores calculados (não persistidos):**
-- `subtotal` = soma de `EstimateItem.totalPrice`
-- `taxAmount` = `subtotal × taxRate / 100`
-- `total` = `subtotal + taxAmount - discountAmount`
+Ver [Cálculos Financeiros e Precisão Monetária](../releases/v1.0.0-estimate-domain-api.md#cálculos-financeiros) para as regras de arredondamento (`BigDecimal`, scale 2, `HALF_UP`).
 
 **Entidade: EstimateItem**  
-Linha de item dentro de um orçamento.
+Linha de trabalho/serviço dentro de um orçamento. `description` e `unitPrice` são copiados no momento da criação a partir do `Service` do catálogo (quando `serviceId` é informado) — alterações futuras no catálogo nunca afetam orçamentos já criados.
 
 ```
 EstimateItem
 ├── id: UUID
-├── companyId: UUID               -- FK → Company
 ├── estimateId: UUID              -- FK → Estimate
+├── serviceId: UUID                -- opcional, referência não-normativa ao catálogo (sem FK de banco)
 ├── description: String
 ├── quantity: BigDecimal
+├── unit: Enum(UNIT, HOUR, DAY, M2, M3, LINEAR_METER, FIXED)
 ├── unitPrice: BigDecimal
-├── unit: String                  -- ex: "m²", "hora", "unidade"
-├── totalPrice: BigDecimal        -- = quantity × unitPrice (calculado e persistido)
+├── total: BigDecimal              -- = quantity × unitPrice (calculado e persistido)
 ├── displayOrder: Integer
-└── createdAt: Instant
+├── createdAt: Instant
+└── updatedAt: Instant
 ```
 
 **Entidade: Material**  
-Material utilizado em um item de orçamento (custo interno, não necessariamente exibido ao cliente).
+**Decisão (Sprint 10A):** pertence diretamente ao `Estimate`, não ao `EstimateItem` — corrige o desenho original deste documento (Sprint 1), que ligava `Material` a `EstimateItem`. Não há catálogo global de materiais nesta sprint.
 
 ```
 Material
 ├── id: UUID
-├── companyId: UUID               -- FK → Company
-├── estimateItemId: UUID          -- FK → EstimateItem
+├── estimateId: UUID              -- FK → Estimate
 ├── name: String
+├── description: String            -- opcional
 ├── quantity: BigDecimal
-├── unit: String
-├── unitCost: BigDecimal
-├── totalCost: BigDecimal         -- = quantity × unitCost (calculado e persistido)
-└── createdAt: Instant
+├── unit: Enum(UNIT, HOUR, DAY, M2, M3, LINEAR_METER, FIXED)
+├── unitPrice: BigDecimal
+├── total: BigDecimal              -- = quantity × unitPrice (calculado e persistido)
+├── displayOrder: Integer
+├── createdAt: Instant
+└── updatedAt: Instant
 ```
 
 ---
@@ -233,7 +255,7 @@ Company (1) ──── (N) GalleryItem
 Company (1) ──── (N) Customer
 Company (1) ──── (N) Estimate
 Estimate  (1) ──── (N) EstimateItem
-EstimateItem (1) ─── (N) Material
+Estimate  (1) ──── (N) Material
 Estimate  (N) ──── (1) Customer
 ```
 
@@ -241,22 +263,28 @@ Estimate  (N) ──── (1) Customer
 
 ## Invariantes de Domínio
 
-1. Toda entidade que não seja `Company` possui `companyId` não nulo.
-2. `Estimate.status` só pode avançar no sentido: `DRAFT → SENT → ACCEPTED | REJECTED`; ou `DRAFT → EXPIRED`.
-3. `EstimateItem.totalPrice` deve ser sempre igual a `quantity × unitPrice` no momento da persistência.
-4. `Material.totalCost` deve ser sempre igual a `quantity × unitCost` no momento da persistência.
+1. Toda entidade que não seja `Company` possui `companyId` não nulo (em `EstimateItem`/`Material` isto é indireto, via `Estimate.companyId`).
+2. `Estimate.status` segue a máquina de estados definida em `EstimateStatusTransitionService` (Sprint 10A): `DRAFT → SENT | CANCELLED`; `SENT → APPROVED | REJECTED | EXPIRED | CANCELLED`; `APPROVED → COMPLETED | CANCELLED`; `REJECTED`, `EXPIRED`, `CANCELLED`, `COMPLETED` são terminais.
+3. `EstimateItem.total` deve ser sempre igual a `quantity × unitPrice` no momento da persistência (`RoundingMode.HALF_UP`, scale 2).
+4. `Material.total` deve ser sempre igual a `quantity × unitPrice` no momento da persistência (`RoundingMode.HALF_UP`, scale 2).
 5. `Company.slug` é imutável após criação.
 6. `User.email` é único globalmente (não apenas dentro da company).
-7. Um `Estimate` só pode ser deletado se estiver em status `DRAFT`.
+7. Um `Estimate` só pode ser deletado se estiver em status `DRAFT`; fora de `DRAFT`, usar a transição para `CANCELLED`.
+8. Um `Customer` nunca é apagado fisicamente — `DELETE /customers/{id}` faz soft-delete (`active = false`), pois `Estimate.customerId` referencia o cliente permanentemente para preservar o histórico financeiro.
+9. Um `Customer` inativo (`active = false`) não pode ser associado a um novo `Estimate`, nem reatribuído a um `Estimate` existente.
+10. Um `Estimate` só pode ser editado (PUT) enquanto `status = DRAFT`. Fora disso, apenas o endpoint de status é permitido.
+11. `Customer` exige pelo menos um de `email` ou `phone` preenchido.
+12. `Estimate.number` é único por `(companyId, number)` — ver [ADR-007](../adr/ADR-007-estimate-numbering-strategy.md) para a estratégia de geração.
 
 ---
 
 ## Decisões de Modelagem
 
-- **`companyId` em `EstimateItem` e `Material`:** redundante relativamente à navegação, mas facilita queries diretas e auditoria sem joins adicionais.
-- **`Material` separado de `EstimateItem`:** permite registar custos de insumos sem que sejam necessariamente itemizados para o cliente, preservando margem comercial.
+- **`Material` pertence diretamente ao `Estimate`, não ao `EstimateItem`** (Sprint 10A — corrige o desenho original da Sprint 1): simplifica o agregado e reflete o uso real — materiais são listados por orçamento, não por linha de serviço.
 - **`Branding` e `Settings` como entidades separadas de `Company`:** evita que a entidade raiz se torne um objeto de dados agregado. Cada entidade tem ciclo de vida e responsabilidade independentes.
-- **`referenceNumber` como campo gerenciado pela aplicação:** sequência legível por humanos (ex: `ORC-2026-0042`) gerada pelo backend, distinta do `UUID` interno.
+- **`number` como campo gerenciado pela aplicação:** sequência legível por humanos (ex: `ORC-2026-0042`) gerada pelo backend via contador atômico por `(companyId, year)`, distinta do `UUID` interno — ver [ADR-007](../adr/ADR-007-estimate-numbering-strategy.md).
+- **`Customer` referenciado apenas por FK, sem snapshot** (Sprint 10A): risco aceite conscientemente para o MVP — ver nota na secção Customer acima.
+- **`EstimateItem.serviceId` sem FK de banco:** referência intencionalmente "solta" ao catálogo — a exclusão ou edição futura de um `Service` nunca deve afetar um orçamento já criado.
 
 ---
 

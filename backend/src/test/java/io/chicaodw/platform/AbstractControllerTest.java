@@ -6,6 +6,8 @@ import io.chicaodw.platform.common.storage.StorageService;
 import io.chicaodw.platform.company.application.BrandingService;
 import io.chicaodw.platform.company.application.CompanyService;
 import io.chicaodw.platform.company.application.SettingsService;
+import io.chicaodw.platform.customer.application.CustomerService;
+import io.chicaodw.platform.estimate.application.EstimateService;
 import io.chicaodw.platform.gallery.application.GalleryService;
 import io.chicaodw.platform.servicecatalog.application.ServiceCatalogService;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -31,6 +33,8 @@ public abstract class AbstractControllerTest extends AbstractIntegrationTest {
     @MockitoBean public StorageService        storageService;
     @MockitoBean public ServiceCatalogService catalogService;
     @MockitoBean public GalleryService        galleryService;
+    @MockitoBean public CustomerService       customerService;
+    @MockitoBean public EstimateService       estimateService;
 
     protected static final UUID COMPANY_ID = UUID.randomUUID();
     protected static final UUID USER_ID    = UUID.randomUUID();
