@@ -8,6 +8,10 @@ import {
   fetchGallery,
   fetchServices,
   fetchSettings,
+  createService,
+  deleteService,
+  reorderService,
+  updateService,
   updateBranding,
   updateCompany,
   updateSettings,
@@ -16,6 +20,7 @@ import { dashboardQueryKeys } from "../api/query-keys";
 import type {
   UpdateBrandingInput,
   UpdateCompanyInput,
+  ServiceFormInput,
   UpdateSettingsInput,
 } from "../types/admin";
 
@@ -104,6 +109,67 @@ export function useServices() {
   return useQuery({
     queryKey: dashboardQueryKeys.services(),
     queryFn: () => fetchServices(accessToken),
+  });
+}
+
+export function useCreateService() {
+  const accessToken = useAccessToken();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload: ServiceFormInput) =>
+      createService(accessToken, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.services() });
+    },
+  });
+}
+
+export function useUpdateService() {
+  const accessToken = useAccessToken();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      serviceId,
+      payload,
+    }: {
+      serviceId: string;
+      payload: ServiceFormInput;
+    }) => updateService(accessToken, serviceId, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.services() });
+    },
+  });
+}
+
+export function useDeleteService() {
+  const accessToken = useAccessToken();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (serviceId: string) => deleteService(accessToken, serviceId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.services() });
+    },
+  });
+}
+
+export function useReorderService() {
+  const accessToken = useAccessToken();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      serviceId,
+      displayOrder,
+    }: {
+      serviceId: string;
+      displayOrder: number;
+    }) => reorderService(accessToken, serviceId, displayOrder),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.services() });
+    },
   });
 }
 

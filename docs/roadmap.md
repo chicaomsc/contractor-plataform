@@ -1,6 +1,6 @@
 # Roadmap do Produto
 
-**Versão:** 2.9 — Sprint 8A concluída  
+**Versão:** 2.10 — Sprint 8B concluída  
 **Data:** 2026-07-16  
 **Horizonte:** MVP + Pós-MVP imediato
 
@@ -35,6 +35,7 @@
 | Real Tenant Validation — JR Pinturas | Concluído |
 | Production Visual QA — JR Pinturas | Concluído |
 | Dashboard Foundation | Concluído |
+| Services Management | Concluído |
 | Frontend — Painel Administrativo completo | Em progresso |
 
 ---
@@ -343,7 +344,36 @@
 
 ---
 
-## Sprint 8B — Painel Administrativo (frontend)
+## Sprint 8B — Services Management ✅
+
+**Objectivo:** Construir a área administrativa completa para gerenciamento dos serviços oferecidos pela empresa, sem alterar backend, endpoints, arquitetura ou regras de negócio.
+
+**Frontend:**
+- [x] Rota `/dashboard/services`
+- [x] Listagem de serviços
+- [x] Criação de serviço
+- [x] Edição de serviço
+- [x] Exclusão com confirmação
+- [x] Ativação e desativação
+- [x] Ordenação por mover para cima e mover para baixo
+- [x] Estados de loading, saving, success, error, retry e empty
+- [x] Componentes reutilizáveis para formulário, lista, card, status, estado vazio e diálogo de exclusão
+- [x] Testes de schema e ordenação
+- [x] Screenshots em `frontend/screenshots/services-management/`
+- [x] Release documentada em `docs/releases/v0.9.1-services-management.md`
+
+**Endpoints consumidos:**
+- [x] `GET /services`
+- [x] `POST /services`
+- [x] `PUT /services/{id}`
+- [x] `DELETE /services/{id}`
+- [x] `PATCH /services/{id}/reorder`
+
+**Critério de saída:** Admin consegue gerir serviços por endpoints existentes, e a landing pública reflete os serviços ativos sem código específico de tenant e sem implementar Gallery, Customers, Estimates, Analytics, Agenda, uploads ou dashboards financeiros/operacionais.
+
+---
+
+## Sprint 8C — Painel Administrativo (frontend)
 
 **Objectivo:** Interface de gestão da empresa, serviços e galeria.
 
@@ -353,7 +383,7 @@
 - [x] Gestão de perfil da empresa
 - [x] Gestão de branding
 - [ ] Gestão de logo
-- [ ] Gestão de serviços (CRUD + reordenar)
+- [x] Gestão de serviços (CRUD + reordenar)
 - [ ] Gestão de galeria (CRUD + upload de imagens)
 - [x] Configurações da conta
 
@@ -474,3 +504,4 @@
 - [Release v0.7.2-spike](releases/v0.7.2-spike.md)
 - [Release v0.8.3-production-qa](releases/v0.8.3-production-qa.md)
 - [Release v0.9.0-dashboard-foundation](releases/v0.9.0-dashboard-foundation.md)
+- [Release v0.9.1-services-management](releases/v0.9.1-services-management.md)
