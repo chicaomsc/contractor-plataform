@@ -9,6 +9,7 @@ import {
   type CompanyDto,
   type GalleryDto,
   type ServiceDto,
+  type ServiceFormInput,
   type SettingsDto,
   type UpdateBrandingInput,
   type UpdateCompanyInput,
@@ -77,6 +78,57 @@ export async function fetchServices(accessToken: string): Promise<ServiceDto[]> 
     accessToken,
   });
   return servicesDtoSchema.parse(response);
+}
+
+export async function createService(
+  accessToken: string,
+  payload: ServiceFormInput,
+): Promise<ServiceDto> {
+  const response = await adminApiRequest<unknown>("/services", {
+    method: "POST",
+    accessToken,
+    body: JSON.stringify(payload),
+  });
+  return servicesDtoSchema.element.parse(response);
+}
+
+export async function updateService(
+  accessToken: string,
+  serviceId: string,
+  payload: ServiceFormInput,
+): Promise<ServiceDto> {
+  const response = await adminApiRequest<unknown>(`/services/${serviceId}`, {
+    method: "PUT",
+    accessToken,
+    body: JSON.stringify(payload),
+  });
+  return servicesDtoSchema.element.parse(response);
+}
+
+export async function deleteService(
+  accessToken: string,
+  serviceId: string,
+): Promise<void> {
+  await adminApiRequest<void>(`/services/${serviceId}`, {
+    method: "DELETE",
+    accessToken,
+  });
+}
+
+export async function reorderService(
+  accessToken: string,
+  serviceId: string,
+  displayOrder: number,
+): Promise<ServiceDto> {
+  const response = await adminApiRequest<unknown>(
+    `/services/${serviceId}/reorder`,
+    {
+      method: "PATCH",
+      accessToken,
+      body: JSON.stringify({ displayOrder }),
+    },
+  );
+  return servicesDtoSchema.element.parse(response);
 }
 
 export async function fetchGallery(accessToken: string): Promise<GalleryDto[]> {

@@ -172,6 +172,13 @@ export function DashboardHome() {
               Rever branding
             </Link>
             <Link
+              href="/dashboard/services"
+              className="flex items-center gap-3 border border-border px-4 py-3 text-sm font-semibold no-underline hover:border-primary"
+            >
+              <Wrench size={18} aria-hidden="true" />
+              Gerenciar serviços
+            </Link>
+            <Link
               href="/dashboard/settings"
               className="flex items-center gap-3 border border-border px-4 py-3 text-sm font-semibold no-underline hover:border-primary"
             >

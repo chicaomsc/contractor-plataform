@@ -60,8 +60,9 @@ A rota `/login` inicia sessão contra a autenticação existente do backend. A �
 - edição de Company via `GET/PUT /company/me`;
 - edição de Branding via `GET/PUT /branding/me`;
 - edição de Settings via `GET/PUT /settings/me`.
+- gestão de Services via endpoints administrativos existentes.
 
-Services e Gallery são consumidos no dashboard apenas para contagens. A gestão dessas áreas ainda não faz parte do frontend.
+Gallery é consumida no dashboard apenas para contagem. A gestão de galeria ainda não faz parte do frontend.
 
 ## Build
 
@@ -103,10 +104,21 @@ Rotas disponíveis:
 - `/dashboard/company`
 - `/dashboard/branding`
 - `/dashboard/settings`
+- `/dashboard/services`
 
 O dashboard consome apenas endpoints existentes do Spring Boot. Não há Route Handlers, Server Actions, mocks permanentes ou backend paralelo no Next.js.
 
 Contratos administrativos ficam em `src/features/dashboard/types`, chamadas HTTP em `src/features/dashboard/api`, hooks TanStack Query em `src/features/dashboard/hooks`, e componentes em `src/features/dashboard/components`.
+
+Gestão de serviços:
+
+- `GET /services` para listagem;
+- `POST /services` para criação;
+- `PUT /services/{id}` para edição e ativação/desativação;
+- `DELETE /services/{id}` para exclusão;
+- `PATCH /services/{id}/reorder` para ordenação.
+
+A ordenação no frontend usa mover para cima e mover para baixo. Drag and drop não foi adicionado porque não existe infraestrutura dessa interação no projeto.
 
 ## Integração pública
 

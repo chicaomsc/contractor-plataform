@@ -8,6 +8,7 @@ import {
   Menu,
   Palette,
   Settings,
+  Wrench,
   UserCircle,
   X,
 } from "lucide-react";
@@ -27,6 +28,7 @@ const navItems = [
   { href: "/dashboard/company", label: "Empresa", icon: Building2 },
   { href: "/dashboard/branding", label: "Branding", icon: Palette },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
+  { href: "/dashboard/services", label: "Serviços", icon: Wrench },
 ];
 
 const breadcrumbLabels = new Map([
@@ -34,6 +36,7 @@ const breadcrumbLabels = new Map([
   ["company", "Empresa"],
   ["branding", "Branding"],
   ["settings", "Settings"],
+  ["services", "Serviços"],
 ]);
 
 function Breadcrumb() {

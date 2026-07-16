@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   updateBrandingSchema,
   updateCompanySchema,
+  serviceFormSchema,
   updateSettingsSchema,
 } from "./admin";
 
@@ -84,6 +85,37 @@ describe("dashboard admin schemas", () => {
       estimateValidityDays: 15,
       estimateFooterText: null,
       locale: null,
+    });
+  });
+
+  it("validates service form fields and normalizes optional values", () => {
+    expect(() =>
+      serviceFormSchema.parse({
+        name: "",
+        shortDescription: "",
+        description: "",
+        icon: "",
+        displayOrder: "0",
+        active: true,
+      }),
+    ).toThrow();
+
+    expect(
+      serviceFormSchema.parse({
+        name: "Pintura residencial",
+        shortDescription: "",
+        description: "",
+        icon: "",
+        displayOrder: "2",
+        active: false,
+      }),
+    ).toMatchObject({
+      name: "Pintura residencial",
+      shortDescription: null,
+      description: null,
+      icon: null,
+      displayOrder: 2,
+      active: false,
     });
   });
 });
