@@ -55,9 +55,7 @@ function Breadcrumb() {
 
           return (
             <li key={href} className="flex min-w-0 items-center gap-2">
-              {index > 0 ? (
-                <ChevronRight size={14} aria-hidden="true" />
-              ) : null}
+              {index > 0 ? <ChevronRight size={14} aria-hidden="true" /> : null}
               {isLast ? (
                 <span className="truncate font-semibold text-foreground">
                   {breadcrumbLabels.get(part) ?? part}
@@ -77,7 +75,7 @@ function Breadcrumb() {
 
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
-  const { session } = useAuth();
+  const { logout, session } = useAuth();
 
   return (
     <div className="flex h-full flex-col bg-[var(--surface-dark)] text-[var(--surface-dark-fg)]">
@@ -128,6 +126,16 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         <p className="m-0 mt-1 truncate text-xs text-white/55">
           {session?.user.email}
         </p>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="mt-4 w-full justify-start text-white/75 hover:bg-white/10 hover:text-white"
+          onClick={logout}
+        >
+          <LogOut size={16} aria-hidden="true" />
+          Sair
+        </Button>
       </div>
     </div>
   );

@@ -20,7 +20,11 @@ public class LocalStorageService implements StorageService {
     @Override
     public String store(String folder, MultipartFile file) {
         try {
-            Path targetDir = Path.of(properties.getBasePath()).resolve(folder).normalize();
+            Path baseDir = Path.of(properties.getBasePath()).toAbsolutePath().normalize();
+            Path targetDir = baseDir.resolve(folder).normalize();
+            if (!targetDir.startsWith(baseDir)) {
+                throw new StorageException("Invalid storage folder", null);
+            }
             Files.createDirectories(targetDir);
 
             String filename = UUID.randomUUID() + extension(file.getOriginalFilename());
@@ -36,9 +40,15 @@ public class LocalStorageService implements StorageService {
     public void delete(String storedPath) {
         if (storedPath == null || storedPath.isBlank()) return;
         try {
-            // storedPath is "/uploads/<folder>/<filename>"; strip the "/uploads/" prefix
+            if (!storedPath.startsWith("/uploads/")) {
+                throw new StorageException("Invalid stored path", null);
+            }
+            Path baseDir = Path.of(properties.getBasePath()).toAbsolutePath().normalize();
             String relative = storedPath.replaceFirst("^/uploads/", "");
-            Path target = Path.of(properties.getBasePath()).resolve(relative).normalize();
+            Path target = baseDir.resolve(relative).normalize();
+            if (!target.startsWith(baseDir)) {
+                throw new StorageException("Invalid stored path", null);
+            }
             Files.deleteIfExists(target);
         } catch (IOException e) {
             throw new StorageException("Failed to delete file: " + storedPath, e);

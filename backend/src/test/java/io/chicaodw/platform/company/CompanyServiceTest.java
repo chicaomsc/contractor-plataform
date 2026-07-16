@@ -2,6 +2,7 @@ package io.chicaodw.platform.company;
 
 import io.chicaodw.platform.common.exception.BusinessRuleException;
 import io.chicaodw.platform.common.exception.ResourceNotFoundException;
+import io.chicaodw.platform.common.storage.ImageUploadPolicy;
 import io.chicaodw.platform.common.storage.StorageService;
 import io.chicaodw.platform.company.api.dto.BrandingResponse;
 import io.chicaodw.platform.company.api.dto.CompanyResponse;
@@ -19,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -41,6 +43,7 @@ class CompanyServiceTest {
     @Mock BrandingRepository brandingRepository;
     @Mock SettingsRepository settingsRepository;
     @Mock StorageService     storageService;
+    @Spy ImageUploadPolicy   imageUploadPolicy = new ImageUploadPolicy();
     @Mock CompanyMapper      companyMapper;
 
     @InjectMocks CompanyService companyService;
@@ -138,7 +141,7 @@ class CompanyServiceTest {
 
     @Test
     void uploadLogo_validImage_savesFileAndUpdatesLogoUrl() {
-        var file = new MockMultipartFile("file", "logo.png", "image/png", new byte[]{1, 2, 3});
+        var file = new MockMultipartFile("file", "logo.png", "image/png", pngBytes());
         var expected = new BrandingResponse(branding.getId(), companyId, "/uploads/company/" + companyId + "/logo/abc.png",
                 "#1E40AF", null, null, null, null, null, null, null);
 
@@ -174,7 +177,7 @@ class CompanyServiceTest {
     @Test
     void uploadLogo_existingLogo_deletesOldFile() {
         branding.setLogoUrl("/uploads/company/" + companyId + "/logo/old.png");
-        var file = new MockMultipartFile("file", "new.png", "image/png", new byte[]{1});
+        var file = new MockMultipartFile("file", "new.png", "image/png", pngBytes());
 
         when(brandingRepository.findByCompanyId(companyId)).thenReturn(Optional.of(branding));
         when(storageService.store(anyString(), any())).thenReturn("/uploads/company/" + companyId + "/logo/new.png");
@@ -218,5 +221,11 @@ class CompanyServiceTest {
         companyService.deleteLogo(companyId);
 
         verify(storageService, never()).delete(anyString());
+    }
+
+    private static byte[] pngBytes() {
+        return new byte[]{
+                (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00
+        };
     }
 }

@@ -78,7 +78,11 @@ npm run start
 npm run lint
 npm run typecheck
 npm run test
+npm run test:e2e:smoke
+npm run test:e2e
 ```
+
+`npm run test:e2e:smoke` roda os smokes críticos e é o alvo do CI. `npm run test:e2e` roda também o fluxo principal completo do MVP. A suíte E2E usa Playwright, Docker Compose para PostgreSQL e o backend Spring Boot local.
 
 ## Estrutura
 
@@ -136,6 +140,16 @@ Gestão de galeria:
 - `DELETE /gallery/{id}/after-image` para remover after.
 
 O par before/after usa o modelo existente do backend: um item de galeria com dois slots de imagem. Não há crop, editor de imagem, compressão ou filtros no frontend.
+
+Uploads administrativos aceitam somente PNG, JPEG e WebP até 5 MB. A validação do frontend é apenas UX; o backend continua sendo a autoridade da política.
+
+## Sessão e segurança
+
+O dashboard persiste tokens no browser conforme o contrato atual do backend. O risco de refresh token em `localStorage` está documentado em `docs/security/authentication-review.md`; a migração recomendada é refresh token em cookie HttpOnly emitido pelo Spring Boot.
+
+Security headers são definidos em `next.config.ts` para a camada Next.js. Headers equivalentes da API são configurados no Spring Security.
+
+O build não depende de `next/font/google`; a tipografia usa system fonts nos tokens CSS.
 
 ## Integração pública
 

@@ -1,6 +1,6 @@
 package io.chicaodw.platform.gallery.application;
 
-import io.chicaodw.platform.common.exception.BusinessRuleException;
+import io.chicaodw.platform.common.storage.ImageUploadPolicy;
 import io.chicaodw.platform.common.storage.StorageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -18,9 +18,10 @@ import java.util.UUID;
 public class GalleryImageService {
 
     private final StorageService storageService;
+    private final ImageUploadPolicy imageUploadPolicy;
 
     public String storeImage(UUID companyId, MultipartFile file) {
-        validate(file);
+        imageUploadPolicy.validate(file);
         return storageService.store("company/" + companyId + "/gallery", file);
     }
 
@@ -28,13 +29,4 @@ public class GalleryImageService {
         storageService.delete(storedPath);
     }
 
-    private static void validate(MultipartFile file) {
-        if (file == null || file.isEmpty()) {
-            throw new BusinessRuleException("Image file cannot be empty");
-        }
-        String ct = file.getContentType();
-        if (ct == null || !ct.startsWith("image/")) {
-            throw new BusinessRuleException("Only image files are accepted");
-        }
-    }
 }
