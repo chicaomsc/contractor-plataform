@@ -1,6 +1,6 @@
 # Roadmap do Produto
 
-**Versão:** 2.13 — Sprint 10A concluída  
+**Versão:** 2.14 — Sprint 10B concluída  
 **Data:** 2026-07-16  
 **Horizonte:** MVP + Pós-MVP imediato
 
@@ -40,6 +40,7 @@
 | MVP Hardening | Concluído |
 | Frontend — Painel Administrativo completo | Concluído |
 | Backend — Módulo Customer + Estimate (domínio, cálculos, API) | Concluído |
+| Frontend — Estimate Builder (`/dashboard/estimates`) | Concluído |
 
 ---
 
@@ -468,31 +469,50 @@
 - [x] `PATCH /estimates/{id}/status`, `GET /estimates` com filtros `status`/`customerId`
 - [x] OpenAPI atualizado, 265 testes (unitários + integração) verdes
 
-**Fora do escopo desta etapa (ver Sprint 11):**
-- [ ] Página de gestão de clientes (frontend)
-- [ ] Formulário de criação/edição de orçamento (frontend)
+**Fora do escopo desta etapa (ver Sprint 10B e 11):**
+- [ ] Página de gestão de clientes / builder de orçamento (frontend)
 - [ ] Geração de PDF
 
 **Critério de saída:** Admin consegue criar, listar, editar e mudar o status de um orçamento completo via API, com isolamento multi-tenant e cálculos garantidos pelo backend. ✅ Atingido — ver [Release v1.0.0](releases/v1.0.0-estimate-domain-api.md).
 
-**Status:** Concluída (backend). Frontend de orçamento adiado para a Sprint 11 junto com PDF.
+**Status:** Concluída (backend).
 
 ---
 
-## Sprint 11 — Frontend de Orçamentos, PDF e Materiais
+## Sprint 10B — Estimate Builder ✅
 
-**Objectivo:** Painel administrativo para clientes e orçamentos (consumindo a API da Sprint 10A), exportação de orçamentos em PDF.
+**Objectivo:** Experiência completa de criação e edição de orçamentos no dashboard, consumindo exclusivamente a API REST da Sprint 10A. Nenhum cálculo financeiro ou regra de negócio duplicada no frontend — o backend permanece a única fonte de verdade.
+
+**Frontend:**
+- [x] `/dashboard/estimates` — listagem com tabela, pesquisa, filtro por status/cliente, ordenação, empty state (sem paginação — endpoint não pagina)
+- [x] `/dashboard/estimates/new` — wizard de 5 passos (Cliente, Informações gerais, Itens, Materiais, Revisão)
+- [x] `/dashboard/estimates/[id]` — visualização e edição (apenas em `DRAFT`), mudança de status, exclusão
+- [x] `CustomerSelector` + `QuickCustomerForm` — seleção/criação rápida de cliente sem sair do wizard
+- [x] `EstimateItemsEditor` / `MaterialsEditor` — adicionar, editar, excluir, mover para cima/baixo
+- [x] `EstimateSummary` / `TotalsCard` — renderizam exclusivamente valores devolvidos pela API
+- [x] `EstimateStatusControl` — oferece todas as transições e delega a validação ao backend (409 em transição inválida)
+- [x] `EstimateNotEditableNotice` — bloqueia UI de edição fora de `DRAFT` com motivo explícito
+- [x] 93 testes de frontend (schemas, sort, resumo financeiro, seleção de cliente, mudança de status, criação/edição via hooks)
+- [x] Verificação manual end-to-end contra backend e frontend reais (registo → wizard → criação → transição de status → bloqueio de edição)
+
+**Critério de saída:** Admin cria e edita um orçamento completo pelo painel, com todos os valores financeiros vindos do backend. ✅ Atingido — ver [Release v1.0.1](releases/v1.0.1-estimate-builder.md).
+
+**Status:** Concluída.
+
+---
+
+## Sprint 11 — PDF
+
+**Objectivo:** Exportação de orçamentos em PDF com o branding da empresa.
 
 **Backend:**
 - [ ] Geração de PDF com branding da empresa
 - [ ] `POST /estimates/{id}/pdf`
 
 **Frontend:**
-- [ ] Página de gestão de clientes
-- [ ] Formulário de criação/edição de orçamento (itens e materiais — `Material` já pertence diretamente ao `Estimate`, ver [ADR/domain-model](architecture/domain-model.md))
-- [ ] Preview e download do PDF
+- [ ] Preview e download do PDF a partir de `/dashboard/estimates/[id]`
 
-**Critério de saída:** Admin cria orçamento completo para um cliente pelo painel e exporta em PDF com logo, cores, itens e totais correctos.
+**Critério de saída:** Admin exporta um orçamento em PDF com logo, cores, itens e totais corretos.
 
 ---
 
@@ -582,3 +602,4 @@
 - [Security — Dependency Audit](security/dependency-audit.md)
 - [ADR-007 — Estratégia de Numeração de Orçamentos](adr/ADR-007-estimate-numbering-strategy.md)
 - [Release v1.0.0 — Estimate Domain & API](releases/v1.0.0-estimate-domain-api.md)
+- [Release v1.0.1 — Estimate Builder](releases/v1.0.1-estimate-builder.md)

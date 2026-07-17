@@ -3,6 +3,7 @@
 import {
   Building2,
   ChevronRight,
+  FileText,
   Home,
   Images,
   LogOut,
@@ -31,6 +32,7 @@ const navItems = [
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
   { href: "/dashboard/services", label: "Serviços", icon: Wrench },
   { href: "/dashboard/gallery", label: "Galeria", icon: Images },
+  { href: "/dashboard/estimates", label: "Orçamentos", icon: FileText },
 ];
 
 const breadcrumbLabels = new Map([
@@ -40,6 +42,8 @@ const breadcrumbLabels = new Map([
   ["settings", "Settings"],
   ["services", "Serviços"],
   ["gallery", "Galeria"],
+  ["estimates", "Orçamentos"],
+  ["new", "Novo"],
 ]);
 
 function Breadcrumb() {
