@@ -141,7 +141,7 @@ Módulo de gestão de clientes.
 
 ### `io.chicaodw.platform.estimate`
 
-Módulo de orçamentação — o de maior complexidade de negócio no MVP. Domínio + API na Sprint 10A, geração de PDF na Sprint 10C.
+Módulo de orçamentação — o de maior complexidade de negócio no MVP. Domínio + API na Sprint 10A, geração de PDF na Sprint 10C, partilha pública na Sprint 10D.
 
 **Responsabilidades:**
 - CRUD completo de `Estimate`, com `EstimateItem` e `Material` como entidades filhas do agregado (cascade ALL + orphanRemoval — sem repositórios próprios)
@@ -151,8 +151,9 @@ Módulo de orçamentação — o de maior complexidade de negócio no MVP. Domí
 - Snapshot do `Customer` no `Estimate` — congelado na criação/reatribuição (`EstimateService.applyCustomerSnapshot`, Sprint 10C)
 - Endpoints: `GET/POST /estimates`, `GET/PUT/DELETE /estimates/{id}`, `PATCH /estimates/{id}/status`, `GET /estimates/{id}/pdf`
 - Geração de PDF (submódulo `estimate.pdf`, Sprint 10C): `EstimatePdfService` (application) → `EstimatePdfDocumentFactory` + `EstimatePdfRenderer` (puros, sem Spring, sem banco) — ver [ADR-008](../adr/ADR-008-pdf-generation-strategy.md)
+- Partilha pública (Sprint 10D): `EstimateShare` (agregado próprio) + `EstimateShareService` — cria/revoga links (`POST/GET/DELETE /estimates/{id}/share`, autenticado) e resolve tokens para as rotas públicas (`GET /public/share/{token}`, `GET /public/share/{token}/pdf`), reaproveitando `EstimatePdfService`/`EstimatePdfDocumentFactory` em vez de duplicar formatação ou renderização — ver [ADR-009](../adr/ADR-009-estimate-share-token-strategy.md)
 
-**Dependências:** `shared`, `auth`, `customer` (via `CustomerService.getAssignableCustomer`), `servicecatalog` (via `ServiceCatalogService.existsForCompany`, para validar o `serviceId` opcional de um `EstimateItem`), `company` (leitura de `Company`/`Branding`/`Settings` para snapshots de criação e para o PDF), `shared`/`common` (via `StorageService.load`, para ler os bytes do logo da empresa ao gerar o PDF)  
+**Dependências:** `shared`, `auth`, `customer` (via `CustomerService.getAssignableCustomer`), `servicecatalog` (via `ServiceCatalogService.existsForCompany`, para validar o `serviceId` opcional de um `EstimateItem`), `company` (leitura de `Company`/`Branding`/`Settings` para snapshots de criação, para o PDF e para a view pública), `shared`/`common` (via `StorageService.load` para o logo, e via `common.security.{SecureTokenGenerator,TokenHasher}` para o token de partilha)  
 **Nota:** O módulo `estimate` não acessa os repositórios de `Customer` ou `Service` diretamente — resolve ambos via ID e delega a validação às application services expostas por `customer` e `servicecatalog`, respectivamente.
 
 ---

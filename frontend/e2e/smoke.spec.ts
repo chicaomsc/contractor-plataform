@@ -108,3 +108,49 @@ test("baixar PDF de um orçamento faz download de um ficheiro não vazio", async
   const stats = fs.statSync(downloadPath as string);
   expect(stats.size).toBeGreaterThan(0);
 });
+
+test("partilhar um orçamento gera um link público, funcional sem sessão, com download de PDF", async ({
+  page,
+  browser,
+  request,
+}) => {
+  const suffix = `share.${Date.now()}`;
+  const { auth, email, password } = await registerAccount(request, suffix);
+  const estimate = await createEstimateWithPdfData(request, auth.accessToken);
+
+  await loginViaUi(page, email, password);
+  await page.goto(`/dashboard/estimates/${estimate.id}`);
+  await expect(page.getByText(estimate.number)).toBeVisible();
+
+  await page.getByRole("button", { name: "Compartilhar" }).click();
+  const linkInput = page.getByLabel("Link público do orçamento");
+  await expect(linkInput).toBeVisible();
+  const shareUrl = await linkInput.inputValue();
+  expect(shareUrl).toContain("/share/");
+  expect(shareUrl).not.toContain(`/estimate/${estimate.id}`);
+
+  const whatsappLink = page.getByRole("link", { name: /WhatsApp/ });
+  await expect(whatsappLink).toHaveAttribute("href", /^https:\/\/wa\.me\/\?text=/);
+
+  // Open the link in a brand-new, cookie-less browser context — proves it needs no session.
+  const publicContext = await browser.newContext();
+  const publicPage = await publicContext.newPage();
+  await publicPage.goto(shareUrl);
+  await expect(publicPage.getByText(estimate.number)).toBeVisible();
+  await expect(publicPage.getByText("E2E PDF Customer")).toBeVisible();
+
+  const downloadPromise = publicPage.waitForEvent("download");
+  await publicPage.getByRole("link", { name: /Baixar PDF/ }).click();
+  const download = await downloadPromise;
+  const downloadPath = await download.path();
+  expect(downloadPath).toBeTruthy();
+  const fs = await import("node:fs");
+  expect(fs.statSync(downloadPath as string).size).toBeGreaterThan(0);
+
+  // Revoking invalidates the link immediately, even for a page that already loaded it.
+  await page.getByRole("button", { name: "Revogar" }).click();
+  await publicPage.reload();
+  await expect(publicPage.getByText("Link indisponível")).toBeVisible();
+
+  await publicContext.close();
+});

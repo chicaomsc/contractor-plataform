@@ -1,7 +1,7 @@
 # Roadmap do Produto
 
-**Versão:** 2.15 — Sprint 10C concluída  
-**Data:** 2026-07-16  
+**Versão:** 2.16 — Sprint 10D concluída  
+**Data:** 2026-07-18  
 **Horizonte:** MVP + Pós-MVP imediato
 
 ---
@@ -42,6 +42,7 @@
 | Backend — Módulo Customer + Estimate (domínio, cálculos, API) | Concluído |
 | Frontend — Estimate Builder (`/dashboard/estimates`) | Concluído |
 | Backend + Frontend — PDF profissional de orçamento | Concluído |
+| Backend + Frontend — Partilha pública de orçamento | Concluído |
 
 ---
 
@@ -526,6 +527,31 @@
 
 ---
 
+## Sprint 10D — Estimate Sharing ✅
+
+**Objectivo:** Link público, revogável e com expiração para um cliente final visualizar e baixar o PDF de um orçamento sem autenticação, reaproveitando integralmente o pipeline de PDF da Sprint 10C. Sem assinatura digital, aceite, pagamentos, email, API do WhatsApp, QR Code ou analytics.
+
+**Backend:**
+- [x] `EstimateShare` (migration V10) — token nunca em texto plano: só `tokenHash` (SHA-256) é persistido, token bruto devolvido uma única vez na criação — ver [ADR-009](adr/ADR-009-estimate-share-token-strategy.md)
+- [x] Token gerado por `SecureRandom`, 160 bits de entropia, Base64 URL-safe — nunca sequencial, nunca UUID
+- [x] `POST/GET/DELETE /estimates/{id}/share` (OWNER, isolado por `companyId`) — criar revoga automaticamente o link anterior (no máximo um ativo por orçamento)
+- [x] `GET /public/share/{token}` e `GET /public/share/{token}/pdf` — sem autenticação, resposta uniforme (404) para token inexistente/expirado/revogado
+- [x] PDF público reaproveita `EstimatePdfService.generatePdf` — nenhum renderer novo; view JSON pública construída a partir do mesmo `EstimatePdfDocument` do PDF
+- [x] `ON DELETE CASCADE` de `estimates` → `estimate_shares` — apagar o orçamento (só possível em `DRAFT`) invalida o link automaticamente
+- [x] Auditoria mínima: `createdAt`, `lastAccessAt`, `accessCount` — sem analytics
+- [x] 38 testes novos no backend (hasher, gerador de token, serviço, integração multi-tenant)
+
+**Frontend:**
+- [x] `ShareEstimatePanel` em `/dashboard/estimates/[id]` — Compartilhar, Copiar link, WhatsApp (`wa.me`, sem API), Revogar
+- [x] Página pública `/share/[token]` — fora do `middleware.ts` de autenticação, não indexável, layout limpo com branding e botão "Baixar PDF"
+- [x] 22 testes novos + 1 E2E cobrindo o fluxo completo (partilhar → abrir sem sessão → baixar PDF → revogar → confirmar indisponibilidade)
+
+**Critério de saída:** Cliente final acede a um orçamento por link público seguro, sem login, com PDF idêntico ao do dashboard. ✅ Atingido — ver [Release v1.0.3](releases/v1.0.3-estimate-sharing.md).
+
+**Status:** Concluída.
+
+---
+
 ## Sprint 12 — Deploy e Operação
 
 **Objectivo:** Sistema em produção com operação mínima.
@@ -615,3 +641,5 @@
 - [Release v1.0.0 — Estimate Domain & API](releases/v1.0.0-estimate-domain-api.md)
 - [Release v1.0.1 — Estimate Builder](releases/v1.0.1-estimate-builder.md)
 - [Release v1.0.2 — Professional Estimate PDF](releases/v1.0.2-estimate-pdf.md)
+- [ADR-009 — Estratégia de Token de Partilha Pública de Orçamentos](adr/ADR-009-estimate-share-token-strategy.md)
+- [Release v1.0.3 — Estimate Sharing](releases/v1.0.3-estimate-sharing.md)
