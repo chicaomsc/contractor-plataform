@@ -25,7 +25,7 @@ class PlatformApplicationTests extends AbstractIntegrationTest {
         );
         assertThat(tables).containsExactlyInAnyOrder(
                 "brandings", "companies", "customers", "estimate_items", "estimate_number_sequences",
-                "estimates", "flyway_schema_history", "gallery_items", "materials",
+                "estimate_shares", "estimates", "flyway_schema_history", "gallery_items", "materials",
                 "refresh_tokens", "services", "settings", "users"
         );
     }

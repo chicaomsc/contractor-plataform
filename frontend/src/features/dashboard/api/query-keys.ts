@@ -12,4 +12,6 @@ export const dashboardQueryKeys = {
     [...dashboardQueryKeys.all, "estimates", filters] as const,
   estimate: (id: string) =>
     [...dashboardQueryKeys.all, "estimates", "detail", id] as const,
+  estimateShare: (id: string) =>
+    [...dashboardQueryKeys.all, "estimates", "share", id] as const,
 };

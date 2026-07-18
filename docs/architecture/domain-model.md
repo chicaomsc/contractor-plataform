@@ -232,6 +232,25 @@ Material
 └── updatedAt: Instant
 ```
 
+### Agregado: EstimateShare (Partilha Pública)
+
+**Novo na Sprint 10D.** Raiz de agregado independente — referencia `Estimate` por `estimateId`, nunca modifica o agregado `Estimate`. Representa um link público, revogável e com expiração, que permite a um cliente final visualizar/baixar o PDF de um orçamento sem autenticação. Ver [ADR-009](../adr/ADR-009-estimate-share-token-strategy.md) para a estratégia completa de token.
+
+```
+EstimateShare
+├── id: UUID
+├── companyId: UUID          -- denormalizado (mesmo padrão de EstimateItem/Material via Estimate, mas aqui direto para isolamento sem join)
+├── estimateId: UUID          -- FK → Estimate, ON DELETE CASCADE
+├── tokenHash: String(64)     -- SHA-256 hex do token bruto; único. Token bruto NUNCA é persistido.
+├── expiresAt: Instant        -- nunca infinito; default 30 dias, configurável (1–365) na criação
+├── revokedAt: Instant?       -- null enquanto ativo
+├── lastAccessAt: Instant?    -- atualizado a cada acesso público bem-sucedido (view ou PDF)
+├── accessCount: long         -- incrementado a cada acesso público bem-sucedido
+├── createdByUserId: UUID
+├── createdAt: Instant
+└── updatedAt: Instant
+```
+
 ---
 
 ## Value Objects
@@ -264,6 +283,7 @@ Company (1) ──── (N) Estimate
 Estimate  (1) ──── (N) EstimateItem
 Estimate  (1) ──── (N) Material
 Estimate  (N) ──── (1) Customer
+Estimate  (1) ──── (0..1) EstimateShare ativo  -- histórico pode ter mais de um (revogados); no máximo um ativo por vez
 ```
 
 ---
@@ -284,6 +304,10 @@ Estimate  (N) ──── (1) Customer
 12. `Estimate.number` é único por `(companyId, number)` — ver [ADR-007](../adr/ADR-007-estimate-numbering-strategy.md) para a estratégia de geração.
 13. Os campos `Estimate.customer*Snapshot` são preenchidos exclusivamente pelo backend (nunca aceites de um request) e só são reescritos quando `customerId` muda — nunca por uma edição ao cadastro do `Customer` atualmente atribuído (Sprint 10C).
 14. `GET /estimates/{id}/pdf` nunca altera `Estimate.status` nem qualquer outro campo — geração de PDF é estritamente de leitura, disponível em qualquer status.
+15. No máximo um `EstimateShare` ativo (`revokedAt IS NULL`) por `Estimate` — criar um novo revoga automaticamente qualquer outro ainda ativo (Sprint 10D).
+16. `EstimateShare.tokenHash` é a única forma de resolver um link público — o token bruto nunca é persistido nem recuperável após a criação (ver [ADR-009](../adr/ADR-009-estimate-share-token-strategy.md)).
+17. Apagar um `Estimate` (só possível em `DRAFT`) apaga em cascata qualquer `EstimateShare` associado (`ON DELETE CASCADE`) — um link nunca sobrevive ao orçamento que referencia.
+18. `EstimateShare.expiresAt` nunca é infinito — obrigatório em toda criação, com default de 30 dias quando não especificado.
 
 ---
 
@@ -295,6 +319,8 @@ Estimate  (N) ──── (1) Customer
 - **`Customer` passou a ter snapshot mínimo no `Estimate`** (Sprint 10C, revisão da decisão da Sprint 10A): o risco documentado inicialmente materializou-se com a geração de PDF — um documento comercial precisa de estabilidade histórica. Apenas os campos exibidos são congelados (`name`, `email`, `phone`, `taxNumber`, `address`); não é um sistema de versionamento — uma reatribuição de cliente (mudar `customerId` num `PUT`) atualiza o snapshot para o novo cliente, mas edições ao cadastro do cliente atualmente atribuído nunca retroagem.
 - **`Company`/`Branding` permanecem sem snapshot** (Sprint 10C, decisão deliberada — ver [ADR-008](../adr/ADR-008-pdf-generation-strategy.md) e [Release v1.0.2](../releases/v1.0.2-estimate-pdf.md)): ao contrário do Customer, a empresa é a própria vendedora emitindo o documento — é aceitável (e desejável) que corrigir o telefone ou logo da empresa se reflita em downloads futuros do mesmo orçamento, como um papel timbrado reimpresso.
 - **`EstimateItem.serviceId` sem FK de banco:** referência intencionalmente "solta" ao catálogo — a exclusão ou edição futura de um `Service` nunca deve afetar um orçamento já criado.
+- **`EstimateShare` como agregado independente, não um campo em `Estimate`** (Sprint 10D): mantém o agregado `Estimate` livre de preocupações de partilha/token, permite histórico de múltiplos links (revogados) por orçamento sem poluir a entidade principal, e reaproveita o padrão já usado por `RefreshToken` (Sprint 2) de um token como entidade própria.
+- **`EstimateShare.tokenHash` em vez de token em texto plano** (Sprint 10D, desvio deliberado do precedente `RefreshToken`): ver [ADR-009](../adr/ADR-009-estimate-share-token-strategy.md) — um link de partilha pública tem uma superfície de exposição (histórico de navegador, WhatsApp, email) muito maior que um refresh token de sessão.
 
 ---
 

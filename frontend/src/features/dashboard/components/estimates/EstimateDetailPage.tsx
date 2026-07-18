@@ -24,6 +24,7 @@ import { EstimateNotEditableNotice } from "./EstimateNotEditableNotice";
 import { EstimateStatusControl } from "./EstimateStatusControl";
 import { EstimateSummary } from "./EstimateSummary";
 import { MaterialsEditor } from "./MaterialsEditor";
+import { ShareEstimatePanel } from "./ShareEstimatePanel";
 
 const generalInfoFormId = "estimate-edit-general-info-form";
 
@@ -140,6 +141,8 @@ export function EstimateDetailPage({ estimateId }: { estimateId: string }) {
       />
 
       <EstimateSummary estimate={estimate} />
+
+      <ShareEstimatePanel estimateId={estimateId} />
 
       {!isDraft ? <EstimateNotEditableNotice status={estimate.status} /> : null}
 

@@ -115,6 +115,7 @@ Rotas disponíveis:
 - `/dashboard/estimates`
 - `/dashboard/estimates/new`
 - `/dashboard/estimates/[id]`
+- `/share/[token]` — página pública (sem sessão), ver "Partilha pública de orçamento" abaixo
 
 O dashboard consome apenas endpoints existentes do Spring Boot. Não há Route Handlers, Server Actions, mocks permanentes ou backend paralelo no Next.js.
 
@@ -161,6 +162,14 @@ Estimate Builder (`/dashboard/estimates`, `/dashboard/estimates/new`, `/dashboar
 Todo valor financeiro exibido (mão de obra, materiais, subtotal, IVA, total, entrada, saldo, e o total de cada item/material) vem exclusivamente do `EstimateResponse`/`EstimateSummaryResponse` devolvido pela API. O frontend nunca soma, multiplica ou arredonda um valor monetário — inclusive no passo de revisão do wizard, que lista itens/materiais sem nenhum total calculado, já que esse número só existe após o backend criar o orçamento. O PDF gerado pelo backend segue a mesma regra: nenhum valor é recalculado, nem no backend (renderer) nem no frontend (botão de download).
 
 Reordenação de itens/materiais no editor usa mover para cima/para baixo, seguindo o mesmo padrão de Services/Gallery (drag and drop não implementado por falta de infraestrutura no projeto).
+
+Partilha pública de orçamento (`ShareEstimatePanel`, em `/dashboard/estimates/[id]`; página pública em `/share/[token]`):
+
+- `POST /estimates/{id}/share` — botão "Compartilhar"/"Gerar novo link". A resposta só traz o `token` bruto nesta chamada (o backend só guarda o hash — ver [ADR-009](../docs/adr/ADR-009-estimate-share-token-strategy.md)); o componente guarda esse token em estado local para montar o link e os botões de cópia/WhatsApp. Recarregar a página não reexibe o link — apenas o estado (ativo/expirado/revogado, data de expiração, contagem de acessos), obtido por `GET /estimates/{id}/share`;
+- `DELETE /estimates/{id}/share` — botão "Revogar";
+- "Copiar link" usa `navigator.clipboard.writeText`; "WhatsApp" apenas monta `https://wa.me/?text=...` com o link codificado (`buildEstimateShareWhatsAppHref`, em `dashboard/utils/estimate-share-links.ts`) — nenhuma integração com a API do WhatsApp Business;
+- o link público é construído a partir de `NEXT_PUBLIC_SITE_URL` (com fallback para `window.location.origin` quando a variável não está configurada), nunca por um caminho previsível como `/estimate/{id}`;
+- `/share/[token]` (`src/app/share/[token]/page.tsx`) consome `GET /public/share/{token}` (JSON, sem autenticação) e renderiza empresa/logo, cliente, itens, materiais, resumo financeiro, observações e condições — todos os valores já formatados pelo backend, sem nenhum cálculo no frontend. O botão "Baixar PDF" aponta diretamente para `GET /public/share/{token}/pdf` (mesmo pipeline de PDF da Sprint 10C, sem preview no browser). A rota fica fora de `/dashboard`, por isso não passa pelo `middleware.ts` de autenticação (matcher é `/dashboard/:path*`) e não é indexável (`robots: { index: false }`).
 
 ## Sessão e segurança
 
