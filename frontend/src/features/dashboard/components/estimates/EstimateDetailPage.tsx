@@ -17,6 +17,7 @@ import { formatMoney } from "../../utils/money";
 import { ErrorState, LoadingState, SaveFeedback } from "../DashboardState";
 import { PageHeader } from "../PageHeader";
 import { StatusBadge } from "./StatusBadge";
+import { DownloadPdfButton } from "./DownloadPdfButton";
 import { EstimateGeneralInfoForm } from "./EstimateGeneralInfoForm";
 import { EstimateItemsEditor } from "./EstimateItemsEditor";
 import { EstimateNotEditableNotice } from "./EstimateNotEditableNotice";
@@ -130,7 +131,12 @@ export function EstimateDetailPage({ estimateId }: { estimateId: string }) {
         eyebrow={estimate.number}
         title={estimate.title}
         description={`Cliente: ${customerName}`}
-        action={<StatusBadge status={estimate.status} />}
+        action={
+          <div className="flex flex-col items-end gap-3 sm:flex-row sm:items-center">
+            <StatusBadge status={estimate.status} />
+            <DownloadPdfButton estimateId={estimate.id} estimateNumber={estimate.number} />
+          </div>
+        }
       />
 
       <EstimateSummary estimate={estimate} />

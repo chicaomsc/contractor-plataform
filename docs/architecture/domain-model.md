@@ -144,7 +144,7 @@ Customer
 └── updatedAt: Instant
 ```
 
-**Decisão (Sprint 10A):** `Customer` é referenciado por `Estimate` apenas por FK (`customerId`), sem snapshot dos seus dados. Alterar o nome/morada de um cliente depois de criado um orçamento reflete-se retroativamente ao consultar esse orçamento — risco aceite conscientemente para o MVP (ver release v1.0.0-estimate-domain-api.md). Caso isto se torne um problema real (ex: divergência visível no PDF gerado na Sprint 11), a mitigação é adicionar um snapshot mínimo (`customerNameSnapshot`, `customerContactSnapshot`) sem remodelar o agregado.
+**Decisão (Sprint 10A, revista na Sprint 10C):** `Customer` é referenciado por `Estimate` por FK (`customerId`) **e** por um snapshot mínimo dos dados exibidos no PDF (ver campos `customer*Snapshot` no `Estimate` abaixo). O risco identificado na Sprint 10A materializou-se assim que a geração de PDF (Sprint 10C) precisou de um documento historicamente estável: editar o nome/morada de um cliente já não altera orçamentos existentes. `customerId` continua a existir para navegação/filtros (ex: listagem por cliente), mas os campos exibidos num documento comercial vêm sempre do snapshot, nunca do cadastro ao vivo.
 
 ---
 
@@ -158,7 +158,7 @@ Raiz do agregado de orçamento. Centraliza a proposta comercial enviada a um cli
 Estimate
 ├── id: UUID
 ├── companyId: UUID               -- FK → Company
-├── customerId: UUID              -- FK → Customer (sem snapshot, ver nota acima)
+├── customerId: UUID              -- FK → Customer (navegação/filtros; dados exibidos vêm do snapshot abaixo)
 ├── number: String                 -- número legível, único por empresa (ex: "ORC-2026-0001") — ver ADR-007
 ├── title: String
 ├── description: String            -- opcional
@@ -169,6 +169,13 @@ Estimate
 ├── estimatedDurationDays: Integer  -- opcional
 ├── notes: String                  -- opcional, visível ao cliente
 ├── terms: String                  -- opcional, condições comerciais
+│
+│   -- Snapshot do Customer (Sprint 10C) — congelado na criação/reatribuição, nunca relido do cadastro
+├── customerNameSnapshot: String     -- NOT NULL (Customer.name também é NOT NULL)
+├── customerEmailSnapshot: String    -- opcional
+├── customerPhoneSnapshot: String    -- opcional
+├── customerTaxNumberSnapshot: String -- opcional
+├── customerAddressSnapshot: Address  -- opcional, mesmo VO reutilizado (@Embedded + @AttributeOverrides)
 │
 │   -- Snapshots (nunca relidos de Settings/Branding após a criação)
 ├── currency: String                -- ISO 4217, copiado de Settings.defaultCurrency
@@ -275,6 +282,8 @@ Estimate  (N) ──── (1) Customer
 10. Um `Estimate` só pode ser editado (PUT) enquanto `status = DRAFT`. Fora disso, apenas o endpoint de status é permitido.
 11. `Customer` exige pelo menos um de `email` ou `phone` preenchido.
 12. `Estimate.number` é único por `(companyId, number)` — ver [ADR-007](../adr/ADR-007-estimate-numbering-strategy.md) para a estratégia de geração.
+13. Os campos `Estimate.customer*Snapshot` são preenchidos exclusivamente pelo backend (nunca aceites de um request) e só são reescritos quando `customerId` muda — nunca por uma edição ao cadastro do `Customer` atualmente atribuído (Sprint 10C).
+14. `GET /estimates/{id}/pdf` nunca altera `Estimate.status` nem qualquer outro campo — geração de PDF é estritamente de leitura, disponível em qualquer status.
 
 ---
 
@@ -283,7 +292,8 @@ Estimate  (N) ──── (1) Customer
 - **`Material` pertence diretamente ao `Estimate`, não ao `EstimateItem`** (Sprint 10A — corrige o desenho original da Sprint 1): simplifica o agregado e reflete o uso real — materiais são listados por orçamento, não por linha de serviço.
 - **`Branding` e `Settings` como entidades separadas de `Company`:** evita que a entidade raiz se torne um objeto de dados agregado. Cada entidade tem ciclo de vida e responsabilidade independentes.
 - **`number` como campo gerenciado pela aplicação:** sequência legível por humanos (ex: `ORC-2026-0042`) gerada pelo backend via contador atômico por `(companyId, year)`, distinta do `UUID` interno — ver [ADR-007](../adr/ADR-007-estimate-numbering-strategy.md).
-- **`Customer` referenciado apenas por FK, sem snapshot** (Sprint 10A): risco aceite conscientemente para o MVP — ver nota na secção Customer acima.
+- **`Customer` passou a ter snapshot mínimo no `Estimate`** (Sprint 10C, revisão da decisão da Sprint 10A): o risco documentado inicialmente materializou-se com a geração de PDF — um documento comercial precisa de estabilidade histórica. Apenas os campos exibidos são congelados (`name`, `email`, `phone`, `taxNumber`, `address`); não é um sistema de versionamento — uma reatribuição de cliente (mudar `customerId` num `PUT`) atualiza o snapshot para o novo cliente, mas edições ao cadastro do cliente atualmente atribuído nunca retroagem.
+- **`Company`/`Branding` permanecem sem snapshot** (Sprint 10C, decisão deliberada — ver [ADR-008](../adr/ADR-008-pdf-generation-strategy.md) e [Release v1.0.2](../releases/v1.0.2-estimate-pdf.md)): ao contrário do Customer, a empresa é a própria vendedora emitindo o documento — é aceitável (e desejável) que corrigir o telefone ou logo da empresa se reflita em downloads futuros do mesmo orçamento, como um papel timbrado reimpresso.
 - **`EstimateItem.serviceId` sem FK de banco:** referência intencionalmente "solta" ao catálogo — a exclusão ou edição futura de um `Service` nunca deve afetar um orçamento já criado.
 
 ---

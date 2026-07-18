@@ -1,4 +1,8 @@
-import { adminApiRequest } from "@/lib/api/admin-http-client";
+import {
+  adminApiRequest,
+  adminApiRequestBlob,
+  type AdminBlobResult,
+} from "@/lib/api/admin-http-client";
 import {
   estimateDtoSchema,
   estimatesSummaryDtoSchema,
@@ -65,6 +69,16 @@ export async function updateEstimate(
     body: JSON.stringify(payload),
   });
   return estimateDtoSchema.parse(response);
+}
+
+export async function downloadEstimatePdf(
+  accessToken: string,
+  estimateId: string,
+): Promise<AdminBlobResult> {
+  return adminApiRequestBlob(`/estimates/${estimateId}/pdf`, {
+    accessToken,
+    timeoutMs: 20000,
+  });
 }
 
 export async function deleteEstimate(

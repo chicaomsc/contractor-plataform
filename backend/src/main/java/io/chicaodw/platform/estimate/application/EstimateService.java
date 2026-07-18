@@ -1,8 +1,11 @@
 package io.chicaodw.platform.estimate.application;
 
+import io.chicaodw.platform.common.entity.Address;
 import io.chicaodw.platform.common.exception.BusinessRuleException;
 import io.chicaodw.platform.common.exception.ResourceNotFoundException;
 import io.chicaodw.platform.company.infrastructure.persistence.SettingsRepository;
+import io.chicaodw.platform.customer.api.dto.CustomerAddressResponse;
+import io.chicaodw.platform.customer.api.dto.CustomerResponse;
 import io.chicaodw.platform.customer.application.CustomerService;
 import io.chicaodw.platform.estimate.api.dto.ChangeEstimateStatusRequest;
 import io.chicaodw.platform.estimate.api.dto.CreateEstimateRequest;
@@ -59,13 +62,14 @@ public class EstimateService {
     // ── Commands ─────────────────────────────────────────────────────────────
 
     public EstimateResponse createEstimate(UUID companyId, CreateEstimateRequest request) {
-        customerService.assertAssignable(companyId, request.customerId());
+        var customer = customerService.getAssignableCustomer(companyId, request.customerId());
         var settings = settingsRepository.findByCompanyId(companyId)
                 .orElseThrow(() -> new ResourceNotFoundException("Settings", companyId));
 
         var estimate = new Estimate();
         estimate.setCompanyId(companyId);
         estimate.setCustomerId(request.customerId());
+        applyCustomerSnapshot(estimate, customer);
         estimate.setNumber(numberGenerator.generate(companyId));
         estimate.setTitle(request.title());
         estimate.setDescription(request.description());
@@ -100,8 +104,9 @@ public class EstimateService {
         requireEditable(estimate);
 
         if (request.customerId() != null) {
-            customerService.assertAssignable(companyId, request.customerId());
+            var customer = customerService.getAssignableCustomer(companyId, request.customerId());
             estimate.setCustomerId(request.customerId());
+            applyCustomerSnapshot(estimate, customer);
         }
         if (request.title()                 != null) estimate.setTitle(request.title());
         if (request.description()           != null) estimate.setDescription(request.description());
@@ -137,6 +142,31 @@ public class EstimateService {
     }
 
     // ── Internal helpers ─────────────────────────────────────────────────────
+
+    /**
+     * Freezes the customer's current identity/contact data onto the Estimate. Called on
+     * creation and whenever the assigned customer changes — never re-applied from a plain
+     * Customer edit, so a PDF generated later still reflects the customer as they were when
+     * assigned, not as they are now.
+     */
+    private void applyCustomerSnapshot(Estimate estimate, CustomerResponse customer) {
+        estimate.setCustomerNameSnapshot(customer.name());
+        estimate.setCustomerEmailSnapshot(customer.email());
+        estimate.setCustomerPhoneSnapshot(customer.phone());
+        estimate.setCustomerTaxNumberSnapshot(customer.taxNumber());
+        estimate.setCustomerAddressSnapshot(toAddress(customer.address()));
+    }
+
+    private static Address toAddress(CustomerAddressResponse address) {
+        if (address == null) return null;
+        return Address.builder()
+                .street(address.street())
+                .city(address.city())
+                .postalCode(address.postalCode())
+                .region(address.region())
+                .country(address.country())
+                .build();
+    }
 
     private void applyItems(Estimate estimate, UUID companyId, List<EstimateItemRequest> items) {
         estimate.clearItems();

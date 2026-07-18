@@ -2,6 +2,8 @@ package io.chicaodw.platform.common.storage;
 
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.Optional;
+
 /**
  * Strategy interface for file storage.
  * Implementations may target local disk, Supabase, S3, etc.
@@ -25,4 +27,14 @@ public interface StorageService {
      * @param storedPath value previously returned by {@code store}
      */
     void delete(String storedPath);
+
+    /**
+     * Reads the bytes of a file previously stored by {@link #store}. Never throws for a
+     * missing or unreadable file — returns empty so callers (e.g. PDF generation) can
+     * degrade gracefully instead of failing the whole operation over a missing logo.
+     *
+     * @param storedPath value previously returned by {@code store}
+     * @return the file's bytes, or empty if {@code storedPath} is null/blank/unresolvable
+     */
+    Optional<byte[]> load(String storedPath);
 }
