@@ -1,6 +1,6 @@
 # Roadmap do Produto
 
-**Versão:** 2.14 — Sprint 10B concluída  
+**Versão:** 2.15 — Sprint 10C concluída  
 **Data:** 2026-07-16  
 **Horizonte:** MVP + Pós-MVP imediato
 
@@ -41,6 +41,7 @@
 | Frontend — Painel Administrativo completo | Concluído |
 | Backend — Módulo Customer + Estimate (domínio, cálculos, API) | Concluído |
 | Frontend — Estimate Builder (`/dashboard/estimates`) | Concluído |
+| Backend + Frontend — PDF profissional de orçamento | Concluído |
 
 ---
 
@@ -501,18 +502,27 @@
 
 ---
 
-## Sprint 11 — PDF
+## Sprint 10C — Professional Estimate PDF ✅
 
-**Objectivo:** Exportação de orçamentos em PDF com o branding da empresa.
+**Objectivo:** Exportação de orçamentos em PDF comercial, usando exclusivamente dados já persistidos e calculados pelo backend (Sprint 10A). Nenhum recálculo financeiro no renderer nem no frontend.
 
 **Backend:**
-- [ ] Geração de PDF com branding da empresa
-- [ ] `POST /estimates/{id}/pdf`
+- [x] `GET /estimates/{id}/pdf` — autenticado, isolado por tenant, `Content-Type: application/pdf`, `Content-Disposition` com filename sanitizado (`orcamento-{number}.pdf`, UTF-8 via `filename*=`)
+- [x] `EstimatePdfService` → `EstimatePdfDocumentFactory` (puro) → `EstimatePdfRenderer` (puro, OpenPDF) → `byte[]`, geração 100% em memória
+- [x] Biblioteca: OpenPDF 1.4.2 (LGPL-2.1+/MPL-2.0) — ver [ADR-008](adr/ADR-008-pdf-generation-strategy.md)
+- [x] Snapshot mínimo do Customer no `Estimate` (migration V9 + backfill) — editar o cliente não altera PDFs de orçamentos já criados
+- [x] Company/Branding: dados atuais no momento da geração (decisão documentada, sem snapshot — ver release notes)
+- [x] DRAFT com selo "Rascunho"; CANCELLED com selo "Cancelado"; download nunca altera o status
+- [x] Paginação correta: cabeçalho de tabela repetido em cada página, linha nunca cortada entre páginas (bug real encontrado e corrigido na inspeção visual)
+- [x] 41 testes novos no backend (factory, renderer, service, integração multi-tenant)
 
 **Frontend:**
-- [ ] Preview e download do PDF a partir de `/dashboard/estimates/[id]`
+- [x] Botão "Baixar PDF" em `/dashboard/estimates/[id]` — download autenticado via blob, sem preview, sem biblioteca de PDF no frontend
+- [x] 11 testes novos + 1 E2E de download
 
-**Critério de saída:** Admin exporta um orçamento em PDF com logo, cores, itens e totais corretos.
+**Critério de saída:** Admin exporta um orçamento em PDF com logo, cores, itens e totais corretos. ✅ Atingido — ver [Release v1.0.2](releases/v1.0.2-estimate-pdf.md).
+
+**Status:** Concluída.
 
 ---
 
@@ -564,7 +574,7 @@
 | Supabase Storage | Serviço externo fora do controlo | Interface de storage abstraída — troca por S3/R2 não quebra o domínio |
 | Railway (backend) | Custo pode aumentar com uso | Dockerfile portável |
 | Java 25 (LTS) | Versão recente, ecossistema em adaptação | Usar apenas features estáveis |
-| Geração de PDF | Bibliotecas Java requerem avaliação de licença | Decidir na Sprint 11; Flying Saucer (LGPL) candidato principal |
+| Geração de PDF | Bibliotecas Java requerem avaliação de licença | Decidido na Sprint 10C: OpenPDF 1.4.2 (LGPL-2.1+/MPL-2.0) — ver [ADR-008](adr/ADR-008-pdf-generation-strategy.md) |
 
 ---
 
@@ -601,5 +611,7 @@
 - [Security — Upload Policy](security/upload-policy.md)
 - [Security — Dependency Audit](security/dependency-audit.md)
 - [ADR-007 — Estratégia de Numeração de Orçamentos](adr/ADR-007-estimate-numbering-strategy.md)
+- [ADR-008 — Estratégia de Geração de PDF](adr/ADR-008-pdf-generation-strategy.md)
 - [Release v1.0.0 — Estimate Domain & API](releases/v1.0.0-estimate-domain-api.md)
 - [Release v1.0.1 — Estimate Builder](releases/v1.0.1-estimate-builder.md)
+- [Release v1.0.2 — Professional Estimate PDF](releases/v1.0.2-estimate-pdf.md)

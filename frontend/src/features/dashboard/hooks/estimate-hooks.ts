@@ -6,6 +6,7 @@ import {
   changeEstimateStatus,
   createEstimate,
   deleteEstimate,
+  downloadEstimatePdf,
   fetchEstimate,
   fetchEstimates,
   updateEstimate,
@@ -115,5 +116,14 @@ export function useChangeEstimateStatus() {
         queryKey: [...dashboardQueryKeys.all, "estimates"],
       });
     },
+  });
+}
+
+/** Read-only — never changes the estimate, so no cache invalidation on success. */
+export function useDownloadEstimatePdf() {
+  const accessToken = useAccessToken();
+
+  return useMutation({
+    mutationFn: (estimateId: string) => downloadEstimatePdf(accessToken, estimateId),
   });
 }

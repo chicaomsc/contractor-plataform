@@ -1,8 +1,12 @@
 package io.chicaodw.platform.estimate.domain;
 
+import io.chicaodw.platform.common.entity.Address;
 import io.chicaodw.platform.common.entity.BaseEntity;
+import jakarta.persistence.AttributeOverride;
+import jakarta.persistence.AttributeOverrides;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -44,6 +48,33 @@ public class Estimate extends BaseEntity {
 
     @Column(name = "customer_id", nullable = false)
     private UUID customerId;
+
+    // ── Customer snapshot (Sprint 10C) ──────────────────────────────────────
+    // Frozen at creation / whenever customerId is reassigned. Never re-read from the
+    // live Customer record after that — editing a Customer must not retroactively change
+    // a document (PDF) already generated for this estimate. See ADR in the domain-model doc.
+
+    @Column(name = "customer_name_snapshot", nullable = false)
+    private String customerNameSnapshot;
+
+    @Column(name = "customer_email_snapshot")
+    private String customerEmailSnapshot;
+
+    @Column(name = "customer_phone_snapshot", length = 50)
+    private String customerPhoneSnapshot;
+
+    @Column(name = "customer_tax_number_snapshot", length = 50)
+    private String customerTaxNumberSnapshot;
+
+    @Embedded
+    @AttributeOverrides({
+            @AttributeOverride(name = "street", column = @Column(name = "customer_address_street_snapshot")),
+            @AttributeOverride(name = "city", column = @Column(name = "customer_address_city_snapshot")),
+            @AttributeOverride(name = "postalCode", column = @Column(name = "customer_address_postal_code_snapshot")),
+            @AttributeOverride(name = "region", column = @Column(name = "customer_address_region_snapshot")),
+            @AttributeOverride(name = "country", column = @Column(name = "customer_address_country_snapshot")),
+    })
+    private Address customerAddressSnapshot;
 
     @Column(nullable = false, length = 50)
     private String number;

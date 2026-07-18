@@ -5,6 +5,7 @@ import io.chicaodw.platform.common.exception.ConflictException;
 import io.chicaodw.platform.common.exception.ResourceNotFoundException;
 import io.chicaodw.platform.company.domain.Settings;
 import io.chicaodw.platform.company.infrastructure.persistence.SettingsRepository;
+import io.chicaodw.platform.customer.api.dto.CustomerResponse;
 import io.chicaodw.platform.customer.application.CustomerService;
 import io.chicaodw.platform.estimate.api.dto.ChangeEstimateStatusRequest;
 import io.chicaodw.platform.estimate.api.dto.CreateEstimateRequest;
@@ -70,6 +71,7 @@ class EstimateServiceTest {
 
     @Test
     void createEstimate_snapshotsSettingsDefaults_whenNotOverridden() {
+        when(customerService.getAssignableCustomer(companyId, customerId)).thenReturn(assignableCustomer());
         when(settingsRepository.findByCompanyId(companyId)).thenReturn(Optional.of(defaultSettings()));
         when(numberGenerator.generate(companyId)).thenReturn("ORC-2026-0001");
         when(estimateRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -86,6 +88,7 @@ class EstimateServiceTest {
 
     @Test
     void createEstimate_clientOverrides_vatAndUpfront_areRespected() {
+        when(customerService.getAssignableCustomer(companyId, customerId)).thenReturn(assignableCustomer());
         when(settingsRepository.findByCompanyId(companyId)).thenReturn(Optional.of(defaultSettings()));
         when(numberGenerator.generate(companyId)).thenReturn("ORC-2026-0001");
         when(estimateRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -101,6 +104,7 @@ class EstimateServiceTest {
 
     @Test
     void createEstimate_computesTotalsFromItemsAndMaterials() {
+        when(customerService.getAssignableCustomer(companyId, customerId)).thenReturn(assignableCustomer());
         when(settingsRepository.findByCompanyId(companyId)).thenReturn(Optional.of(defaultSettings()));
         when(numberGenerator.generate(companyId)).thenReturn("ORC-2026-0001");
         when(estimateRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -119,7 +123,7 @@ class EstimateServiceTest {
     @Test
     void createEstimate_inactiveCustomer_propagatesBusinessRuleException() {
         doThrow(new BusinessRuleException("Customer is inactive"))
-                .when(customerService).assertAssignable(companyId, customerId);
+                .when(customerService).getAssignableCustomer(companyId, customerId);
 
         var request = createRequest(null, null, List.of(), List.of());
 
@@ -131,7 +135,7 @@ class EstimateServiceTest {
     @Test
     void createEstimate_crossTenantCustomer_propagatesResourceNotFoundException() {
         doThrow(new ResourceNotFoundException("Customer", customerId))
-                .when(customerService).assertAssignable(companyId, customerId);
+                .when(customerService).getAssignableCustomer(companyId, customerId);
 
         var request = createRequest(null, null, List.of(), List.of());
 
@@ -141,6 +145,7 @@ class EstimateServiceTest {
 
     @Test
     void createEstimate_serviceIdFromAnotherCompany_throwsResourceNotFoundException() {
+        when(customerService.getAssignableCustomer(companyId, customerId)).thenReturn(assignableCustomer());
         when(settingsRepository.findByCompanyId(companyId)).thenReturn(Optional.of(defaultSettings()));
         when(numberGenerator.generate(companyId)).thenReturn("ORC-2026-0001");
         UUID foreignServiceId = UUID.randomUUID();
@@ -155,6 +160,7 @@ class EstimateServiceTest {
 
     @Test
     void createEstimate_validUntilDefaultsFromSettingsValidityDays() {
+        when(customerService.getAssignableCustomer(companyId, customerId)).thenReturn(assignableCustomer());
         var settings = defaultSettings();
         settings.setEstimateValidityDays(15);
         when(settingsRepository.findByCompanyId(companyId)).thenReturn(Optional.of(settings));
@@ -269,6 +275,12 @@ class EstimateServiceTest {
 
     private MaterialRequest materialRequest(String unitPrice) {
         return new MaterialRequest("Paint", null, BigDecimal.ONE, EstimateUnit.UNIT, new BigDecimal(unitPrice), null);
+    }
+
+    private CustomerResponse assignableCustomer() {
+        return new CustomerResponse(
+                customerId, companyId, "Jane Doe", "jane@example.com", "912345678",
+                null, null, null, true, java.time.Instant.now(), java.time.Instant.now());
     }
 
     private Settings defaultSettings() {

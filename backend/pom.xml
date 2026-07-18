@@ -98,6 +98,15 @@
             <version>${springdoc.version}</version>
         </dependency>
 
+        <!-- ── PDF generation (Sprint 10C) ──────────────────────── -->
+        <!-- OpenPDF: LGPL-2.1+/MPL-2.0 dual license, actively maintained fork of iText 4.
+             See docs/adr/ADR-008-pdf-generation-strategy.md for the full rationale. -->
+        <dependency>
+            <groupId>com.github.librepdf</groupId>
+            <artifactId>openpdf</artifactId>
+            <version>1.4.2</version>
+        </dependency>
+
         <!-- ── Code generation ──────────────────────────────────── -->
         <dependency>
             <groupId>org.projectlombok</groupId>

@@ -91,15 +91,23 @@ public class CustomerService {
     }
 
     /**
-     * Validates that a customer can be assigned to an estimate: must exist within the
-     * caller's company and must be active. Used by the estimate module.
+     * Validates that a customer can be assigned to an estimate (exists within the caller's
+     * company, is active) and returns its current data — used by the estimate module both
+     * to validate ownership and to build the customer snapshot frozen onto the Estimate.
      */
     @Transactional(readOnly = true)
-    public void assertAssignable(UUID companyId, UUID customerId) {
+    public CustomerResponse getAssignableCustomer(UUID companyId, UUID customerId) {
         var customer = findByIdAndCompany(customerId, companyId);
         if (!customer.isActive()) {
             throw new BusinessRuleException("Customer is inactive and cannot be assigned to an estimate: " + customerId);
         }
+        return customerMapper.toResponse(customer);
+    }
+
+    /** Validation-only variant of {@link #getAssignableCustomer} for callers that don't need the data. */
+    @Transactional(readOnly = true)
+    public void assertAssignable(UUID companyId, UUID customerId) {
+        getAssignableCustomer(companyId, customerId);
     }
 
     private void requireContactInfo(String email, String phone) {

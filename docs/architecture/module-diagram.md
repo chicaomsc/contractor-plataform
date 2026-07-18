@@ -132,7 +132,7 @@ Módulo de gestão de clientes.
 **Responsabilidades:**
 - CRUD de `Customer` (exclusão é soft-delete — `active = false`, ver [ADR de domínio](domain-model.md))
 - Listagem de clientes da empresa
-- Expõe `CustomerService.assertAssignable(companyId, customerId)`, usado pelo módulo `estimate` para validar ownership e estado ativo sem expor o repositório
+- Expõe `CustomerService.getAssignableCustomer(companyId, customerId)` — valida ownership/estado ativo **e** devolve os dados usados pelo módulo `estimate` para o snapshot do cliente (Sprint 10C); `assertAssignable` (Sprint 10A) é um atalho que delega para o mesmo método
 - Endpoints (Sprint 10A): `GET/POST /customers`, `GET/PUT/DELETE /customers/{id}`
 
 **Dependências:** `shared`, `auth`
@@ -141,17 +141,18 @@ Módulo de gestão de clientes.
 
 ### `io.chicaodw.platform.estimate`
 
-Módulo de orçamentação — o de maior complexidade de negócio no MVP. Implementado na Sprint 10A (domínio + API; PDF fica para a Sprint 11).
+Módulo de orçamentação — o de maior complexidade de negócio no MVP. Domínio + API na Sprint 10A, geração de PDF na Sprint 10C.
 
 **Responsabilidades:**
 - CRUD completo de `Estimate`, com `EstimateItem` e `Material` como entidades filhas do agregado (cascade ALL + orphanRemoval — sem repositórios próprios)
 - Geração de `number` sequencial por empresa (`EstimateNumberGenerator`, ver [ADR-007](../adr/ADR-007-estimate-numbering-strategy.md))
 - Cálculo de totais (`EstimateCalculationService`, serviço de domínio puro — sem Spring, sem acesso a banco)
 - Transições de `status` com validação de invariantes (`EstimateStatusTransitionService`, também puro)
-- Endpoints: `GET/POST /estimates`, `GET/PUT/DELETE /estimates/{id}`, `PATCH /estimates/{id}/status`
-- Geração de PDF do orçamento — **fora do escopo da Sprint 10A**, planeada para a Sprint 11
+- Snapshot do `Customer` no `Estimate` — congelado na criação/reatribuição (`EstimateService.applyCustomerSnapshot`, Sprint 10C)
+- Endpoints: `GET/POST /estimates`, `GET/PUT/DELETE /estimates/{id}`, `PATCH /estimates/{id}/status`, `GET /estimates/{id}/pdf`
+- Geração de PDF (submódulo `estimate.pdf`, Sprint 10C): `EstimatePdfService` (application) → `EstimatePdfDocumentFactory` + `EstimatePdfRenderer` (puros, sem Spring, sem banco) — ver [ADR-008](../adr/ADR-008-pdf-generation-strategy.md)
 
-**Dependências:** `shared`, `auth`, `customer` (via `CustomerService.assertAssignable`), `servicecatalog` (via `ServiceCatalogService.existsForCompany`, para validar o `serviceId` opcional de um `EstimateItem`), `company` (leitura de `Settings`/`Branding` para os snapshots de criação)  
+**Dependências:** `shared`, `auth`, `customer` (via `CustomerService.getAssignableCustomer`), `servicecatalog` (via `ServiceCatalogService.existsForCompany`, para validar o `serviceId` opcional de um `EstimateItem`), `company` (leitura de `Company`/`Branding`/`Settings` para snapshots de criação e para o PDF), `shared`/`common` (via `StorageService.load`, para ler os bytes do logo da empresa ao gerar o PDF)  
 **Nota:** O módulo `estimate` não acessa os repositórios de `Customer` ou `Service` diretamente — resolve ambos via ID e delega a validação às application services expostas por `customer` e `servicecatalog`, respectivamente.
 
 ---
@@ -296,6 +297,8 @@ io.chicaodw.platform.<módulo>/
 - `domain/` e `infrastructure/` são **package-private** para o módulo.
 - `dto/` e interfaces de `application/` podem ser referenciados por outros módulos se necessário.
 - Controllers em `api/` são públicos apenas para o framework (Spring).
+
+**Exceção documentada:** o módulo `estimate` tem um pacote adicional, `estimate.pdf/`, para o modelo de documento (`EstimatePdfDocument`), o assembler (`EstimatePdfDocumentFactory`) e o renderer (`EstimatePdfRenderer`, OpenPDF) — Sprint 10C. Não é `domain/` porque não representa o modelo de negócio persistido, nem `application/` porque não depende de Spring nem de banco (mesmo espírito de `EstimateCalculationService`, mas grande o suficiente para justificar um pacote próprio em vez de viver solto em `domain/`).
 
 ---
 
