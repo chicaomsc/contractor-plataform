@@ -1,0 +1,27 @@
+# Version control / CI
+.git
+.github
+
+# Build output (rebuilt inside the image)
+target/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+
+# Logs
+*.log
+
+# Env / secrets — never enter the build context
+.env
+.env.*
+
+# Local runtime data — never bake uploaded files into an image
+storage/
+
+# Docs not needed to build the jar
+*.md

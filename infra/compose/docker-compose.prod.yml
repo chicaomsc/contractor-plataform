@@ -1,0 +1,140 @@
+# Contractor Platform — production container stack (Sprint 11A.1).
+#
+# Scope of this file: frontend + backend + PostgreSQL only. Caddy (the intended
+# public ingress in front of these two services — see infra/README.md for the
+# target architecture) is deliberately NOT declared here: there is no coherent
+# minimal Caddy config yet (no Caddyfile), and adding a service definition without
+# one would just be a broken placeholder. It is added in Sprint 11A.3.
+#
+# Until Caddy exists, "frontend"/"backend" publish their ports directly to the host
+# so this stack can be exercised end-to-end for local validation (see the ports:
+# comments below) — this is a temporary state for 11A.1, not the final design.
+#
+# Run with `docker compose --env-file ../env/production.env -f docker-compose.prod.yml ...`
+# from this directory, or `-f infra/compose/docker-compose.prod.yml` from the repo
+# root. See infra/README.md for the full command reference.
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  backend_storage:
+
+services:
+  postgres:
+    # Deliberately 17, not 16: both docker/docker-compose.yml (local dev) and
+    # AbstractIntegrationTest (Testcontainers, the entire backend test suite) are
+    # already pinned to postgres:17-alpine. Running 16 in production would mean the
+    # one environment that has never actually been exercised against this schema/
+    # Flyway migration set is production itself — the "necessidade diferente" this
+    # choice is conditioned on.
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    # No `ports:` — reachable only from other containers on the `internal` network.
+    # This is what actually keeps Postgres off the host/public interface; there is
+    # no separate firewall step required for this guarantee.
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    mem_limit: 900m
+    mem_reservation: 500m
+    logging: *default-logging
+
+  backend:
+    image: ${BACKEND_IMAGE:-ghcr.io/chicaodw/contractor-platform-backend}:${APP_VERSION:-local}
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ../env/production.env
+    environment:
+      # DB_URL is composed from the same Postgres credentials/service name used
+      # above, rather than duplicated as a separate variable in production.env —
+      # one less place for the two to drift apart.
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      DB_USERNAME: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      JAVA_TOOL_OPTIONS: >-
+        -XX:MaxRAMPercentage=70
+        -XX:InitialRAMPercentage=20
+        -XX:+UseG1GC
+        -XX:+ExitOnOutOfMemoryError
+    volumes:
+      # app.storage.base-path (STORAGE_PATH) — the only directory the backend
+      # writes application data to (uploaded logos/gallery images). See
+      # infra/README.md for why nothing else needs a volume (PDFs are generated
+      # in-memory and never touch disk).
+      - backend_storage:/app/storage
+    ports:
+      # Temporary direct publish for 11A.1 local validation — see file header.
+      - "${BACKEND_PORT:-8080}:8080"
+    networks:
+      - internal
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 45s
+    mem_limit: 1400m
+    mem_reservation: 900m
+    logging: *default-logging
+
+  frontend:
+    image: ${FRONTEND_IMAGE:-ghcr.io/chicaodw/contractor-platform-frontend}:${APP_VERSION:-local}
+    build:
+      context: ../../frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:?NEXT_PUBLIC_API_BASE_URL is required}
+        NEXT_PUBLIC_COMPANY_SLUG: ${NEXT_PUBLIC_COMPANY_SLUG:?NEXT_PUBLIC_COMPANY_SLUG is required}
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-}
+    restart: unless-stopped
+    env_file:
+      - ../env/production.env
+    environment:
+      NODE_OPTIONS: --max-old-space-size=512
+    ports:
+      # Temporary direct publish for 11A.1 local validation — see file header.
+      # Host-side port is parameterized (container-side stays 3000) so more than
+      # one project can run on this machine at once without a port clash; e.g.
+      # FRONTEND_HOST_PORT=3001 ./... while another project already holds 3000.
+      - "${FRONTEND_HOST_PORT:-3000}:3000"
+    networks:
+      - internal
+    # Deliberately no `depends_on: backend` — the frontend renders (with empty/
+    # error states already built into its data hooks) even when the API is
+    # temporarily unavailable; it must be able to start and stay up independently
+    # of backend health, not be gated on it.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    mem_limit: 700m
+    mem_reservation: 350m
+    logging: *default-logging

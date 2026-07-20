@@ -1,0 +1,5 @@
+# Real environment files with actual secrets must never be committed. The root
+# .gitignore's `.env`/`.env.*` patterns don't match this directory's naming
+# convention (`production.env`, not `.env.production`), so this is scoped locally.
+*.env
+!*.env.example

@@ -1,0 +1,35 @@
+# Version control / CI
+.git
+.github
+
+# Dependencies (reinstalled inside the image from the lockfile)
+node_modules
+
+# Build output (rebuilt inside the image)
+.next
+out
+
+# Not needed to build the production bundle
+e2e
+playwright-report
+test-results
+screenshots
+coverage
+
+# Env / secrets — never enter the build context
+.env
+.env.*
+
+# IDE
+.idea
+.vscode
+
+# OS
+.DS_Store
+
+# Logs
+npm-debug.log*
+*.log
+
+# Docs not needed to build
+*.md
