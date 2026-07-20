@@ -4,6 +4,10 @@ const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:808
 const connectSrc = new URL(apiBaseUrl).origin;
 
 const nextConfig: NextConfig = {
+  // Sprint 11A.1: standalone output for the production Docker image — bundles a
+  // minimal server.js with only the traced dependencies, instead of requiring
+  // node_modules + npm start in the runtime image.
+  output: "standalone",
   poweredByHeader: false,
   reactStrictMode: true,
   images: {
