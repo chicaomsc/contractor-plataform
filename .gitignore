@@ -24,3 +24,5 @@ target/
 # Node
 node_modules/
 dist/
+# Runtime/local uploaded files
+backend/storage/

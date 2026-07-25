@@ -34,7 +34,7 @@ describe("public site API", () => {
       slug: "tenant-slug",
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      new URL("/public/sites/tenant-slug", "http://api.test"),
+      new URL("/api/public/sites/tenant-slug", "http://api.test"),
       expect.objectContaining({
         headers: expect.objectContaining({ Accept: "application/json" }),
       }),

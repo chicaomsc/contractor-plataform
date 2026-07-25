@@ -1,26 +1,29 @@
-# Infra — Contractor Platform (Sprints 11A.1 + 11A.2)
+# Infra — Contractor Platform (Sprints 11A.1 + 11A.2 + 11A.3)
 
 Fundação de containers de produção (11A.1): imagens Docker do backend e do frontend, e
 um Docker Compose que sobe o stack completo (frontend + backend + PostgreSQL)
-localmente, simulando produção. Configuração de produção (11A.2, este documento
-atualizado): profile Spring `prod`, shutdown gracioso, health/liveness/readiness,
-compressão, CORS validado, storage validado no startup, JVM/CPU/memória, logs. **Não**
-cobre Caddy, HTTPS/HSTS, Cloudflare, provisionamento de VPS, Terraform, deploy por SSH,
-publicação no GHCR, backup, Storage Box, systemd, monitoramento externo ou cookies
-`HttpOnly` para o JWT — esses itens são de etapas posteriores (ver "Próximas etapas" no
-final deste documento).
+localmente, simulando produção. Configuração de produção (11A.2): profile Spring
+`prod`, shutdown gracioso, health/liveness/readiness, compressão, CORS validado,
+storage validado no startup, JVM/CPU/memória, logs. Reverse proxy (11A.3, este
+documento atualizado): Caddy como único ponto de entrada público — roteamento de `/`,
+`/api/*` e `/uploads/*`, compressão, persistência e healthcheck do próprio Caddy;
+`frontend`/`backend`/`postgres` deixam de publicar porta no host. **Não** cobre
+HTTPS real, HSTS, Cloudflare, domínio real, provisionamento de VPS, Terraform, deploy
+por SSH, publicação no GHCR, backup, Storage Box, systemd, monitoramento externo ou
+cookies `HttpOnly` para o JWT — esses itens são de etapas posteriores (ver "Próximas
+etapas" no final deste documento).
 
 ---
 
 ## Arquitetura dos containers
 
-Arquitetura de produção alvo (definida para o projeto, não totalmente implementada
-ainda):
+Arquitetura de produção alvo (definida para o projeto; Caddy já implementado nesta
+sprint, Cloudflare/domínio real ainda não):
 
 ```
-Cloudflare
+Cloudflare               ← ainda NÃO implementado (domínio real, DNS, TLS gerenciado)
     ↓
-Caddy                    ← ainda NÃO implementado nesta sprint (ver Sprint 11A.3)
+Caddy                    ← implementado nesta sprint (Sprint 11A.3)
 ├── Next.js  (frontend)
 └── Spring Boot (backend)
         ↓
@@ -30,23 +33,28 @@ Caddy                    ← ainda NÃO implementado nesta sprint (ver Sprint 11
 O que **este** Compose (`infra/compose/docker-compose.prod.yml`) efetivamente sobe:
 
 ```
-┌─────────────┐     ┌─────────────┐     ┌──────────────┐
-│  frontend   │     │   backend   │────▶│  postgres    │
-│  (Next.js)  │     │(Spring Boot)│     │ (PostgreSQL) │
-│  :3000      │     │  :8080      │     │  :5432       │
-└─────────────┘     └─────────────┘     └──────────────┘
-      │                    │                    │
-      └────────────────────┴────────────────────┘
-                  rede interna "internal"
+                          ┌───────────┐
+        host: :80 ───────▶   caddy   │
+                          └─────┬─────┘
+              ┌──────────────────┼──────────────────┐
+              │ "/" , /_next/*   │ /api/*            │ /uploads/*
+              ▼                  ▼ (prefixo removido)▼ (prefixo mantido)
+      ┌─────────────┐     ┌─────────────┐     ┌──────────────┐
+      │  frontend   │     │   backend   │────▶│  postgres    │
+      │  (Next.js)  │     │(Spring Boot)│     │ (PostgreSQL) │
+      │  :3000      │     │  :8080      │     │  :5432       │
+      └─────────────┘     └─────────────┘     └──────────────┘
+            │                    │                    │
+            └────────────────────┴────────────────────┘
+                        rede interna "internal"
 ```
 
-- **Sem Caddy nesta etapa.** Por isso, `frontend` e `backend` publicam suas portas
-  diretamente no host (por padrão `3000`/`8080`, ambas configuráveis via
-  `FRONTEND_HOST_PORT`/`BACKEND_PORT` — ver "Rodando em paralelo com outro projeto
-  local" abaixo) — uma conveniência **temporária** só para validar o stack
-  localmente. Quando o Caddy for adicionado (Sprint 11A.3), ele passa a ser o único
-  ponto de entrada público, essas publicações diretas devem ser
-  reavaliadas/removidas, e a variável `FRONTEND_HOST_PORT` deixa de ter efeito.
+- **Só o `caddy` publica porta no host** (por padrão `80`, configurável via
+  `CADDY_HTTP_PORT` — ver "Rodando em paralelo com outro projeto local" abaixo).
+  `frontend`, `backend` e `postgres` são alcançáveis **apenas** pela rede Docker
+  `internal` (`frontend:3000`, `backend:8080`) — nenhum dos três publica porta no
+  host. Isso é o desenho final de rede desta camada; ver "Roteamento (Sprint
+  11A.3)" abaixo para o detalhe de cada regra.
 - **`postgres` nunca publica porta no host** — só é alcançável pelos outros
   containers, através da rede `internal`. Essa é a garantia real de isolamento (não
   depende de firewall externo).
@@ -55,6 +63,11 @@ O que **este** Compose (`infra/compose/docker-compose.prod.yml`) efetivamente so
   temporariamente indisponível (os hooks já tratam estados de erro/carregamento).
 - **`backend` aguarda `postgres` ficar saudável** (`depends_on: condition:
   service_healthy`) antes de iniciar.
+- **`caddy` aguarda `frontend` e `backend` ficarem saudáveis** (`depends_on:
+  condition: service_healthy` nos dois) — só para ordem de startup, não para o
+  próprio healthcheck do Caddy: o healthcheck do `caddy` nunca chama frontend ou
+  backend (ver "Healthcheck do Caddy" abaixo), então uma instabilidade de qualquer
+  um dos dois nunca marca o Caddy como `unhealthy`.
 
 ---
 
@@ -109,21 +122,18 @@ docker compose --env-file ../env/production.env -f docker-compose.prod.yml up -d
 via `env_file:` de cada serviço no YAML, as variáveis injetadas dentro dos
 containers (`JWT_SECRET`, `APP_CORS_ALLOWED_ORIGINS`, etc.).
 
-### Rodando em paralelo com outro projeto local (porta 3000 já ocupada)
+### Rodando em paralelo com outro projeto local (porta 80 já ocupada)
 
-O frontend só publica a porta `3000` por padrão — o lado do host é configurável via
-`FRONTEND_HOST_PORT`; o container continua escutando em `3000` internamente em
-qualquer caso (isso é o que muda quando o Caddy assume o roteamento na Sprint
-11A.3: a publicação direta deixa de existir e `FRONTEND_HOST_PORT` deixa de ser
-consultado). Se outra aplicação na máquina já usa `3000`, edite `production.env`:
+Desde a Sprint 11A.3, só o `caddy` publica porta no host — por padrão `80`, via
+`CADDY_HTTP_PORT`. `frontend` e `backend` nunca publicam porta própria; mudar
+`CADDY_HTTP_PORT` é a única coisa necessária para liberar o stack inteiro em outra
+porta. Se outra aplicação na máquina já usa `80`, edite `production.env`:
 
 ```bash
 cd infra/env
 cp production.env.example production.env
-# editar production.env e trocar a linha:
-#   FRONTEND_HOST_PORT=3000
-# por:
-#   FRONTEND_HOST_PORT=3001
+# editar production.env e adicionar/trocar a linha:
+#   CADDY_HTTP_PORT=8000
 ```
 
 E suba o stack normalmente:
@@ -133,10 +143,10 @@ cd ../compose
 docker compose --env-file ../env/production.env -f docker-compose.prod.yml up -d --build
 ```
 
-Validar que o frontend respondeu na porta alternativa:
+Validar que o Caddy respondeu na porta alternativa (roteando para o frontend):
 
 ```bash
-curl -s -o /dev/null -w "HTTP %{http_code}\n" http://localhost:3001/
+curl -s -o /dev/null -w "HTTP %{http_code}\n" http://localhost:8000/
 # esperado: HTTP 200
 ```
 
@@ -160,10 +170,14 @@ docker compose -f docker-compose.prod.yml logs -f
 docker compose -f docker-compose.prod.yml logs -f backend
 docker compose -f docker-compose.prod.yml logs -f frontend
 docker compose -f docker-compose.prod.yml logs -f postgres
+docker compose -f docker-compose.prod.yml logs -f caddy
 ```
 
 Todos os serviços usam o driver `json-file` com rotação (`max-size: 10m`, `max-file:
-5`) — logs não crescem sem limite no disco do host.
+5`) — logs não crescem sem limite no disco do host. O `caddy` loga em JSON para
+stdout (`log { output stdout; format json }` no Caddyfile) — cada linha é um acesso,
+sem nenhum segredo (`JWT_SECRET`, senhas, tokens) neles; só método, caminho,
+status, duração e alguns cabeçalhos.
 
 ---
 
@@ -180,7 +194,7 @@ docker compose -f docker-compose.prod.yml down
 ```
 
 `down` (sem `-v`) remove containers e a rede, mas **preserva** os volumes nomeados
-(`postgres_data`, `backend_storage`).
+(`postgres_data`, `backend_storage`, `caddy_data`, `caddy_config`).
 
 ## Como apagar volumes conscientemente
 
@@ -188,8 +202,9 @@ docker compose -f docker-compose.prod.yml down
 docker compose -f docker-compose.prod.yml down -v
 ```
 
-**Isto apaga o banco de dados e todos os uploads.** Use apenas quando tiver certeza —
-não existe confirmação interativa.
+**Isto apaga o banco de dados, todos os uploads e o estado interno do Caddy
+(`caddy_data`/`caddy_config` — inclui certificados TLS, quando existirem).** Use
+apenas quando tiver certeza — não existe confirmação interativa.
 
 ---
 
@@ -199,6 +214,8 @@ não existe confirmação interativa.
 |---|---|---|---|
 | `postgres_data` | `/var/lib/postgresql/data` | Banco de dados completo (todas as tabelas) | **Sim** — dado crítico |
 | `backend_storage` | `/app/storage` | Uploads (`app.storage.base-path`): logos e imagens de galeria, servidos via `/uploads/**` | **Sim** — arquivos do cliente, não regeneráveis |
+| `caddy_data` | `/data` | Estado persistente do Caddy — certificados/chaves TLS e metadados de renovação ACME (nada gravado ali enquanto `CADDY_HOST=:80`, já que não há automatic HTTPS a persistir) | Ainda não crítico nesta sprint (sem domínio real); passa a ser quando o ACME real for ativado |
+| `caddy_config` | `/config` | Config ativa do Caddy autosalva (JSON adaptado a partir do Caddyfile) — permite reiniciar sem reprocessar o Caddyfile do zero | Não — é derivada do `Caddyfile`, que já está versionado em `infra/caddy/` |
 
 **PDFs de orçamento não são persistidos** — `EstimatePdfService` gera os bytes do PDF
 inteiramente em memória a cada requisição (`GET /estimates/{id}/pdf`,
@@ -210,11 +227,51 @@ verificado no código (`EstimatePdfService`/`StorageService`), não presumido.
 
 ## Portas internas vs. publicadas
 
-| Serviço | Porta interna | Publicada no host nesta etapa? |
+| Serviço | Porta interna | Publicada no host? |
 |---|---|---|
 | `postgres` | 5432 | **Não** — nunca |
-| `backend` | 8080 | Sim, temporariamente (`${BACKEND_PORT:-8080}`) — até o Caddy existir |
-| `frontend` | 3000 | Sim, temporariamente (`${FRONTEND_HOST_PORT:-3000}`) — porta do host configurável, container sempre em 3000; publicação direta some quando o Caddy existir |
+| `backend` | 8080 | **Não** — só alcançável via `backend:8080` na rede `internal` (o Caddy fala com ela) |
+| `frontend` | 3000 | **Não** — só alcançável via `frontend:3000` na rede `internal` (o Caddy fala com ela) |
+| `caddy` | 80 (443 preparado, não publicado ainda) | **Sim** — `${CADDY_HTTP_PORT:-80}:80`, o único ponto de entrada público desta stack |
+
+Confirmar isso na prática: `docker compose ps` só deve mostrar uma entrada em `PORTS`
+para o `caddy`; `docker port <container_backend>`, `docker port <container_frontend>`
+e `docker port <container_postgres>` devem retornar vazio.
+
+---
+
+## Roteamento (Sprint 11A.3)
+
+Config real em [infra/caddy/Caddyfile](caddy/Caddyfile); decisão completa em
+[docs/design/DT-011A.3-caddy-reverse-proxy.md](../docs/design/DT-011A.3-caddy-reverse-proxy.md).
+Esta seção é o resumo operacional.
+
+| Caminho externo | Destino | Prefixo mantido? |
+|---|---|---|
+| `/` e qualquer caminho não listado abaixo (`/dashboard/**`, `/login`, `/share/[token]`, `/_next/*`, etc.) | `frontend:3000` | — (repassado como veio) |
+| `/api/*` | `backend:8080` | **Não** — `/api` é removido antes de encaminhar (`handle_path`). Os controllers Spring nunca foram renomeados para incluir `/api` (`/auth`, `/estimates`, `/customers`, `/company`, `/branding`, `/settings`, `/services`, `/gallery`, `/public/sites`, `/public/share`) — o prefixo existe **só** nesta borda do Caddy |
+| `/uploads/*` | `backend:8080` | **Sim** — encaminhado tal como veio (`handle`, sem `handle_path`); o backend já serve exatamente `/uploads/**` (`StorageWebConfig`), então não há prefixo a remover |
+
+**`/actuator/**` e Swagger/OpenAPI UI não têm rota pública no Caddy** — não existe
+nenhum `handle`/`handle_path` para eles. Os healthchecks Docker do próprio backend
+continuam chamando `http://127.0.0.1:8080/actuator/health/...` diretamente dentro do
+container, sem passar pelo Caddy nem pela rede `internal`. Externamente, qualquer
+tentativa de acessar `/actuator/**` ou `/swagger-ui` através do Caddy cai no `handle`
+catch-all e recebe o 404 padrão do Next.js — não há erro custom para isso, é
+simplesmente "esta rota não existe" do ponto de vista de quem está fora.
+
+### Nota: `/api/health` do frontend
+
+O Next.js tem sua própria rota interna `GET /api/health` (usada só pelo healthcheck
+Docker do container `frontend`, chamada diretamente como
+`http://localhost:3000/api/health` **dentro** do próprio container — nunca através da
+rede `internal` nem do Caddy). Essa rota colide, em nome, com a regra pública
+`/api/* → backend`: externamente, uma requisição a `/api/health` passa pelo
+`handle_path /api/*` do Caddy e vai para o **backend** (que não tem esse endpoint —
+resultaria em 404 do Spring), nunca chega ao Next.js. Isso é **aceitável por
+desenho**: nada externo precisa chamar o `/api/health` do frontend, e o healthcheck
+Docker do frontend nunca depende do Caddy para funcionar. Não foi criada nenhuma
+exceção no Caddy para expor essa rota publicamente — nem deveria.
 
 ---
 
@@ -248,11 +305,24 @@ ativa `backend/src/main/resources/application-prod.yml`, que soma (não substitu
 | Categoria | Variáveis | Efeito de mudar o valor |
 |---|---|---|
 | Build-time (`NEXT_PUBLIC_*`) | `NEXT_PUBLIC_API_BASE_URL`, `NEXT_PUBLIC_COMPANY_SLUG`, `NEXT_PUBLIC_SITE_URL` | **Exige reconstruir a imagem** (`docker compose build frontend` ou `up --build`) — são inlined no bundle JS do browser durante `next build`; reiniciar o container sozinho não muda nada já compilado |
-| Runtime | `PORT`, `HOSTNAME`, `NODE_OPTIONS`, `FRONTEND_HOST_PORT` | Basta recriar o container (`up -d`), sem rebuild |
+| Runtime | `PORT`, `HOSTNAME`, `NODE_OPTIONS` | Basta recriar o container (`up -d`), sem rebuild |
 | Fixas na imagem | `NODE_ENV=production` | Não configurável fora de um rebuild do `frontend/Dockerfile` |
 
 Nenhuma variável `NEXT_PUBLIC_*` é ou deve ser um segredo — qualquer pessoa consegue
 lê-la no DevTools do browser depois do build.
+
+**Sprint 11A.3 — `NEXT_PUBLIC_API_BASE_URL` mudou de significado.** Antes do Caddy,
+apontava direto para a porta publicada do backend (`http://localhost:8080` ou um
+domínio `api.*` próprio). Agora deve ser o **mesmo** valor de `NEXT_PUBLIC_SITE_URL`
+(a mesma origem pública que o Caddy serve) — o frontend adiciona o prefixo `/api`
+internamente (`frontend/src/lib/api/api-path.ts`, `withApiPrefix`, aplicado nos 4
+pontos que montam uma URL de API) antes de chamar `new URL(path,
+NEXT_PUBLIC_API_BASE_URL)`. É o Caddy (`handle_path /api/*`) que remove esse prefixo
+antes de encaminhar ao backend — os controllers Spring continuam sem `/api`. Uma
+tentativa de usar `NEXT_PUBLIC_API_BASE_URL=/api` (caminho relativo, sem origem) foi
+testada e rejeitada — tanto o `new URL(path, base)` do WHATWG quanto o schema Zod que
+valida essa variável (`z.string().url()`) exigem uma URL absoluta; ver
+docs/design/DT-011A.3-caddy-reverse-proxy.md §9 para a verificação.
 
 ### Health, liveness e readiness
 
@@ -309,7 +379,15 @@ log do servidor).
 `APP_CORS_ALLOWED_ORIGINS` — ver comentário detalhado em
 `infra/env/production.env.example`. Resumo: obrigatória com `prod` ativo, aceita
 múltiplas origens separadas por vírgula, cada uma validada como URL http/https
-absoluta, sem espaços residuais, sem wildcard `*`, sem `localhost`/`127.0.0.1`.
+absoluta, sem espaços residuais, sem wildcard `*`, sem `localhost`/`127.0.0.1`. A
+lógica de validação e o filtro CORS em si não mudaram nesta sprint.
+
+**Sprint 11A.3 — CORS deixou de ser a única linha de defesa.** Com Caddy servindo
+frontend e backend na mesma origem pública, chamadas do browser a `/api/*` são
+same-origin e nunca disparam preflight/CORS. `APP_CORS_ALLOWED_ORIGINS` continua
+obrigatória e continua validada da mesma forma — é defesa em profundidade para
+chamadas de outra origem (clientes não-browser, uma futura divisão por subdomínio),
+não algo de que a topologia atual dependa para funcionar.
 
 ### Storage
 
@@ -335,17 +413,89 @@ já eram usados desde a 11A.1; `cpus` é novo nesta sprint. Nota técnica: sob
 no nível do serviço) que tem efeito — um bloco `deploy.resources.limits` seria
 silenciosamente ignorado sem `docker stack deploy`.
 
-### HSTS, Caddy e JWT `HttpOnly` — fora do escopo desta sprint
+## Caddy / Reverse Proxy (Sprint 11A.3)
 
-- **`Strict-Transport-Security`:** deliberadamente ausente do frontend. Anunciar HSTS
-  sobre HTTP puro (sem TLS) não tem efeito garantido e pode ser arriscado se o domínio
-  mudar antes do TLS existir. Vira responsabilidade do Caddy na Sprint 11A.3, só depois
-  do TLS via Cloudflare estar validado ponta a ponta.
+Decisão completa em
+[docs/design/DT-011A.3-caddy-reverse-proxy.md](../docs/design/DT-011A.3-caddy-reverse-proxy.md).
+Config real em [infra/caddy/Caddyfile](caddy/Caddyfile) — layout único, usado tanto
+localmente quanto (sem mudança nenhuma) numa futura implantação com domínio real.
+Roteamento em si já coberto acima ("Roteamento (Sprint 11A.3)").
+
+### HTTP local hoje, HTTPS real mais tarde — mesmo arquivo
+
+`{$CADDY_HOST}` no topo do Caddyfile é o único ponto variável:
+
+- `CADDY_HOST=:80` (valor usado nesta sprint, `production.env.example`) — Caddy serve
+  HTTP puro em todas as interfaces e **nunca tenta ACME/HTTPS automático**. Não é
+  configurado nenhum domínio real.
+- `CADDY_HOST=app.exemplo.com` (futuro, Sprint 11C+) — Caddy passa a provisionar e
+  renovar automaticamente um certificado TLS real via ACME para esse domínio. Nenhuma
+  outra linha do Caddyfile muda.
+
+Nem Cloudflare, nem DNS, nem um domínio real são configurados nesta sprint — a porta
+80 crua é suficiente para validar todo o roteamento, compressão e persistência.
+
+### Compressão
+
+`encode zstd gzip` no Caddyfile — negociada por `Accept-Encoding` do cliente (zstd
+preferido quando o cliente aceita, senão gzip). Isso é **além**, não em vez, da
+compressão HTTP que Spring (`server.compression.enabled`) e Next.js já aplicam por
+conta própria — nenhum dos dois foi removido ou alterado nesta sprint; nenhum tuning
+adicional foi feito.
+
+### Headers de segurança — Caddy não duplica nada
+
+`Content-Security-Policy`, `X-Content-Type-Options`, `X-Frame-Options`/
+`frame-ancestors`, `Referrer-Policy` e `Permissions-Policy` continuam sendo
+responsabilidade exclusiva do Next.js e do Spring — o Caddyfile não define nenhum
+desses headers. Isso significa que os headers precisam ser validados **através** do
+Caddy (não só direto no `frontend:3000`/`backend:8080`, que não são mais alcançáveis
+de fora) para confirmar que o proxy os repassa sem alterar — ver "Comandos de
+validação" abaixo.
+
+### Persistência do Caddy
+
+`caddy_data` (`/data`) e `caddy_config` (`/config`) são volumes nomeados — sobrevivem
+a `docker compose down` (sem `-v`) e a recriações do container. Ver a tabela "Dados
+persistentes" acima.
+
+### Segurança do container
+
+`read_only: true` na raiz do sistema de arquivos do container; `/tmp` recebe um
+`tmpfs` próprio (onde o Caddy grava temporários/escreve atomicamente); `/data` e
+`/config` continuam graváveis como volumes nomeados. Nenhuma imagem customizada foi
+criada só para rodar non-root, e nenhum `cap_add` foi adicionado — a imagem oficial
+`caddy:2-alpine` roda como veio, sem hardening adicional fora deste escopo.
+
+### Healthcheck do Caddy
+
+```yaml
+test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:2019/config/"]
+```
+
+Verifica a API administrativa do próprio Caddy (`127.0.0.1:2019`, só acessível de
+dentro do container, nunca publicada) — **não** o site block público, e portanto
+nunca depende do `frontend` ou do `backend` estarem no ar. Uma instabilidade em
+qualquer um dos dois nunca marca o `caddy` como `unhealthy`. `depends_on` com
+`condition: service_healthy` nos dois upstreams existe só para ordem de startup (ver
+diagrama de arquitetura acima), não para o healthcheck em si.
+
+### HSTS, TLS real e JWT `HttpOnly` — ainda fora do escopo
+
+- **`Strict-Transport-Security`:** ainda ausente, deliberadamente — não configurado no
+  Caddyfile nesta sprint (`CADDY_HOST=:80`, sem TLS real). Anunciar HSTS sobre HTTP
+  puro não tem efeito garantido e pode ser arriscado se o domínio mudar antes do TLS
+  existir. Fica para quando um domínio real + TLS via Cloudflare estiverem validados
+  ponta a ponta (Sprint 11C+).
+- **Cloudflare, DNS, domínio real:** não configurados nesta sprint — ver seção acima.
 - **Migração do refresh token para cookie `HttpOnly`:** mencionada como melhoria futura
   em `docs/security/authentication-review.md`, permanece fora do escopo — o mecanismo
   atual (access token JWT via header, refresh token opaco) não foi alterado.
 
 ### Comandos de validação
+
+Todos os comandos abaixo assumem `CADDY_HOST=:80`/`CADDY_HTTP_PORT=80` (os defaults
+de `production.env.example`) — troque `80` se você mudou `CADDY_HTTP_PORT`.
 
 ```bash
 cd infra/compose
@@ -356,47 +506,63 @@ docker compose --env-file ../env/production.env -f docker-compose.prod.yml confi
 # Subir com rebuild
 docker compose --env-file ../env/production.env -f docker-compose.prod.yml up -d --build
 
-# Estado dos três serviços
+# Estado dos quatro serviços — aguardar "healthy" em todos
 docker compose -f docker-compose.prod.yml ps
 
 # Profile ativo do backend
 docker compose -f docker-compose.prod.yml logs backend | grep -i "profile"
 
-# Health / liveness / readiness
-curl -i http://localhost:${BACKEND_PORT:-8080}/actuator/health
-curl -i http://localhost:${BACKEND_PORT:-8080}/actuator/health/liveness
-curl -i http://localhost:${BACKEND_PORT:-8080}/actuator/health/readiness
+# ── Evidência de que só o Caddy publica porta ──────────────────────────────
+docker compose -f docker-compose.prod.yml ps
+# esperado: coluna PORTS preenchida só na linha do "caddy"
+docker port "$(docker compose -f docker-compose.prod.yml ps -q backend)"   # esperado: vazio
+docker port "$(docker compose -f docker-compose.prod.yml ps -q frontend)"  # esperado: vazio
+docker port "$(docker compose -f docker-compose.prod.yml ps -q postgres)"  # esperado: vazio
+docker port "$(docker compose -f docker-compose.prod.yml ps -q caddy)"     # esperado: 80/tcp -> 0.0.0.0:80
 
-# Readiness cai quando o Postgres cai; liveness não
-docker compose -f docker-compose.prod.yml stop postgres
-curl -i http://localhost:${BACKEND_PORT:-8080}/actuator/health/liveness    # continua UP
-curl -i http://localhost:${BACKEND_PORT:-8080}/actuator/health/readiness  # DOWN
-docker compose -f docker-compose.prod.yml start postgres
+# ── Healthcheck do próprio Caddy (API admin, não o site block) ─────────────
+docker inspect --format '{{.State.Health.Status}}' "$(docker compose -f docker-compose.prod.yml ps -q caddy)"
+# esperado: healthy
 
-# Frontend
-curl -i http://localhost:${FRONTEND_HOST_PORT:-3000}/api/health
+# ── Roteamento ──────────────────────────────────────────────────────────────
+curl -s -o /dev/null -w "HTTP %{http_code}\n" http://localhost/                       # esperado: 200 (frontend)
+curl -s -o /dev/null -w "HTTP %{http_code}\n" http://localhost/api/company             # esperado: 200/401 do backend, não 404 do Next.js
+curl -s -o /dev/null -w "HTTP %{http_code}\n" http://localhost/uploads/qualquer-arquivo-existente.png
+                                                                                        # esperado: 200 (se o arquivo existir) — nunca prefixado com /api
 
-# Headers de segurança do frontend (HSTS deve estar ausente)
-curl -sD - -o /dev/null http://localhost:${FRONTEND_HOST_PORT:-3000}/ \
+# /actuator/health e /swagger-ui não devem ser alcançáveis publicamente pelo Caddy
+curl -s -o /dev/null -w "HTTP %{http_code}\n" http://localhost/actuator/health   # esperado: 404 do Next.js (catch-all), não 200 do Spring
+curl -s -o /dev/null -w "HTTP %{http_code}\n" http://localhost/swagger-ui/index.html
+                                                                                  # esperado: 404 do Next.js
+
+# Healthchecks internos do Docker continuam via rede Docker / dentro do container, não pelo Caddy:
+docker compose -f docker-compose.prod.yml exec backend wget -qO- http://127.0.0.1:8080/actuator/health/readiness
+docker compose -f docker-compose.prod.yml exec frontend wget -qO- http://127.0.0.1:3000/api/health
+
+# ── Headers de segurança — validados ATRAVÉS do Caddy, não direto no Next.js/Spring ──
+curl -sD - -o /dev/null http://localhost/ \
   | grep -iE "content-security-policy|x-content-type-options|x-frame-options|referrer-policy|strict-transport-security"
+# esperado: os quatro primeiros presentes (vindos do Next.js), strict-transport-security AUSENTE
 
-# CORS permitida vs. rejeitada
-curl -si -X OPTIONS http://localhost:${BACKEND_PORT:-8080}/auth/login \
+# ── Compressão do Caddy ──────────────────────────────────────────────────────
+curl -sD - -o /dev/null -H "Accept-Encoding: zstd, gzip" http://localhost/ | grep -i content-encoding
+curl -sD - -o /dev/null -H "Accept-Encoding: gzip" http://localhost/api/company | grep -i content-encoding
+
+# ── CORS permitida vs. rejeitada (backstop — same-origin já não depende disto) ──
+curl -si -X OPTIONS http://localhost/api/auth/login \
   -H "Origin: https://SEU_DOMINIO_CONFIGURADO" -H "Access-Control-Request-Method: POST" \
   | grep -i access-control-allow-origin
-curl -si -X OPTIONS http://localhost:${BACKEND_PORT:-8080}/auth/login \
+curl -si -X OPTIONS http://localhost/api/auth/login \
   -H "Origin: https://origem-nao-permitida.example" -H "Access-Control-Request-Method: POST" \
   | grep -i access-control-allow-origin   # esperado: sem correspondência
 
-# Outros endpoints do Actuator continuam protegidos
-curl -i http://localhost:${BACKEND_PORT:-8080}/actuator/info   # esperado: 401
-
-# Limites de memória
+# ── Limites de memória ──────────────────────────────────────────────────────
 docker stats --no-stream $(docker compose -f docker-compose.prod.yml ps -q)
 
-# Persistência: upload sobrevive a down/up
+# ── Persistência: uploads e volumes do Caddy sobrevivem a down/up (NÃO down -v) ──
 docker compose -f docker-compose.prod.yml down
 docker compose --env-file ../env/production.env -f docker-compose.prod.yml up -d
+docker volume ls | grep -E "caddy_data|caddy_config|backend_storage|postgres_data"   # esperado: todos ainda existem
 ```
 
 ### Troubleshooting
@@ -408,34 +574,42 @@ docker compose --env-file ../env/production.env -f docker-compose.prod.yml up -d
 | CORS falha no browser mesmo com a origem "certa" | Espaço/protocolo/porta diferente do configurado, ou variável não redefinida (ainda no exemplo) | Conferir `APP_CORS_ALLOWED_ORIGINS` no `production.env` real, não no `.example` |
 | Mudei `NEXT_PUBLIC_API_BASE_URL` e nada mudou | Variável build-time — precisa de rebuild | `docker compose build frontend` (ou `up --build`), não só `restart` |
 | `docker compose up` recusa subir citando uma variável `is required` | Falta uma variável obrigatória em `production.env` (`POSTGRES_*`, `NEXT_PUBLIC_*`) | Comparar com `production.env.example` |
+| `caddy` nunca fica `healthy` | Config inválida no `Caddyfile`, ou porta 2019 (admin API) inacessível dentro do container | `docker compose logs caddy`; validar sintaxe com `docker run --rm -v "$(pwd)/../caddy/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile` |
+| `GET /api/algumacoisa` retorna 404 do Next.js em vez de resposta do backend | Rota não bate com `handle_path /api/*`, ou backend não está healthy | Conferir se o caminho tem exatamente o prefixo `/api/`; `docker compose ps backend` |
+| `/uploads/...` retorna 404 mesmo com o arquivo existindo | Caminho não corresponde ao que o backend realmente serve, ou volume `backend_storage` vazio (down -v acidental) | Conferir `resolveAdminAssetUrl`/`resolvePublicAssetUrl` no frontend; `docker compose exec backend ls /app/storage` |
+| `curl http://localhost/` dá "connection refused" | `CADDY_HTTP_PORT` diferente do usado no curl, ou `caddy` não subiu | `docker compose ps caddy`; conferir `CADDY_HTTP_PORT` em `production.env` |
 
-## Limitações desta etapa (Sprints 11A.1 + 11A.2)
+## Limitações desta etapa (Sprints 11A.1 + 11A.2 + 11A.3)
 
-- **Sem Caddy** — sem HTTPS, sem reverse proxy, sem Cloudflare na frente. As portas
-  3000/8080 ficam diretamente expostas ao host que rodar este Compose.
-- **Sem HSTS** — deliberado enquanto não há TLS; vira responsabilidade do Caddy na
-  Sprint 11A.3 (ver seção acima).
+- **Sem Cloudflare, sem domínio real, sem TLS/HTTPS real** — `CADDY_HOST=:80` serve
+  HTTP puro; o Caddyfile já suporta um domínio real sem alteração (ver "HTTP local
+  hoje, HTTPS real mais tarde" acima), mas isso não foi configurado nem testado nesta
+  sprint.
+- **Sem HSTS** — deliberado enquanto não há TLS real (ver seção acima).
 - **CPU/memória provisórios** — calculados sobre uma premissa de VPS (~2 vCPU/4 GB)
   ainda não confirmada; serão revisados na Sprint 11B quando a VPS Hetzner real for
-  escolhida.
+  escolhida — inclui os limites do próprio `caddy`, adicionados nesta sprint com a
+  mesma premissa provisória.
 - **Sem publicação de imagens no GHCR** — `BACKEND_IMAGE`/`FRONTEND_IMAGE` apontam
   para um caminho GHCR de exemplo, mas nada aqui faz `docker push`; as imagens usadas
   localmente vêm de `docker compose build`.
 - **Sem tags imutáveis reais** — `APP_VERSION=local` é o único valor usado até um
   pipeline de CI passar a gerar tags por commit SHA (Sprint 11A.4).
-- **Publicação direta de portas do frontend/backend** é temporária, como descrito
-  acima — não é o desenho final de rede.
 - **Sem migração do JWT/refresh token para cookie `HttpOnly`** — mecanismo de
   autenticação inalterado nesta sprint (ver seção acima).
+- **Sem hardening adicional do container Caddy** além de `read_only`/`tmpfs` — sem
+  imagem customizada non-root, sem `cap_add`, sem revisão de superfície além do que
+  já vem na imagem oficial.
 
 ## Próximas etapas (fora desta sprint)
 
-- **Sprint 11A.3:** `Caddyfile` real, serviço `caddy` no Compose, TLS via Cloudflare,
-  HSTS, remoção da publicação direta de portas do frontend/backend.
 - **Sprint 11A.4:** pipeline de build/publicação de imagens no GHCR por commit SHA.
 - **Sprint 11A.5:** backup (Restic, Storage Box).
 - **Sprint 11A.6:** consolidação final da documentação operacional.
 - **Sprint 11B:** provisionamento real da VPS Hetzner, Terraform (se adotado), e
-  revisão dos valores provisórios de CPU/memória contra o hardware real.
+  revisão dos valores provisórios de CPU/memória (incluindo o `caddy`) contra o
+  hardware real.
+- **Sprint 11C+ (não planejada em detalhe ainda):** domínio real, DNS/Cloudflare, TLS
+  automático via ACME (só trocar `CADDY_HOST`), HSTS.
 - **Etapas seguintes (não planejadas em detalhe ainda):** deploy por SSH,
   monitoramento externo, observabilidade completa.

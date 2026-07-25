@@ -1,5 +1,6 @@
 import { ApiError } from "@/lib/api/errors";
 import { apiRequest } from "@/lib/api/http-client";
+import { withApiPrefix } from "@/lib/api/api-path";
 import { getPublicEnv } from "@/lib/env/public-env";
 import { publicEstimateShareDtoSchema, type PublicEstimateShareDto } from "../types/api";
 
@@ -21,5 +22,6 @@ export async function fetchPublicEstimateShare(
 
 export function buildPublicEstimateSharePdfUrl(token: string): string {
   const env = getPublicEnv();
-  return new URL(`/public/share/${encodeURIComponent(token)}/pdf`, env.NEXT_PUBLIC_API_BASE_URL).toString();
+  const path = withApiPrefix(`/public/share/${encodeURIComponent(token)}/pdf`);
+  return new URL(path, env.NEXT_PUBLIC_API_BASE_URL).toString();
 }

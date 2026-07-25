@@ -1,15 +1,14 @@
-# Contractor Platform — production container stack (Sprint 11A.1; profile/health/
-# resource settings added in Sprint 11A.2 — see docs/design/DT-011A.2-production-configuration.md).
+# Contractor Platform — production container stack.
+# Sprint 11A.1: backend/frontend/postgres containers.
+# Sprint 11A.2: profile prod, health/readiness/liveness, resource limits.
+# Sprint 11A.3: Caddy as the single public entrypoint — see
+# docs/design/DT-011A.3-caddy-reverse-proxy.md.
 #
-# Scope of this file: frontend + backend + PostgreSQL only. Caddy (the intended
-# public ingress in front of these two services — see infra/README.md for the
-# target architecture) is deliberately NOT declared here: there is no coherent
-# minimal Caddy config yet (no Caddyfile), and adding a service definition without
-# one would just be a broken placeholder. It is added in Sprint 11A.3.
-#
-# Until Caddy exists, "frontend"/"backend" publish their ports directly to the host
-# so this stack can be exercised end-to-end for local validation (see the ports:
-# comments below) — this is a temporary state for 11A.1, not the final design.
+# Only `caddy` publishes a port to the host. `frontend`/`backend`/`postgres` are
+# reachable only on the `internal` Docker network — Caddy reaches them by service
+# name (frontend:3000, backend:8080), the same way any other container on this
+# network would. This was a temporary state up through 11A.2 (frontend/backend used
+# to publish ports directly for local validation); it ends here.
 #
 # Run with `docker compose --env-file ../env/production.env -f docker-compose.prod.yml ...`
 # from this directory, or `-f infra/compose/docker-compose.prod.yml` from the repo
@@ -28,6 +27,8 @@ networks:
 volumes:
   postgres_data:
   backend_storage:
+  caddy_data:
+  caddy_config:
 
 services:
   postgres:
@@ -94,9 +95,9 @@ services:
       # infra/README.md for why nothing else needs a volume (PDFs are generated
       # in-memory and never touch disk).
       - backend_storage:/app/storage
-    ports:
-      # Temporary direct publish for 11A.1 local validation — see file header.
-      - "${BACKEND_PORT:-8080}:8080"
+    # No `ports:` since Sprint 11A.3 — only Caddy publishes a port; the backend is
+    # reachable on the `internal` network as `backend:8080` (Caddy's /api/* and
+    # /uploads/* rules both target it that way).
     networks:
       - internal
     depends_on:
@@ -137,12 +138,9 @@ services:
       # requiring knowledge of what the image bakes in.
       NODE_ENV: production
       NODE_OPTIONS: --max-old-space-size=512
-    ports:
-      # Temporary direct publish for 11A.1 local validation — see file header.
-      # Host-side port is parameterized (container-side stays 3000) so more than
-      # one project can run on this machine at once without a port clash; e.g.
-      # FRONTEND_HOST_PORT=3001 ./... while another project already holds 3000.
-      - "${FRONTEND_HOST_PORT:-3000}:3000"
+    # No `ports:` since Sprint 11A.3 — only Caddy publishes a port; the frontend is
+    # reachable on the `internal` network as `frontend:3000` (Caddy's catch-all rule
+    # targets it that way).
     networks:
       - internal
     # Deliberately no `depends_on: backend` — the frontend renders (with empty/
@@ -159,5 +157,59 @@ services:
     mem_reservation: 350m
     # PROVISIONAL (Sprint 11A.2) — see the postgres service comment above; same
     # premise, revisit in Sprint 11B.
+    cpus: "0.5"
+    logging: *default-logging
+
+  caddy:
+    # Official image, explicit tag (Alpine variant, matching the convention already
+    # used for postgres:17-alpine) — verified before use (Sprint 11A.3 design): has
+    # wget/curl, runs as root (needed to bind ports 80/443 without extra
+    # capabilities), and its own example Caddyfile already documents the ":80"
+    # (no-ACME) pattern used below. See DT-011A.3 §5.4.
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      CADDY_HOST: ${CADDY_HOST:-:80}
+    volumes:
+      - ../caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    # read_only root filesystem — Caddy only ever needs to write to /data (certs/
+    # OCSP) and /config (autosaved active config), both already mounted as writable
+    # named volumes above. /tmp is where Caddy stages some file operations (e.g.
+    # atomic writes), so it gets a small writable tmpfs rather than loosening
+    # read_only for the whole container.
+    read_only: true
+    tmpfs:
+      - /tmp
+    ports:
+      - "${CADDY_HTTP_PORT:-80}:80"
+      # - "${CADDY_HTTPS_PORT:-443}:443"   # enable once CADDY_HOST is a real domain (Sprint 11C+)
+    networks:
+      - internal
+    # Startup ordering only (Caddy shouldn't start routing before it has somewhere
+    # to route to) — NOT a health dependency: Caddy's own healthcheck below never
+    # calls frontend/backend, so a frontend/backend outage never makes Caddy itself
+    # report unhealthy (see DT-011A.3 §16).
+    depends_on:
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    healthcheck:
+      # Deliberately checks Caddy's own admin API (bound to 127.0.0.1:2019 inside
+      # the container by default, never published to the host/network) instead of
+      # the public site block — this verifies only that the Caddy process itself is
+      # alive, with zero dependency on the frontend/backend upstreams it proxies to.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:2019/config/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    mem_limit: 256m
+    mem_reservation: 128m
+    # PROVISIONAL (Sprint 11A.2 pattern extended here) — Caddy is a lightweight
+    # proxy (no JVM/V8, no application state); revisit alongside the other services
+    # once a real VPS is chosen (Sprint 11B).
     cpus: "0.5"
     logging: *default-logging
