@@ -34,7 +34,14 @@ export default defineConfig({
       stderr: "pipe",
     },
     {
-      command: `NEXT_PUBLIC_API_BASE_URL=${backendUrl} NEXT_PUBLIC_SITE_URL=${frontendUrl} NEXT_PUBLIC_COMPANY_SLUG=e2e-hardening npm run dev -- --hostname 127.0.0.1 --port ${frontendPort}`,
+      // NEXT_PUBLIC_API_BASE_URL is the frontend's OWN origin, not the backend's —
+      // matching the same-origin-via-Caddy architecture (Sprint 11A.3): the browser
+      // calls withApiPrefix()-prefixed paths against this origin, expecting /api/*
+      // to reach the backend. There's no Caddy in this local/E2E setup to do that
+      // stripping, so API_PROXY_TARGET tells next.config.ts's dev-only rewrite where
+      // the real backend is — see next.config.ts for why this is safe in production
+      // (API_PROXY_TARGET is never set there, so the rewrite is a no-op).
+      command: `NEXT_PUBLIC_API_BASE_URL=${frontendUrl} NEXT_PUBLIC_SITE_URL=${frontendUrl} NEXT_PUBLIC_COMPANY_SLUG=e2e-hardening API_PROXY_TARGET=${backendUrl} npm run dev -- --hostname 127.0.0.1 --port ${frontendPort}`,
       url: `${frontendUrl}/login`,
       reuseExistingServer: true,
       timeout: 120_000,
