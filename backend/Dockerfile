@@ -60,9 +60,14 @@ ENV STORAGE_PATH=/app/storage \
 EXPOSE 8080
 
 # eclipse-temurin:*-alpine ships BusyBox wget out of the box — no extra package
-# installed just for this check. /actuator/health is permitAll in SecurityConfig.
+# installed just for this check. /actuator/health/** is permitAll in SecurityConfig.
+# Uses /readiness (not the bare /actuator/health) so the container only reports
+# healthy once it can actually reach PostgreSQL — see DT-011A.2 §6.1.6. Requires
+# SPRING_PROFILES_ACTIVE=prod (set in docker-compose.prod.yml) to exist at all; the
+# probe sub-paths are only registered when management.endpoint.health.probes.enabled
+# is set, which lives in application-prod.yml.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=3 \
-    CMD wget -q -O /dev/null http://127.0.0.1:8080/actuator/health || exit 1
+    CMD wget -q -O /dev/null http://127.0.0.1:8080/actuator/health/readiness || exit 1
 
 # Exec form: java runs as PID 1 and receives SIGTERM directly from `docker stop`/
 # Compose, so Spring Boot's shutdown hook runs instead of the signal being swallowed

@@ -1,0 +1,56 @@
+# Sprint 11A.2 — production profile overrides. Spring merges this on top of
+# application.yml at runtime: any property not redefined here keeps its base value.
+# No secrets live in this file — JWT_SECRET, DB_*, APP_CORS_ALLOWED_ORIGINS always
+# come from environment variables (see infra/env/production.env.example).
+#
+# Some production concerns are intentionally NOT duplicated here because
+# application.yml (base) is already correct for them in every profile: error
+# message/stack trace suppression (server.error.*), upload size limits
+# (spring.servlet.multipart.*, already aligned with ImageUploadPolicy's 5 MB), and
+# Actuator's exposed-endpoint list (health, info — unchanged; the liveness/readiness
+# sub-paths enabled below are sub-resources of the already-exposed "health" endpoint).
+#
+# See docs/design/DT-011A.2-production-configuration.md for the full rationale.
+
+spring:
+  datasource:
+    hikari:
+      idle-timeout: 600000     # 10 minutes (Hikari's own default, made explicit)
+      max-lifetime: 1800000    # 30 minutes (Hikari's own default, made explicit)
+
+  flyway:
+    clean-disabled: true
+
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+
+  output:
+    ansi:
+      enabled: never
+
+  jackson:
+    time-zone: UTC
+
+server:
+  shutdown: graceful
+  forward-headers-strategy: framework
+  compression:
+    enabled: true
+    mime-types: application/json,application/problem+json,text/plain,text/css,application/javascript
+    min-response-size: 1024
+
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState,db
+
+logging:
+  level:
+    root: INFO
+    io.chicaodw.platform: INFO
+    org.hibernate.SQL: WARN
+    org.flywaydb: INFO
