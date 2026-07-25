@@ -3,6 +3,9 @@
 # Sprint 11A.2: profile prod, health/readiness/liveness, resource limits.
 # Sprint 11A.3: Caddy as the single public entrypoint — see
 # docs/design/DT-011A.3-caddy-reverse-proxy.md.
+# Sprint 11A.4: BACKEND_IMAGE/FRONTEND_IMAGE default to the real GHCR owner
+# (chicaomsc) now that .github/workflows/publish-images.yml actually publishes
+# there — see docs/design/DT-011A.4-ghcr-image-pipeline.md.
 #
 # Only `caddy` publishes a port to the host. `frontend`/`backend`/`postgres` are
 # reachable only on the `internal` Docker network — Caddy reaches them by service
@@ -66,7 +69,7 @@ services:
     logging: *default-logging
 
   backend:
-    image: ${BACKEND_IMAGE:-ghcr.io/chicaodw/contractor-platform-backend}:${APP_VERSION:-local}
+    image: ${BACKEND_IMAGE:-ghcr.io/chicaomsc/contractor-platform-backend}:${APP_VERSION:-local}
     build:
       context: ../../backend
       dockerfile: Dockerfile
@@ -121,7 +124,7 @@ services:
     logging: *default-logging
 
   frontend:
-    image: ${FRONTEND_IMAGE:-ghcr.io/chicaodw/contractor-platform-frontend}:${APP_VERSION:-local}
+    image: ${FRONTEND_IMAGE:-ghcr.io/chicaomsc/contractor-platform-frontend}:${APP_VERSION:-local}
     build:
       context: ../../frontend
       dockerfile: Dockerfile
