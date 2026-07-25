@@ -1,17 +1,19 @@
-# Infra — Contractor Platform (Sprints 11A.1 + 11A.2 + 11A.3)
+# Infra — Contractor Platform (Sprints 11A.1 + 11A.2 + 11A.3 + 11A.4)
 
 Fundação de containers de produção (11A.1): imagens Docker do backend e do frontend, e
 um Docker Compose que sobe o stack completo (frontend + backend + PostgreSQL)
 localmente, simulando produção. Configuração de produção (11A.2): profile Spring
 `prod`, shutdown gracioso, health/liveness/readiness, compressão, CORS validado,
-storage validado no startup, JVM/CPU/memória, logs. Reverse proxy (11A.3, este
-documento atualizado): Caddy como único ponto de entrada público — roteamento de `/`,
-`/api/*` e `/uploads/*`, compressão, persistência e healthcheck do próprio Caddy;
-`frontend`/`backend`/`postgres` deixam de publicar porta no host. **Não** cobre
-HTTPS real, HSTS, Cloudflare, domínio real, provisionamento de VPS, Terraform, deploy
-por SSH, publicação no GHCR, backup, Storage Box, systemd, monitoramento externo ou
-cookies `HttpOnly` para o JWT — esses itens são de etapas posteriores (ver "Próximas
-etapas" no final deste documento).
+storage validado no startup, JVM/CPU/memória, logs. Reverse proxy (11A.3): Caddy como
+único ponto de entrada público — roteamento de `/`, `/api/*` e `/uploads/*`,
+compressão, persistência e healthcheck do próprio Caddy; `frontend`/`backend`/
+`postgres` deixam de publicar porta no host. Pipeline de imagens (11A.4, este
+documento atualizado): GitHub Actions builda e publica `backend`/`frontend` no GHCR,
+taggeadas de forma imutável pelo commit SHA — ver "GHCR Image Pipeline" abaixo. **Não**
+cobre HTTPS real, HSTS, Cloudflare, domínio real, provisionamento de VPS, Terraform,
+deploy remoto por SSH, backup, Storage Box, systemd, monitoramento externo ou cookies
+`HttpOnly` para o JWT — esses itens são de etapas posteriores (ver "Próximas etapas" no
+final deste documento).
 
 ---
 
@@ -105,8 +107,9 @@ docker compose --env-file ../env/production.env -f docker-compose.prod.yml build
 
 Isso constrói `backend/Dockerfile` e `frontend/Dockerfile` e marca as imagens como
 `${BACKEND_IMAGE}:${APP_VERSION}` / `${FRONTEND_IMAGE}:${APP_VERSION}` (por padrão,
-`APP_VERSION=local` no `.env.example`). Publicação real no GHCR fica para uma etapa
-posterior — nada aqui depende do GHCR para funcionar localmente.
+`APP_VERSION=local` no `.env.example`). Isso continua funcionando exatamente assim,
+independente do pipeline GHCR (Sprint 11A.4, ver seção dedicada abaixo) — nada aqui
+depende do GHCR para build/validação local.
 
 ---
 
@@ -579,7 +582,191 @@ docker volume ls | grep -E "caddy_data|caddy_config|backend_storage|postgres_dat
 | `/uploads/...` retorna 404 mesmo com o arquivo existindo | Caminho não corresponde ao que o backend realmente serve, ou volume `backend_storage` vazio (down -v acidental) | Conferir `resolveAdminAssetUrl`/`resolvePublicAssetUrl` no frontend; `docker compose exec backend ls /app/storage` |
 | `curl http://localhost/` dá "connection refused" | `CADDY_HTTP_PORT` diferente do usado no curl, ou `caddy` não subiu | `docker compose ps caddy`; conferir `CADDY_HTTP_PORT` em `production.env` |
 
-## Limitações desta etapa (Sprints 11A.1 + 11A.2 + 11A.3)
+## GHCR Image Pipeline (Sprint 11A.4)
+
+Decisão completa em
+[docs/design/DT-011A.4-ghcr-image-pipeline.md](../docs/design/DT-011A.4-ghcr-image-pipeline.md).
+Workflow real em [.github/workflows/publish-images.yml](../.github/workflows/publish-images.yml)
+— esta seção é o resumo operacional.
+
+### Fluxo
+
+```
+Pull Request → main        backend-ci.yml / frontend-ci.yml (inalterados)
+                              → lint, testes, build de validação — NUNCA publica imagem
+
+Push em main                publish-images.yml (novo)
+                              → Docker Buildx → GHCR
+                                   ├── ghcr.io/chicaomsc/contractor-platform-backend:<tags>
+                                   └── ghcr.io/chicaomsc/contractor-platform-frontend:<tags>
+
+workflow_dispatch           Republicação manual de qualquer ref (branch/tag/SHA)
+```
+
+`publish-images.yml` é um workflow **separado** dos dois já existentes — nunca os
+altera, nunca é disparado por `pull_request`. `backend-ci.yml`/`frontend-ci.yml`
+respondem "o código está correto?"; `publish-images.yml` responde "este commit vira um
+artefato publicado?".
+
+### Imagens e nomenclatura
+
+```
+ghcr.io/chicaomsc/contractor-platform-backend
+ghcr.io/chicaomsc/contractor-platform-frontend
+```
+
+`chicaomsc` é o owner real do repositório GitHub (confirmado via `git remote`/e-mail
+noreply dos commits/API do GitHub) — os defaults antigos apontavam incorretamente para
+`ghcr.io/chicaodw/...` (e-mail pessoal, não a conta GitHub); corrigidos nesta sprint em
+`docker-compose.prod.yml` e `production.env.example`.
+
+### Tags
+
+Cada build publica 3 tags para o mesmo digest (um único build, sem custo extra):
+
+| Tag | Mutável? | Uso |
+|---|---|---|
+| `:<full-sha>` (40 chars) | Não | **Referência canônica de deploy/rollback — é o valor de `APP_VERSION`** |
+| `:<short-sha>` (7 chars) | Não | Alias de conveniência, mesmo digest — mais fácil de digitar manualmente |
+| `:main` | Sim (sempre aponta para o build mais recente de `main`) | Só para inspeção humana no GHCR ("qual é o build mais recente?") — nunca usado como `APP_VERSION` |
+
+**`:latest` não é publicada** — a tag simplesmente não existe, em vez de existir e só
+avisar para não usá-la para deploy.
+
+### `APP_VERSION`
+
+`APP_VERSION` deve ser sempre o **full commit SHA** (40 caracteres) publicado por
+`publish-images.yml` — é o mesmo valor de `git rev-parse HEAD` do commit que gerou a
+imagem. Isso já funciona com o `docker-compose.prod.yml` atual sem nenhuma mudança
+estrutural: `image:` de `backend`/`frontend` já é
+`${BACKEND_IMAGE:-...}:${APP_VERSION:-local}` — 100% parametrizado.
+
+Fluxo futuro esperado numa VPS (Sprint 11B, ainda não implementado):
+
+```bash
+export APP_VERSION=<full-sha-publicado>
+docker compose --env-file infra/env/production.env -f infra/compose/docker-compose.prod.yml pull
+docker compose --env-file infra/env/production.env -f infra/compose/docker-compose.prod.yml up -d
+```
+
+**Nunca passe `--build`** nesse fluxo — isso reconstruiria a imagem localmente em vez
+de usar a publicada. `up -d` sozinho (sem `--build`) nunca invoca o bloco `build:`
+quando a imagem referenciada já existe (local ou recém-`pull`ada).
+
+### Rollback
+
+```bash
+export APP_VERSION=<sha-anterior>
+docker compose --env-file infra/env/production.env -f infra/compose/docker-compose.prod.yml pull
+docker compose --env-file infra/env/production.env -f infra/compose/docker-compose.prod.yml up -d
+```
+
+Funciona porque toda imagem publicada é imutável e referenciável por SHA
+indefinidamente. **Rollback de container não é rollback de banco de dados** — ver
+limitação do Flyway logo abaixo.
+
+### Limitação do Flyway (importante)
+
+Flyway, como configurado neste projeto, é **forward-only** — não há migrations "undo".
+Se o container do backend for revertido para uma versão de código mais antiga depois
+que uma migration mais nova já rodou contra o banco, o código antigo passa a rodar
+contra um schema que ele não conhece. Isso é seguro **somente se** a migration
+aplicada foi estritamente aditiva/retrocompatível (nova coluna nullable, nova tabela) —
+é inseguro se ela removeu/renomeou uma coluna, mudou um tipo, ou tornou algo
+`NOT NULL` que o código antigo não preenche. **Nenhum downgrade automático de
+migration é implementado.** Escreva migrations aditivas sempre que possível
+especificamente para manter o rollback de container seguro por padrão; uma reversão de
+schema genuína exige uma migration manual revisada ou restauração de backup (Sprint
+11A.5, fora de escopo).
+
+### Frontend — imagem ainda tenant-specific (limitação temporária)
+
+`NEXT_PUBLIC_API_BASE_URL`, `NEXT_PUBLIC_COMPANY_SLUG` e `NEXT_PUBLIC_SITE_URL` são
+inlined no bundle JS **no build** (constraint do Next.js, não escolha deste projeto).
+Nesta sprint, **continuam sendo build-time** — nenhuma refatoração para resolução em
+runtime foi feita. Na prática:
+
+- **A imagem `contractor-platform-frontend` publicada contém um tenant específico
+  baked-in** — hoje, o valor configurado na GitHub Actions Variable
+  `NEXT_PUBLIC_COMPANY_SLUG` (ex.: `jr-pinturas`). A rota raiz `/` dessa imagem sempre
+  renderiza a mesma empresa, não importa quem a rode.
+- **Mudar `NEXT_PUBLIC_COMPANY_SLUG` exige rebuild** — atualizar a Variable no GitHub e
+  disparar `workflow_dispatch` (ou um novo push relevante) gera uma **nova** imagem;
+  não existe forma de trocar o tenant de uma imagem já publicada sem reconstruí-la.
+- **Isso é uma limitação temporária, não a arquitetura final** — o backend já é
+  genuinamente multi-tenant (isolamento por `company_id`, testado); só a landing
+  pública do frontend está presa a um tenant por build. Uma imagem frontend realmente
+  genérica exigiria resolver o tenant em runtime (ex.: middleware mapeando
+  `Host`/domínio → slug via chamada à API), o que é uma refatoração deliberadamente
+  fora do escopo desta sprint — fica para quando um 2º cliente for onboardado.
+- A imagem publicada carrega um label OCI extra (`io.chicaodw.tenant=<slug>`) —
+  registra qual tenant está baked-in naquele build específico, para que ninguém
+  presuma, pelo nome genérico da imagem, que ela serve qualquer cliente.
+
+### GitHub Actions Variables necessárias
+
+Configuradas em **Settings → Secrets and variables → Actions → Variables** do
+repositório (não em Secrets — nenhum dos três é segredo, todos acabam visíveis no
+bundle JS do browser):
+
+| Variable | Obrigatória? | Efeito se ausente |
+|---|---|---|
+| `NEXT_PUBLIC_API_BASE_URL` | Sim | Job `frontend` falha explicitamente antes do build (`::error::`), não builda com valor vazio |
+| `NEXT_PUBLIC_COMPANY_SLUG` | Sim | Mesmo — nunca há um default seguro/genérico para qual tenant embutir |
+| `NEXT_PUBLIC_SITE_URL` | Sim | Mesmo |
+
+Nenhum dos três tem valor específico da JR Pinturas hardcoded no workflow — os valores
+vivem inteiramente nas Variables do repositório, editáveis sem tocar em código. Quando
+um domínio real existir (Cloudflare/DNS, Sprint 11C+), basta atualizar as Variables e
+disparar `workflow_dispatch` para republicar com os valores corretos.
+
+### Autenticação e permissões
+
+```yaml
+permissions:
+  contents: read
+  packages: write
+```
+
+Autenticação no GHCR via `GITHUB_TOKEN` (automático, por execução, via
+`docker/login-action`) — **nenhum PAT é criado ou necessário** para publicar, já que o
+token tem permissão de escrita sobre pacotes do próprio repositório/owner. Um PAT só
+se tornaria necessário no lado do **pull** (VPS, Sprint 11B) se o pacote GHCR fosse
+privado — não é o caso: a estratégia alvo é **GHCR público** (mesma visibilidade do
+repositório), então `docker pull` funciona sem autenticação nenhuma.
+
+### Plataforma
+
+Só `linux/amd64` é publicado — a VPS alvo é x86_64, e os runners `ubuntu-latest` do
+GitHub Actions já são nativamente `amd64` (sem emulação QEMU). Desenvolvimento local em
+Apple Silicon usa `docker compose build` (nativo arm64 no Mac) para validação — nunca
+consome a imagem publicada no GHCR para isso. `arm64`/multi-plataforma não estão
+configurados nesta sprint.
+
+### Cache
+
+```yaml
+cache-from: type=gha,scope=backend      # scope=frontend no job frontend
+cache-to: type=gha,mode=max,scope=backend
+```
+
+Cache do Buildx via GitHub Actions cache, com `scope` separado por imagem — evita que
+o cache de uma invalide o da outra. Sem infraestrutura extra, sem custo adicional
+mensurável.
+
+### Troubleshooting (pipeline GHCR)
+
+| Sintoma | Causa provável | Ação |
+|---|---|---|
+| Job `frontend` falha em "Validate required GitHub Actions Variables" | Uma das três `NEXT_PUBLIC_*` Variables não está configurada no repositório | Settings → Secrets and variables → Actions → Variables; adicionar a(s) que faltarem |
+| `docker/login-action` falha com 401/403 | `permissions: packages: write` ausente do workflow, ou executando de um fork (forks não herdam `GITHUB_TOKEN` com escrita) | Conferir o bloco `permissions:` no topo do workflow; publicar a partir de um push/dispatch no repositório-base, não de um fork |
+| Imagem publicada mas `docker pull` de outra máquina pede autenticação | Pacote GHCR ainda está com visibilidade privada (default do `GITHUB_TOKEN` em alguns casos) | No GHCR, abrir o pacote → Package settings → Change visibility → Public |
+| `workflow_dispatch` não aparece na aba Actions | Workflow ainda não foi commitado/pushado para o branch padrão | `workflow_dispatch` só fica disponível depois que o arquivo existe em `main` |
+| Quero saber qual SHA está publicado como `:main` agora | — | Ver a aba **Packages** do repositório no GitHub, ou `docker manifest inspect ghcr.io/chicaomsc/contractor-platform-backend:main` |
+
+---
+
+## Limitações desta etapa (Sprints 11A.1 + 11A.2 + 11A.3 + 11A.4)
 
 - **Sem Cloudflare, sem domínio real, sem TLS/HTTPS real** — `CADDY_HOST=:80` serve
   HTTP puro; o Caddyfile já suporta um domínio real sem alteração (ver "HTTP local
@@ -590,11 +777,19 @@ docker volume ls | grep -E "caddy_data|caddy_config|backend_storage|postgres_dat
   ainda não confirmada; serão revisados na Sprint 11B quando a VPS Hetzner real for
   escolhida — inclui os limites do próprio `caddy`, adicionados nesta sprint com a
   mesma premissa provisória.
-- **Sem publicação de imagens no GHCR** — `BACKEND_IMAGE`/`FRONTEND_IMAGE` apontam
-  para um caminho GHCR de exemplo, mas nada aqui faz `docker push`; as imagens usadas
-  localmente vêm de `docker compose build`.
-- **Sem tags imutáveis reais** — `APP_VERSION=local` é o único valor usado até um
-  pipeline de CI passar a gerar tags por commit SHA (Sprint 11A.4).
+- **Publicação real no GHCR ainda não foi validada em produção** — o workflow existe e
+  foi validado sintaticamente, mas só pode ser confirmado de fato (login, push,
+  visibilidade pública, `linux/amd64`) depois de um push/merge real para `main` — ver
+  "itens que dependem de push" no relatório de implementação.
+- **GitHub Actions Variables (`NEXT_PUBLIC_*`) precisam ser configuradas manualmente**
+  no repositório antes do primeiro push — o workflow falha explicitamente se
+  ausentes, não assume um valor.
+- **Imagem frontend ainda é tenant-specific** — `NEXT_PUBLIC_COMPANY_SLUG` continua
+  build-time (ver "GHCR Image Pipeline" acima); resolução de tenant em runtime fica
+  para quando um 2º cliente existir.
+- **Sem autenticação de `docker pull` na VPS** — como o pacote GHCR é público, isso não
+  é necessário hoje; se a visibilidade mudar para privada no futuro, um token de
+  leitura precisará ser configurado na VPS (Sprint 11B).
 - **Sem migração do JWT/refresh token para cookie `HttpOnly`** — mecanismo de
   autenticação inalterado nesta sprint (ver seção acima).
 - **Sem hardening adicional do container Caddy** além de `read_only`/`tmpfs` — sem
@@ -603,13 +798,16 @@ docker volume ls | grep -E "caddy_data|caddy_config|backend_storage|postgres_dat
 
 ## Próximas etapas (fora desta sprint)
 
-- **Sprint 11A.4:** pipeline de build/publicação de imagens no GHCR por commit SHA.
-- **Sprint 11A.5:** backup (Restic, Storage Box).
+- **Sprint 11A.5:** backup (Restic, Storage Box) — relevante também para o cenário de
+  rollback de banco que o pipeline GHCR deliberadamente não resolve.
 - **Sprint 11A.6:** consolidação final da documentação operacional.
-- **Sprint 11B:** provisionamento real da VPS Hetzner, Terraform (se adotado), e
-  revisão dos valores provisórios de CPU/memória (incluindo o `caddy`) contra o
-  hardware real.
+- **Sprint 11B:** provisionamento real da VPS Hetzner, Terraform (se adotado),
+  autenticação de `docker pull` na VPS (se a visibilidade do GHCR mudar), e revisão
+  dos valores provisórios de CPU/memória (incluindo o `caddy`) contra o hardware real.
 - **Sprint 11C+ (não planejada em detalhe ainda):** domínio real, DNS/Cloudflare, TLS
   automático via ACME (só trocar `CADDY_HOST`), HSTS.
+- **Multi-tenant real no frontend:** eliminar `NEXT_PUBLIC_COMPANY_SLUG` como
+  build-arg, resolver tenant via `Host`/domínio em runtime — quando um 2º cliente for
+  onboardado.
 - **Etapas seguintes (não planejadas em detalhe ainda):** deploy por SSH,
   monitoramento externo, observabilidade completa.

@@ -1,0 +1,158 @@
+name: Publish images to GHCR
+
+# Builds and publishes the backend and frontend production images to GHCR,
+# tagged immutably by commit SHA (see docs/design/DT-011A.4-ghcr-image-pipeline.md).
+#
+# Deliberately separate from backend-ci.yml/frontend-ci.yml: those answer "is the
+# code correct?" (every PR, every push); this answers "should this commit become a
+# published, deployable artifact?" (only main, or an explicit manual run). Never
+# triggered by pull_request — a PR never publishes an image.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - '.github/workflows/publish-images.yml'
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Git ref (branch, tag, or commit SHA) to build and publish. Empty = current main.'
+        required: false
+        default: ''
+
+# Prevents two publishes of the same ref from racing each other. Never cancel a
+# publish that's already mid-push — that could leave a half-pushed manifest in GHCR.
+concurrency:
+  group: publish-images-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  BACKEND_IMAGE: ghcr.io/chicaomsc/contractor-platform-backend
+  FRONTEND_IMAGE: ghcr.io/chicaomsc/contractor-platform-frontend
+
+jobs:
+  backend:
+    name: Build & push backend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.sha }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # context: git (not the default "workflow") so the sha/tags reflect the ref
+      # actually checked out above, including a workflow_dispatch `ref` input —
+      # the default context derives the sha from the triggering event instead,
+      # which would be wrong for a manually-specified ref.
+      - name: Docker metadata (tags + OCI labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.BACKEND_IMAGE }}
+          context: git
+          tags: |
+            type=sha,format=long,prefix=
+            type=sha,format=short,prefix=
+            type=raw,value=main,enable=${{ github.event_name == 'push' || github.event.inputs.ref == '' || github.event.inputs.ref == 'main' }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          file: backend/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: true
+          sbom: true
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+  frontend:
+    name: Build & push frontend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.sha }}
+
+      # NEXT_PUBLIC_* are inlined into the client bundle at build time (Next.js
+      # constraint, not a choice made here — see infra/README.md). None of them is
+      # a secret, but none has a safe generic default either (see
+      # docs/design/DT-011A.4-ghcr-image-pipeline.md §12): NEXT_PUBLIC_COMPANY_SLUG
+      # is inherently tenant-specific, and the API/site URLs must match whatever
+      # origin Caddy actually serves. Failing clearly here beats silently baking in
+      # an empty string or a hardcoded tenant.
+      - name: Validate required GitHub Actions Variables
+        run: |
+          missing=()
+          [ -z "${{ vars.NEXT_PUBLIC_API_BASE_URL }}" ] && missing+=(NEXT_PUBLIC_API_BASE_URL)
+          [ -z "${{ vars.NEXT_PUBLIC_COMPANY_SLUG }}" ] && missing+=(NEXT_PUBLIC_COMPANY_SLUG)
+          [ -z "${{ vars.NEXT_PUBLIC_SITE_URL }}" ] && missing+=(NEXT_PUBLIC_SITE_URL)
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Missing required GitHub Actions Variables: ${missing[*]}. Configure them under Settings > Secrets and variables > Actions > Variables before running this workflow. See infra/README.md (\"GitHub Actions Variables\")."
+            exit 1
+          fi
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata (tags + OCI labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.FRONTEND_IMAGE }}
+          context: git
+          tags: |
+            type=sha,format=long,prefix=
+            type=sha,format=short,prefix=
+            type=raw,value=main,enable=${{ github.event_name == 'push' || github.event.inputs.ref == '' || github.event.inputs.ref == 'main' }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: frontend
+          file: frontend/Dockerfile
+          platforms: linux/amd64
+          push: true
+          build-args: |
+            NEXT_PUBLIC_API_BASE_URL=${{ vars.NEXT_PUBLIC_API_BASE_URL }}
+            NEXT_PUBLIC_COMPANY_SLUG=${{ vars.NEXT_PUBLIC_COMPANY_SLUG }}
+            NEXT_PUBLIC_SITE_URL=${{ vars.NEXT_PUBLIC_SITE_URL }}
+          tags: ${{ steps.meta.outputs.tags }}
+          # Extra label (beyond metadata-action's standard OCI set) recording which
+          # tenant is baked into this specific image — see DT §12: the image name is
+          # generic ("contractor-platform-frontend") but its contents are not yet.
+          labels: |
+            ${{ steps.meta.outputs.labels }}
+            io.chicaodw.tenant=${{ vars.NEXT_PUBLIC_COMPANY_SLUG }}
+          provenance: true
+          sbom: true
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
