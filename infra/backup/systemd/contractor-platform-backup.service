@@ -1,0 +1,27 @@
+# Contractor Platform — backup service unit (DT-011A.5 §22).
+#
+# NOT installed or enabled by this sprint — a versioned template only. Copy to
+# /etc/systemd/system/ on the real VPS (Sprint 11B), adjust the two absolute
+# paths below to match where this repository is checked out, then:
+#   systemctl daemon-reload
+#   systemctl enable --now contractor-platform-backup.timer
+#
+# No secret is embedded here: backup-all.sh resolves infra/backup/env/backup.env
+# itself (see lib.sh, BACKUP_ENV_FILE), so this unit only needs to know where
+# the script lives, not any credential.
+
+[Unit]
+Description=Contractor Platform backup (PostgreSQL, backend_storage, caddy_data)
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+# CHANGE ME: absolute path to this repository checkout on the real VPS.
+WorkingDirectory=/opt/contractor-platform/infra/backup/scripts
+ExecStart=/opt/contractor-platform/infra/backup/scripts/backup-all.sh
+# A non-zero exit here is exactly what makes `systemctl status
+# contractor-platform-backup.service` and `journalctl -u
+# contractor-platform-backup.service` show the run as failed — see
+# infra/backup/README.md "Observabilidade". No external notification wired up
+# yet; OnFailure= is a natural future extension point, not implemented now.

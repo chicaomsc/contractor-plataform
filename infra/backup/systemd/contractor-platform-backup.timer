@@ -1,0 +1,23 @@
+# Contractor Platform — daily backup timer (DT-011A.5 §16/§17/§22).
+#
+# NOT installed or enabled by this sprint — a versioned template only.
+#
+# 03:15 UTC is a reasonable default for a single early client (low-traffic
+# hours in most of its likely timezones) — it is an adjustable default, not an
+# agreed SLA. Change OnCalendar= freely; nothing else depends on this exact
+# time.
+
+[Unit]
+Description=Daily timer for contractor-platform-backup.service
+
+[Timer]
+OnCalendar=*-*-* 03:15:00 UTC
+# If the VPS was down/rebooting at the scheduled time, run the missed backup
+# as soon as the system is back up, instead of silently waiting for tomorrow.
+Persistent=true
+# Small jitter so backup doesn't always fire at the exact same wall-clock
+# second as other scheduled maintenance; harmless, not load-bearing.
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target
