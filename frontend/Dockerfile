@@ -57,12 +57,12 @@ USER node
 
 EXPOSE 3000
 
-# No dedicated health endpoint exists yet in the app (see infra/README.md — tracked
-# as a Sprint 11A.2 follow-up). Checking "/" is a deliberate, documented stand-in:
-# it is public (no auth), always resolves through the same Next.js server process,
-# and node:22-alpine already ships BusyBox wget, so no extra package is installed.
+# Dedicated health route (Sprint 11A.2) — src/app/api/health/route.ts. Trivial by
+# design: no backend call, no data fetch, so it never reports unhealthy because of
+# something unrelated to the Next.js process itself (e.g. the public landing page's
+# own rendering). node:22-alpine already ships BusyBox wget, so no extra package.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD wget -q -O /dev/null http://127.0.0.1:3000/ || exit 1
+    CMD wget -q -O /dev/null http://127.0.0.1:3000/api/health || exit 1
 
 # Exec form + standalone server.js as PID 1: no "npm start" wrapper, no npm install
 # at container startup. Node's default SIGTERM handling closes the HTTP server

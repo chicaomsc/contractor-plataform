@@ -52,6 +52,7 @@ public class SecurityConfig {
                                 "/public/**",
                                 "/uploads/**",
                                 "/actuator/health",
+                                "/actuator/health/**",
                                 "/api-docs/**",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html"
@@ -66,7 +67,11 @@ public class SecurityConfig {
     @Bean
     public UrlBasedCorsConfigurationSource corsConfigurationSource() {
         var configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(allowedOrigins);
+        // Spring's relaxed binding for a comma-separated List<String> does not trim
+        // whitespace around each element, so " https://a.pt, https://b.pt" would
+        // otherwise leave a literal leading space in an allowed origin.
+        configuration.setAllowedOrigins(
+                allowedOrigins.stream().map(String::trim).filter(origin -> !origin.isBlank()).toList());
         configuration.setAllowedMethods(List.of("GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept"));
         configuration.setExposedHeaders(List.of("Location"));
