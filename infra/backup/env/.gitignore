@@ -1,0 +1,11 @@
+# Real backup config files must never be committed. Same reasoning as
+# infra/env/.gitignore: the root .gitignore's `.env`/`.env.*` patterns only
+# match dotfiles (`.env.production`), not this directory's `backup.env`
+# naming convention — scoped locally instead.
+*.env
+!*.env.example
+
+# Restic repository password files
+restic-password
+*.password
+*.secret

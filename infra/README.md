@@ -1,4 +1,4 @@
-# Infra — Contractor Platform (Sprints 11A.1 + 11A.2 + 11A.3 + 11A.4)
+# Infra — Contractor Platform (Sprints 11A.1 + 11A.2 + 11A.3 + 11A.4 + 11A.5)
 
 Fundação de containers de produção (11A.1): imagens Docker do backend e do frontend, e
 um Docker Compose que sobe o stack completo (frontend + backend + PostgreSQL)
@@ -7,13 +7,16 @@ localmente, simulando produção. Configuração de produção (11A.2): profile 
 storage validado no startup, JVM/CPU/memória, logs. Reverse proxy (11A.3): Caddy como
 único ponto de entrada público — roteamento de `/`, `/api/*` e `/uploads/*`,
 compressão, persistência e healthcheck do próprio Caddy; `frontend`/`backend`/
-`postgres` deixam de publicar porta no host. Pipeline de imagens (11A.4, este
-documento atualizado): GitHub Actions builda e publica `backend`/`frontend` no GHCR,
-taggeadas de forma imutável pelo commit SHA — ver "GHCR Image Pipeline" abaixo. **Não**
-cobre HTTPS real, HSTS, Cloudflare, domínio real, provisionamento de VPS, Terraform,
-deploy remoto por SSH, backup, Storage Box, systemd, monitoramento externo ou cookies
-`HttpOnly` para o JWT — esses itens são de etapas posteriores (ver "Próximas etapas" no
-final deste documento).
+`postgres` deixam de publicar porta no host. Pipeline de imagens (11A.4): GitHub
+Actions builda e publica `backend`/`frontend` no GHCR, taggeadas de forma imutável
+pelo commit SHA — ver "GHCR Image Pipeline" abaixo. Backup/restore (11A.5, este
+documento atualizado): scripts em `infra/backup/` fazem backup do PostgreSQL,
+`backend_storage` e `caddy_data` via Restic — ver "Backup / Restore" abaixo e o
+runbook completo em [infra/backup/README.md](backup/README.md). **Não** cobre HTTPS
+real, HSTS, Cloudflare, domínio real, provisionamento de VPS, Terraform, deploy
+remoto por SSH, Storage Box real, systemd instalado de verdade, monitoramento
+externo ou cookies `HttpOnly` para o JWT — esses itens são de etapas posteriores (ver
+"Próximas etapas" no final deste documento).
 
 ---
 
@@ -766,6 +769,61 @@ mensurável.
 
 ---
 
+## Backup / Restore (Sprint 11A.5)
+
+Decisão completa em
+[docs/design/DT-011A.5-backup-restore.md](../docs/design/DT-011A.5-backup-restore.md).
+Runbook operacional completo (setup, comandos, troubleshooting) em
+[infra/backup/README.md](backup/README.md) — esta seção é só o resumo.
+
+### O quê e como
+
+| Dado | Classificação | Ferramenta |
+|---|---|---|
+| PostgreSQL | Obrigatório | `pg_dump --format=custom`, dentro do container `postgres`, staged localmente e validado antes de ir para o Restic |
+| `backend_storage` | Obrigatório | Restic lê o volume via `--volumes-from backend:ro` — sem parar o container, backup crash-consistent |
+| `caddy_data` | Recomendado/operacional, não crítico de negócio | Mesmo mecanismo, `--volumes-from caddy:ro` |
+| `caddy_config` | Não entra — 100% derivado do `Caddyfile` já versionado | — |
+
+Restic roda sempre como container efêmero (`restic/restic:0.19.1`, versão pinada,
+nunca `:latest`) — nunca instalado dentro dos containers de aplicação. Nenhum
+serviço novo entra em `docker-compose.prod.yml`.
+
+### Nesta sprint: repositório local, não Storage Box real
+
+Toda a implementação foi validada com um repositório Restic **local** (um
+diretório neste host) — a Hetzner Storage Box real, credenciais reais e a VPS
+real são Sprint 11B. Trocar para a Storage Box real é só mudar
+`RESTIC_REPOSITORY` para `sftp:<user>@<host>:/caminho` — nenhum script muda.
+
+### Scripts
+
+```
+infra/backup/
+  README.md                # runbook completo
+  env/backup.env.example   # placeholders — copie para backup.env (gitignored)
+  scripts/
+    lib.sh                 # helpers compartilhados (logging, validação, restic_run)
+    backup-postgres.sh
+    backup-files.sh        # backend_storage e/ou caddy_data
+    backup-all.sh          # orquestra os três + retenção (só se tudo tiver sucesso)
+    restore-postgres.sh    # dry-run por padrão; --confirm para restaurar de fato
+    restore-files.sh       # idem, snapshot → staging → validação → cópia controlada
+  systemd/                 # templates versionados, NÃO instalados nesta sprint
+    contractor-platform-backup.service
+    contractor-platform-backup.timer
+```
+
+### Retenção, RPO/RTO
+
+7 diários + 4 semanais + 6 mensais (por tag, `--group-by tags`). RPO ≤ 24h,
+RTO ≤ algumas horas — premissas técnicas do MVP, não SLA contratual. Detalhes,
+troubleshooting, disaster recovery total e a relação com rollback de imagem
+GHCR (`APP_VERSION`) vs. restore de banco (Flyway não faz downgrade) estão no
+runbook completo.
+
+---
+
 ## Limitações desta etapa (Sprints 11A.1 + 11A.2 + 11A.3 + 11A.4)
 
 - **Sem Cloudflare, sem domínio real, sem TLS/HTTPS real** — `CADDY_HOST=:80` serve
@@ -795,19 +853,30 @@ mensurável.
 - **Sem hardening adicional do container Caddy** além de `read_only`/`tmpfs` — sem
   imagem customizada non-root, sem `cap_add`, sem revisão de superfície além do que
   já vem na imagem oficial.
+- **Backup validado só contra repositório Restic local** — o backend SFTP contra a
+  Hetzner Storage Box real não foi exercitado (sem conta real nesta sprint); só o
+  cliente `sftp`/`ssh` presente na imagem `restic/restic:0.19.1` foi confirmado.
+  Trocar `RESTIC_REPOSITORY` para `sftp:...` é a única mudança esperada quando a
+  Storage Box existir.
+- **Restore total (VPS nova hipotética) documentado, não executado de ponta a ponta**
+  — não há VPS real para testar contra; o roteiro em `infra/backup/README.md`
+  "Disaster Recovery Total" é o plano a validar na Sprint 11B.
+- **systemd de backup é só template versionado** — `contractor-platform-backup.
+  {service,timer}` não foram instalados/habilitados em nenhum ambiente real.
 
 ## Próximas etapas (fora desta sprint)
 
-- **Sprint 11A.5:** backup (Restic, Storage Box) — relevante também para o cenário de
-  rollback de banco que o pipeline GHCR deliberadamente não resolve.
 - **Sprint 11A.6:** consolidação final da documentação operacional.
 - **Sprint 11B:** provisionamento real da VPS Hetzner, Terraform (se adotado),
-  autenticação de `docker pull` na VPS (se a visibilidade do GHCR mudar), e revisão
-  dos valores provisórios de CPU/memória (incluindo o `caddy`) contra o hardware real.
+  autenticação de `docker pull` na VPS (se a visibilidade do GHCR mudar), revisão
+  dos valores provisórios de CPU/memória (incluindo o `caddy`) contra o hardware
+  real, provisionamento da Hetzner Storage Box real, instalação dos templates
+  systemd de backup, e execução real do disaster recovery total.
 - **Sprint 11C+ (não planejada em detalhe ainda):** domínio real, DNS/Cloudflare, TLS
   automático via ACME (só trocar `CADDY_HOST`), HSTS.
 - **Multi-tenant real no frontend:** eliminar `NEXT_PUBLIC_COMPANY_SLUG` como
   build-arg, resolver tenant via `Host`/domínio em runtime — quando um 2º cliente for
   onboardado.
 - **Etapas seguintes (não planejadas em detalhe ainda):** deploy por SSH,
-  monitoramento externo, observabilidade completa.
+  monitoramento externo, observabilidade completa, notificação de falha de backup
+  além de `journalctl`.
