@@ -102,7 +102,7 @@ describe("PublicEstimateSharePage", () => {
 
     expect(screen.getByRole("link", { name: /Baixar PDF/ })).toHaveAttribute(
       "href",
-      "http://api.test/public/share/abc123/pdf",
+      "http://api.test/api/public/share/abc123/pdf",
     );
   });
 

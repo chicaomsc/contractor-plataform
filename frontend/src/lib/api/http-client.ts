@@ -1,4 +1,5 @@
 import { getPublicEnv } from "@/lib/env/public-env";
+import { withApiPrefix } from "./api-path";
 import { ApiError, type ApiErrorBody } from "./errors";
 
 const DEFAULT_TIMEOUT_MS = 8000;
@@ -54,14 +55,17 @@ export async function apiRequest<T>(
   const signal = composeAbortSignal(timeoutController.signal, options.signal);
 
   try {
-    const response = await fetch(new URL(path, env.NEXT_PUBLIC_API_BASE_URL), {
-      ...options,
-      headers: {
-        Accept: "application/json",
-        ...options.headers,
+    const response = await fetch(
+      new URL(withApiPrefix(path), env.NEXT_PUBLIC_API_BASE_URL),
+      {
+        ...options,
+        headers: {
+          Accept: "application/json",
+          ...options.headers,
+        },
+        signal,
       },
-      signal,
-    });
+    );
 
     if (!response.ok) {
       const body = await parseErrorBody(response);

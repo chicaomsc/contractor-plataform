@@ -1,0 +1,46 @@
+# Contractor Platform — Caddy reverse proxy (Sprint 11A.3).
+# Design: docs/design/DT-011A.3-caddy-reverse-proxy.md
+#
+# {$CADDY_HOST} makes this the same file for local validation and future production:
+#   - CADDY_HOST=:80            → plain HTTP, Caddy never attempts automatic HTTPS/ACME
+#   - CADDY_HOST=dominio.tld    → Caddy automatically provisions/renews a real TLS
+#                                 certificate (ACME) — no other change to this file.
+# No real domain is configured here — see infra/env/production.env.example.
+
+{$CADDY_HOST} {
+	encode zstd gzip
+
+	log {
+		output stdout
+		format json
+	}
+
+	# /api/* → backend, with the /api prefix stripped before proxying. The Spring
+	# controllers were never renamed to add an /api prefix (see DT §5.2/§7) — this is
+	# the only place that prefix exists at all.
+	handle_path /api/* {
+		reverse_proxy backend:8080
+	}
+
+	# /uploads/* → backend, WITHOUT stripping the prefix — the backend's own route
+	# already is /uploads/** (StorageWebConfig), and the frontend's asset-URL
+	# resolvers already build exactly this path from the API's own responses.
+	handle /uploads/* {
+		reverse_proxy backend:8080
+	}
+
+	# Everything else → frontend. Includes /dashboard/**, /login, /share/[token],
+	# /_next/* (served by the same standalone Next.js process), and the frontend's
+	# own /api/health (never routed here in practice — the Docker healthcheck for
+	# the frontend container calls it directly inside the container, never through
+	# Caddy; see DT §7 "Nota sobre /api/health do frontend vs. /api/* do backend").
+	# Unknown routes fall through to Next.js's own not-found page (existing, not
+	# a Caddy-level 404).
+	handle {
+		reverse_proxy frontend:3000
+	}
+
+	handle_errors {
+		respond "{err.status_code} {err.status_text}"
+	}
+}

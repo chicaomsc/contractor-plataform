@@ -74,6 +74,16 @@ describe("adminApiRequestBlob", () => {
     expect(headers.get("Authorization")).toBe("Bearer my-token");
   });
 
+  it("prefixes the path with /api so Caddy's same-origin rule routes it to the backend", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(pdfResponse({ "Content-Type": "application/pdf" }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await adminApiRequestBlob("/estimates/e1/pdf", { accessToken: "tok" });
+
+    const [url] = fetchMock.mock.calls[0] as [URL, RequestInit];
+    expect(url.toString()).toBe("http://api.test/api/estimates/e1/pdf");
+  });
+
   it("throws an ApiError with the response status on failure (e.g. cross-tenant 404)", async () => {
     vi.stubGlobal(
       "fetch",
