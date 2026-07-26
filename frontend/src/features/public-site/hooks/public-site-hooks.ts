@@ -6,6 +6,7 @@ import {
   fetchPublicGallery,
   fetchPublicServices,
   fetchPublicSite,
+  fetchPublicTenant,
 } from "../api/public-site-api";
 import { publicSiteQueryKeys } from "../api/query-keys";
 import {
@@ -41,8 +42,20 @@ export function usePublicSite(companySlug: string | null) {
       const dto = await fetchPublicSite(companySlug, { signal });
       return mapPublicSiteDto(dto);
     },
-    enabled: true,
+    enabled: Boolean(companySlug),
     staleTime: SITE_STALE_TIME_MS,
+    retry: shouldRetry,
+  });
+}
+
+export function usePublicTenant() {
+  const host =
+    typeof window === "undefined" ? "__server__" : window.location.host;
+
+  return useQuery({
+    queryKey: publicSiteQueryKeys.tenant(host),
+    queryFn: ({ signal }) => fetchPublicTenant({ signal }),
+    staleTime: 0,
     retry: shouldRetry,
   });
 }

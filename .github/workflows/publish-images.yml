@@ -118,17 +118,12 @@ jobs:
           echo "short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
       # NEXT_PUBLIC_* are inlined into the client bundle at build time (Next.js
-      # constraint, not a choice made here — see infra/README.md). None of them is
-      # a secret, but none has a safe generic default either (see
-      # docs/design/DT-011A.4-ghcr-image-pipeline.md §12): NEXT_PUBLIC_COMPANY_SLUG
-      # is inherently tenant-specific, and the API/site URLs must match whatever
-      # origin Caddy actually serves. Failing clearly here beats silently baking in
-      # an empty string or a hardcoded tenant.
+      # constraint, not a choice made here — see infra/README.md). Tenant identity
+      # is resolved at runtime, so only public origins remain build arguments.
       - name: Validate required GitHub Actions Variables
         run: |
           missing=()
           [ -z "${{ vars.NEXT_PUBLIC_API_BASE_URL }}" ] && missing+=(NEXT_PUBLIC_API_BASE_URL)
-          [ -z "${{ vars.NEXT_PUBLIC_COMPANY_SLUG }}" ] && missing+=(NEXT_PUBLIC_COMPANY_SLUG)
           [ -z "${{ vars.NEXT_PUBLIC_SITE_URL }}" ] && missing+=(NEXT_PUBLIC_SITE_URL)
           if [ ${#missing[@]} -gt 0 ]; then
             echo "::error::Missing required GitHub Actions Variables: ${missing[*]}. Configure them under Settings > Secrets and variables > Actions > Variables before running this workflow. See infra/README.md (\"GitHub Actions Variables\")."
@@ -167,15 +162,10 @@ jobs:
           push: true
           build-args: |
             NEXT_PUBLIC_API_BASE_URL=${{ vars.NEXT_PUBLIC_API_BASE_URL }}
-            NEXT_PUBLIC_COMPANY_SLUG=${{ vars.NEXT_PUBLIC_COMPANY_SLUG }}
             NEXT_PUBLIC_SITE_URL=${{ vars.NEXT_PUBLIC_SITE_URL }}
           tags: ${{ steps.meta.outputs.tags }}
-          # Extra label (beyond metadata-action's standard OCI set) recording which
-          # tenant is baked into this specific image — see DT §12: the image name is
-          # generic ("contractor-platform-frontend") but its contents are not yet.
           labels: |
             ${{ steps.meta.outputs.labels }}
-            io.chicaodw.tenant=${{ vars.NEXT_PUBLIC_COMPANY_SLUG }}
           provenance: true
           sbom: true
           cache-from: type=gha,scope=frontend

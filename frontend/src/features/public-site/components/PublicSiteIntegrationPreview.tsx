@@ -95,7 +95,7 @@ export function PublicSiteIntegrationPreview({
               Slug público não configurado
             </h1>
             <p className="mb-0 text-[var(--muted-foreground)]">
-              Configure `NEXT_PUBLIC_COMPANY_SLUG` para carregar os dados
+              Resolva o tenant público antes de carregar os dados
               públicos.
             </p>
           </div>

@@ -7,8 +7,11 @@ export type AuthSession = {
   refreshToken: string;
   user: {
     id: string;
+    companyId: string | null;
     email: string;
     name: string;
+    role: "OWNER" | "SUPER_ADMIN";
+    status: "ACTIVE" | "INACTIVE" | "PENDING";
   };
   company: {
     id: string;
@@ -16,6 +19,9 @@ export type AuthSession = {
     slug: string;
   };
 };
+
+export const platformAdminEmail = "platform.e2e@contractor.test";
+export const platformAdminPassword = "SecureAdmin123!";
 
 export async function registerAccount(
   request: APIRequestContext,
@@ -46,6 +52,15 @@ export async function loginViaUi(page: Page, email: string, password: string) {
   await page.getByRole("button", { name: "Entrar" }).click();
   await expect(page).toHaveURL(/\/dashboard/);
   await expect(page.getByText("Status do site")).toBeVisible();
+}
+
+export async function loginAdminViaUi(page: Page) {
+  await page.goto("/admin/login");
+  await page.getByLabel("Email").fill(platformAdminEmail);
+  await page.getByLabel("Password").fill(platformAdminPassword);
+  await page.getByRole("button", { name: "Entrar" }).click();
+  await expect(page).toHaveURL(/\/admin/);
+  await expect(page.getByText("Administração da plataforma")).toBeVisible();
 }
 
 export async function deleteCreatedServices(

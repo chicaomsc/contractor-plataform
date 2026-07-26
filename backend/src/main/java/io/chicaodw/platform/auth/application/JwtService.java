@@ -21,11 +21,16 @@ public class JwtService {
 
     public String generateAccessToken(User user) {
         long now = System.currentTimeMillis();
-        return Jwts.builder()
+        var builder = Jwts.builder()
                 .subject(user.getId().toString())
                 .claim("email", user.getEmail())
-                .claim("role", user.getRole().name())
-                .claim("companyId", user.getCompanyId().toString())
+                .claim("role", user.getRole().name());
+        // SUPER_ADMIN has no company — the claim is simply omitted rather than
+        // encoding a sentinel value (see DT-011A.7 §5).
+        if (user.getCompanyId() != null) {
+            builder.claim("companyId", user.getCompanyId().toString());
+        }
+        return builder
                 .issuedAt(new Date(now))
                 .expiration(new Date(now + jwtProperties.getAccessTokenTtl() * 1_000L))
                 .signWith(signingKey())

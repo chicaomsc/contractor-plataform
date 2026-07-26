@@ -53,9 +53,14 @@ export const publicGalleryItemDtoSchema = z.object({
   featured: z.boolean(),
 });
 
+export const tenantResolutionDtoSchema = z.object({
+  slug: z.string(),
+});
+
 export const publicServicesDtoSchema = z.array(publicServiceDtoSchema);
 export const publicGalleryDtoSchema = z.array(publicGalleryItemDtoSchema);
 
 export type PublicSiteDto = z.infer<typeof publicSiteDtoSchema>;
 export type PublicServiceDto = z.infer<typeof publicServiceDtoSchema>;
 export type PublicGalleryItemDto = z.infer<typeof publicGalleryItemDtoSchema>;
+export type TenantResolutionDto = z.infer<typeof tenantResolutionDtoSchema>;

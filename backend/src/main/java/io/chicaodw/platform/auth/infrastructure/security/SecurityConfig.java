@@ -33,6 +33,7 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http,
                                            JwtAuthenticationFilter jwtFilter,
+                                           ActiveAccountFilter activeAccountFilter,
                                            JwtAuthenticationEntryPoint entryPoint) throws Exception {
         return http
                 .cors(Customizer.withDefaults())
@@ -49,6 +50,7 @@ public class SecurityConfig {
                                 "/auth/register",
                                 "/auth/login",
                                 "/auth/refresh",
+                                "/auth/invites/accept",
                                 "/public/**",
                                 "/uploads/**",
                                 "/actuator/health",
@@ -57,10 +59,15 @@ public class SecurityConfig {
                                 "/swagger-ui/**",
                                 "/swagger-ui.html"
                         ).permitAll()
+                        // Defense in depth alongside @PreAuthorize on AdminController
+                        // (DT-011A.7 §6) — protects /admin/** even if a future
+                        // endpoint forgets the method-security annotation.
+                        .requestMatchers("/admin/**").hasRole("SUPER_ADMIN")
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(ex -> ex.authenticationEntryPoint(entryPoint))
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(activeAccountFilter, JwtAuthenticationFilter.class)
                 .build();
     }
 

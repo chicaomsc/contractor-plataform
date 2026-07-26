@@ -33,6 +33,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -171,6 +172,47 @@ class AuthServiceTest {
                 .isInstanceOf(BadCredentialsException.class);
     }
 
+    @Test
+    void login_inactiveCompany_throwsDisabledException() {
+        company.setStatus(CompanyStatus.INACTIVE);
+        var userDetails = new PlatformUserDetails(user);
+        var authentication = new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+        when(authenticationManager.authenticate(any())).thenReturn(authentication);
+        when(companyRepository.findById(companyId)).thenReturn(Optional.of(company));
+
+        assertThatThrownBy(() -> authService.login(new LoginRequest("alice@example.com", "password1")))
+                .isInstanceOf(DisabledException.class);
+    }
+
+    @Test
+    void login_superAdmin_returnsNullCompany_noNpe() {
+        User superAdmin = new User();
+        ReflectionTestUtils.setField(superAdmin, "id", UUID.randomUUID());
+        ReflectionTestUtils.setField(superAdmin, "companyId", null);
+        superAdmin.setEmail("admin@example.com");
+        superAdmin.setPasswordHash("hashed");
+        superAdmin.setName("Platform Admin");
+        superAdmin.setRole(UserRole.SUPER_ADMIN);
+        superAdmin.setStatus(UserStatus.ACTIVE);
+
+        var userDetails = new PlatformUserDetails(superAdmin);
+        var authentication = new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+        when(authenticationManager.authenticate(any())).thenReturn(authentication);
+        when(jwtService.generateAccessToken(any())).thenReturn("access-token");
+        when(refreshTokenRepository.save(any())).thenAnswer(inv -> {
+            RefreshToken rt = inv.getArgument(0);
+            ReflectionTestUtils.setField(rt, "id", UUID.randomUUID());
+            return rt;
+        });
+        when(authMapper.toUserResponse(any())).thenReturn(
+                new UserResponse(superAdmin.getId(), null, "admin@example.com", "Platform Admin", "SUPER_ADMIN", "ACTIVE"));
+
+        AuthResponse response = authService.login(new LoginRequest("admin@example.com", "password1"));
+
+        assertThat(response.company()).isNull();
+        assertThat(response.accessToken()).isEqualTo("access-token");
+    }
+
     // ── Refresh ───────────────────────────────────────────────────────────────
 
     @Test
@@ -210,7 +252,65 @@ class AuthServiceTest {
                 .hasMessageContaining("expired");
     }
 
+    @Test
+    void refresh_inactiveCompany_throwsDisabledException() {
+        RefreshToken stored = new RefreshToken();
+        ReflectionTestUtils.setField(stored, "id", UUID.randomUUID());
+        stored.setUserId(userId);
+        stored.setToken("valid-token");
+        stored.setExpiresAt(Instant.now().plusSeconds(3600));
+
+        company.setStatus(CompanyStatus.INACTIVE);
+        when(refreshTokenRepository.findByToken("valid-token")).thenReturn(Optional.of(stored));
+        when(refreshTokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(companyRepository.findById(companyId)).thenReturn(Optional.of(company));
+
+        assertThatThrownBy(() -> authService.refresh("valid-token"))
+                .isInstanceOf(DisabledException.class);
+    }
+
+    @Test
+    void refresh_inactiveUser_throwsDisabledException() {
+        RefreshToken stored = new RefreshToken();
+        ReflectionTestUtils.setField(stored, "id", UUID.randomUUID());
+        stored.setUserId(userId);
+        stored.setToken("valid-token");
+        stored.setExpiresAt(Instant.now().plusSeconds(3600));
+
+        user.setStatus(UserStatus.INACTIVE);
+        when(refreshTokenRepository.findByToken("valid-token")).thenReturn(Optional.of(stored));
+        when(refreshTokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> authService.refresh("valid-token"))
+                .isInstanceOf(DisabledException.class);
+    }
+
     // ── Me ────────────────────────────────────────────────────────────────────
+
+    @Test
+    void me_superAdmin_returnsNullCompanyBrandingAndSettings() {
+        User superAdmin = new User();
+        UUID superAdminId = UUID.randomUUID();
+        ReflectionTestUtils.setField(superAdmin, "id", superAdminId);
+        ReflectionTestUtils.setField(superAdmin, "companyId", null);
+        superAdmin.setEmail("admin@example.com");
+        superAdmin.setPasswordHash("hashed");
+        superAdmin.setName("Platform Admin");
+        superAdmin.setRole(UserRole.SUPER_ADMIN);
+        superAdmin.setStatus(UserStatus.ACTIVE);
+
+        when(userRepository.findById(superAdminId)).thenReturn(Optional.of(superAdmin));
+        when(authMapper.toUserResponse(any())).thenReturn(
+                new UserResponse(superAdminId, null, "admin@example.com", "Platform Admin", "SUPER_ADMIN", "ACTIVE"));
+
+        MeResponse me = authService.me(superAdminId);
+
+        assertThat(me.company()).isNull();
+        assertThat(me.branding()).isNull();
+        assertThat(me.settings()).isNull();
+    }
 
     @Test
     void me_authenticated_returnsFullProfile() {

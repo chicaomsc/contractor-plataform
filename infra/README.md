@@ -317,7 +317,7 @@ ativa `backend/src/main/resources/application-prod.yml`, que soma (não substitu
 
 | Categoria | Variáveis | Efeito de mudar o valor |
 |---|---|---|
-| Build-time (`NEXT_PUBLIC_*`) | `NEXT_PUBLIC_API_BASE_URL`, `NEXT_PUBLIC_COMPANY_SLUG`, `NEXT_PUBLIC_SITE_URL` | **Exige reconstruir a imagem** (`docker compose build frontend` ou `up --build`) — são inlined no bundle JS do browser durante `next build`; reiniciar o container sozinho não muda nada já compilado |
+| Build-time (`NEXT_PUBLIC_*`) | `NEXT_PUBLIC_API_BASE_URL`, `NEXT_PUBLIC_SITE_URL` | **Exige reconstruir a imagem** (`docker compose build frontend` ou `up --build`) — são inlined no bundle JS do browser durante `next build`; reiniciar o container sozinho não muda nada já compilado |
 | Runtime | `PORT`, `HOSTNAME`, `NODE_OPTIONS` | Basta recriar o container (`up -d`), sem rebuild |
 | Fixas na imagem | `NODE_ENV=production` | Não configurável fora de um rebuild do `frontend/Dockerfile` |
 
@@ -593,29 +593,17 @@ especificamente para manter o rollback de container seguro por padrão; uma reve
 schema genuína exige uma migration manual revisada ou restauração de backup (Sprint
 11A.5, fora de escopo).
 
-### Frontend — imagem ainda tenant-specific (limitação temporária)
+### Frontend — imagem genérica multi-tenant
 
-`NEXT_PUBLIC_API_BASE_URL`, `NEXT_PUBLIC_COMPANY_SLUG` e `NEXT_PUBLIC_SITE_URL` são
-inlined no bundle JS **no build** (constraint do Next.js, não escolha deste projeto).
-Nesta sprint, **continuam sendo build-time** — nenhuma refatoração para resolução em
-runtime foi feita. Na prática:
+`NEXT_PUBLIC_API_BASE_URL` e `NEXT_PUBLIC_SITE_URL` continuam inlined no bundle JS
+**no build** (constraint do Next.js, não escolha deste projeto). Tenant identity não
+é build-time: a rota pública chama `GET /api/public/tenant` em runtime, pelo mesmo
+origin, e o backend resolve a empresa pelo `Host` real da requisição.
 
-- **A imagem `contractor-platform-frontend` publicada contém um tenant específico
-  baked-in** — hoje, o valor configurado na GitHub Actions Variable
-  `NEXT_PUBLIC_COMPANY_SLUG` (ex.: `jr-pinturas`). A rota raiz `/` dessa imagem sempre
-  renderiza a mesma empresa, não importa quem a rode.
-- **Mudar `NEXT_PUBLIC_COMPANY_SLUG` exige rebuild** — atualizar a Variable no GitHub e
-  disparar `workflow_dispatch` (ou um novo push relevante) gera uma **nova** imagem;
-  não existe forma de trocar o tenant de uma imagem já publicada sem reconstruí-la.
-- **Isso é uma limitação temporária, não a arquitetura final** — o backend já é
-  genuinamente multi-tenant (isolamento por `company_id`, testado); só a landing
-  pública do frontend está presa a um tenant por build. Uma imagem frontend realmente
-  genérica exigiria resolver o tenant em runtime (ex.: middleware mapeando
-  `Host`/domínio → slug via chamada à API), o que é uma refatoração deliberadamente
-  fora do escopo desta sprint — fica para quando um 2º cliente for onboardado.
-- A imagem publicada carrega um label OCI extra (`io.chicaodw.tenant=<slug>`) —
-  registra qual tenant está baked-in naquele build específico, para que ninguém
-  presuma, pelo nome genérico da imagem, que ela serve qualquer cliente.
+Na prática, a mesma imagem `contractor-platform-frontend` publicada pode servir
+múltiplos tenants. Trocar/adicionar tenant não exige rebuild de frontend; exige que o
+Host resolva corretamente no backend, com `PLATFORM_DEFAULT_TENANT_SLUG` podendo
+servir como fallback operacional temporário.
 
 ### GitHub Actions Variables necessárias
 
@@ -626,13 +614,11 @@ bundle JS do browser):
 | Variable | Obrigatória? | Efeito se ausente |
 |---|---|---|
 | `NEXT_PUBLIC_API_BASE_URL` | Sim | Job `frontend` falha explicitamente antes do build (`::error::`), não builda com valor vazio |
-| `NEXT_PUBLIC_COMPANY_SLUG` | Sim | Mesmo — nunca há um default seguro/genérico para qual tenant embutir |
 | `NEXT_PUBLIC_SITE_URL` | Sim | Mesmo |
 
-Nenhum dos três tem valor específico da JR Pinturas hardcoded no workflow — os valores
-vivem inteiramente nas Variables do repositório, editáveis sem tocar em código. Quando
-um domínio real existir (Cloudflare/DNS, Sprint 11C+), basta atualizar as Variables e
-disparar `workflow_dispatch` para republicar com os valores corretos.
+Nenhum valor específico da JR Pinturas fica hardcoded no workflow. Quando um domínio
+real existir (Cloudflare/DNS, Sprint 11C+), basta atualizar as Variables de origin e
+garantir que o backend resolve o Host esperado.
 
 ### Autenticação e permissões
 
@@ -756,9 +742,8 @@ runbook completo.
 - **GitHub Actions Variables (`NEXT_PUBLIC_*`) precisam ser configuradas manualmente**
   no repositório antes do primeiro push — o workflow falha explicitamente se
   ausentes, não assume um valor.
-- **Imagem frontend ainda é tenant-specific** — `NEXT_PUBLIC_COMPANY_SLUG` continua
-  build-time (ver "GHCR Image Pipeline" acima); resolução de tenant em runtime fica
-  para quando um 2º cliente existir.
+- **Imagem frontend genérica para tenants** — a landing resolve tenant por Host em
+  runtime via backend (ver "GHCR Image Pipeline" acima).
 - **Sem autenticação de `docker pull` na VPS** — como o pacote GHCR é público, isso não
   é necessário hoje; se a visibilidade mudar para privada no futuro, um token de
   leitura precisará ser configurado na VPS (Sprint 11B).
@@ -789,9 +774,8 @@ runbook completo.
   `CADDY_HOST`), HSTS — bloqueador para go-live, ver `docs/roadmap.md`.
 - **Sprint 11D:** validação final, handover operacional e go-live — ver
   `docs/roadmap.md` e [Checklist de Go-Live](../docs/operations/runbook.md#25-checklist-de-go-live).
-- **Multi-tenant real no frontend:** eliminar `NEXT_PUBLIC_COMPANY_SLUG` como
-  build-arg, resolver tenant via `Host`/domínio em runtime — quando um 2º cliente for
-  onboardado.
+- **Multi-tenant real no frontend:** já não depende de tenant baked-in; evolução
+  futura fica concentrada em DNS/domínios reais e Cloudflare.
 - **Etapas seguintes (não planejadas em detalhe ainda):** deploy por SSH,
   monitoramento externo, observabilidade completa, notificação de falha de backup
   além de `journalctl`.

@@ -78,7 +78,6 @@ describe("public site mappers", () => {
 
   it("resolves relative upload URLs against the public API base URL", () => {
     process.env.NEXT_PUBLIC_API_BASE_URL = "http://localhost:8081";
-    process.env.NEXT_PUBLIC_COMPANY_SLUG = "empresa-teste";
 
     const site = mapPublicSiteDto({
       slug: "empresa-teste",

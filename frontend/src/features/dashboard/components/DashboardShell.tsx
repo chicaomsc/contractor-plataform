@@ -125,7 +125,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
       <div className="border-t border-white/10 p-5">
         <p className="m-0 truncate text-sm font-semibold">
-          {session?.company.name}
+          {session?.company?.name}
         </p>
         <p className="m-0 mt-1 truncate text-xs text-white/55">
           {session?.user.email}
@@ -169,8 +169,8 @@ export function DashboardShell({ children }: DashboardShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { session } = useAuth();
   const companyLabel = useMemo(
-    () => session?.company.name ?? "Dashboard",
-    [session?.company.name],
+    () => session?.company?.name ?? "Dashboard",
+    [session?.company?.name],
   );
 
   return (

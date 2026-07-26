@@ -9,10 +9,23 @@ import { useForm } from "react-hook-form";
 import { useAuth } from "../hooks/auth-context";
 import {
   loginFormSchema,
+  type AuthResponse,
   type LoginFormValues,
 } from "../types/auth";
 
-export function LoginForm() {
+type LoginFormProps = {
+  variant?: "owner" | "admin";
+};
+
+function getRedirectPath(auth: AuthResponse, requestedNext: string | null) {
+  if (auth.user.role === "SUPER_ADMIN") {
+    return requestedNext?.startsWith("/admin") ? requestedNext : "/admin";
+  }
+
+  return requestedNext?.startsWith("/dashboard") ? requestedNext : "/dashboard";
+}
+
+export function LoginForm({ variant = "owner" }: LoginFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { login } = useAuth();
@@ -33,8 +46,8 @@ export function LoginForm() {
     setFormError(null);
 
     try {
-      await login(values);
-      router.replace(searchParams.get("next") ?? "/dashboard");
+      const auth = await login(values);
+      router.replace(getRedirectPath(auth, searchParams.get("next")));
     } catch (error) {
       setFormError(
         error instanceof ApiError
@@ -52,13 +65,17 @@ export function LoginForm() {
     >
       <div className="space-y-2">
         <p className="text-sm font-semibold uppercase tracking-[0.18em] text-primary">
-          Dashboard
+          {variant === "admin" ? "Platform Admin" : "Dashboard"}
         </p>
         <h1 className="m-0 font-display text-3xl font-bold">
-          Entrar na área administrativa
+          {variant === "admin"
+            ? "Entrar na administração da plataforma"
+            : "Entrar na área administrativa"}
         </h1>
         <p className="m-0 text-sm text-[var(--muted-foreground)]">
-          Use a conta criada no backend da plataforma.
+          {variant === "admin"
+            ? "Acesso restrito a contas SUPER_ADMIN."
+            : "Use a conta criada no backend da plataforma."}
         </p>
       </div>
 

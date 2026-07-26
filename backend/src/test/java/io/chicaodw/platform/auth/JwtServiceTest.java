@@ -88,4 +88,40 @@ class JwtServiceTest {
         assertThatThrownBy(() -> jwtService.parseClaims(tampered))
                 .isInstanceOf(JwtException.class);
     }
+
+    // ── SUPER_ADMIN (no company) — DT-011A.7 §5/§13 ────────────────────────────
+
+    @Test
+    void shouldGenerateTokenForSuperAdminWithoutThrowing() {
+        User superAdmin = new User();
+        superAdmin.setEmail("admin@example.com");
+        superAdmin.setPasswordHash("hash");
+        superAdmin.setName("Platform Admin");
+        superAdmin.setRole(UserRole.SUPER_ADMIN);
+        superAdmin.setStatus(UserStatus.ACTIVE);
+        ReflectionTestUtils.setField(superAdmin, "id", UUID.randomUUID());
+        ReflectionTestUtils.setField(superAdmin, "companyId", null);
+
+        String token = jwtService.generateAccessToken(superAdmin);
+
+        assertThat(token).isNotBlank();
+    }
+
+    @Test
+    void superAdminToken_omitsCompanyIdClaimEntirely() {
+        User superAdmin = new User();
+        superAdmin.setEmail("admin@example.com");
+        superAdmin.setPasswordHash("hash");
+        superAdmin.setName("Platform Admin");
+        superAdmin.setRole(UserRole.SUPER_ADMIN);
+        superAdmin.setStatus(UserStatus.ACTIVE);
+        ReflectionTestUtils.setField(superAdmin, "id", UUID.randomUUID());
+        ReflectionTestUtils.setField(superAdmin, "companyId", null);
+
+        String token  = jwtService.generateAccessToken(superAdmin);
+        Claims claims = jwtService.parseClaims(token);
+
+        assertThat(claims.get("companyId")).isNull();
+        assertThat(claims.get("role", String.class)).isEqualTo("SUPER_ADMIN");
+    }
 }

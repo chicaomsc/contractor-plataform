@@ -74,6 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAccessToken(null);
     queryClient.removeQueries({ queryKey: ["auth"] });
     queryClient.removeQueries({ queryKey: ["dashboard"] });
+    queryClient.removeQueries({ queryKey: ["platform-admin"] });
     router.replace("/login");
   }, [queryClient, router]);
 

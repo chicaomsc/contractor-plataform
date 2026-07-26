@@ -1,4 +1,5 @@
 export {
+  fetchPublicTenant,
   fetchPublicGallery as getPublicGallery,
   fetchPublicServices as getPublicServices,
   fetchPublicSite as getPublicSite,

@@ -1,5 +1,6 @@
 package io.chicaodw.platform.auth.domain;
 
 public enum UserRole {
-    OWNER
+    OWNER,
+    SUPER_ADMIN
 }
