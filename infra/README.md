@@ -1,4 +1,9 @@
-# Infra — Contractor Platform (Sprints 11A.1 + 11A.2 + 11A.3 + 11A.4 + 11A.5)
+# Infra — Contractor Platform (Sprints 11A.1–11A.6)
+
+Visão técnica da infraestrutura de produção: o que cada peça é e por que existe.
+**Para procedimentos operacionais do dia a dia (deploy, rollback, health checks,
+troubleshooting, checklists), ver o [Runbook de Produção](../docs/operations/runbook.md)
+— este documento não repete esse conteúdo.**
 
 Fundação de containers de produção (11A.1): imagens Docker do backend e do frontend, e
 um Docker Compose que sobe o stack completo (frontend + backend + PostgreSQL)
@@ -9,14 +14,16 @@ storage validado no startup, JVM/CPU/memória, logs. Reverse proxy (11A.3): Cadd
 compressão, persistência e healthcheck do próprio Caddy; `frontend`/`backend`/
 `postgres` deixam de publicar porta no host. Pipeline de imagens (11A.4): GitHub
 Actions builda e publica `backend`/`frontend` no GHCR, taggeadas de forma imutável
-pelo commit SHA — ver "GHCR Image Pipeline" abaixo. Backup/restore (11A.5, este
-documento atualizado): scripts em `infra/backup/` fazem backup do PostgreSQL,
-`backend_storage` e `caddy_data` via Restic — ver "Backup / Restore" abaixo e o
-runbook completo em [infra/backup/README.md](backup/README.md). **Não** cobre HTTPS
-real, HSTS, Cloudflare, domínio real, provisionamento de VPS, Terraform, deploy
-remoto por SSH, Storage Box real, systemd instalado de verdade, monitoramento
-externo ou cookies `HttpOnly` para o JWT — esses itens são de etapas posteriores (ver
-"Próximas etapas" no final deste documento).
+pelo commit SHA — ver "GHCR Image Pipeline" abaixo. Backup/restore (11A.5): scripts em
+`infra/backup/` fazem backup do PostgreSQL, `backend_storage` e `caddy_data` via
+Restic — ver "Backup / Restore" abaixo e o runbook especializado em
+[infra/backup/README.md](backup/README.md). Documentação operacional (11A.6, este
+documento reduzido): procedimentos do dia a dia consolidados no
+[Runbook de Produção](../docs/operations/runbook.md); `docs/roadmap.md` corrigido para
+refletir esta arquitetura. **Não** cobre HTTPS real, HSTS, Cloudflare, domínio real,
+provisionamento de VPS, Terraform, deploy remoto por SSH, Storage Box real, systemd
+instalado de verdade, monitoramento externo ou cookies `HttpOnly` para o JWT — esses
+itens são de etapas posteriores (ver "Próximas etapas" no final deste documento).
 
 ---
 
@@ -498,92 +505,13 @@ diagrama de arquitetura acima), não para o healthcheck em si.
   em `docs/security/authentication-review.md`, permanece fora do escopo — o mecanismo
   atual (access token JWT via header, refresh token opaco) não foi alterado.
 
-### Comandos de validação
+### Comandos de validação e troubleshooting
 
-Todos os comandos abaixo assumem `CADDY_HOST=:80`/`CADDY_HTTP_PORT=80` (os defaults
-de `production.env.example`) — troque `80` se você mudou `CADDY_HTTP_PORT`.
-
-```bash
-cd infra/compose
-
-# Config válido (variáveis obrigatórias resolvidas, sem erro de sintaxe)
-docker compose --env-file ../env/production.env -f docker-compose.prod.yml config
-
-# Subir com rebuild
-docker compose --env-file ../env/production.env -f docker-compose.prod.yml up -d --build
-
-# Estado dos quatro serviços — aguardar "healthy" em todos
-docker compose -f docker-compose.prod.yml ps
-
-# Profile ativo do backend
-docker compose -f docker-compose.prod.yml logs backend | grep -i "profile"
-
-# ── Evidência de que só o Caddy publica porta ──────────────────────────────
-docker compose -f docker-compose.prod.yml ps
-# esperado: coluna PORTS preenchida só na linha do "caddy"
-docker port "$(docker compose -f docker-compose.prod.yml ps -q backend)"   # esperado: vazio
-docker port "$(docker compose -f docker-compose.prod.yml ps -q frontend)"  # esperado: vazio
-docker port "$(docker compose -f docker-compose.prod.yml ps -q postgres)"  # esperado: vazio
-docker port "$(docker compose -f docker-compose.prod.yml ps -q caddy)"     # esperado: 80/tcp -> 0.0.0.0:80
-
-# ── Healthcheck do próprio Caddy (API admin, não o site block) ─────────────
-docker inspect --format '{{.State.Health.Status}}' "$(docker compose -f docker-compose.prod.yml ps -q caddy)"
-# esperado: healthy
-
-# ── Roteamento ──────────────────────────────────────────────────────────────
-curl -s -o /dev/null -w "HTTP %{http_code}\n" http://localhost/                       # esperado: 200 (frontend)
-curl -s -o /dev/null -w "HTTP %{http_code}\n" http://localhost/api/company             # esperado: 200/401 do backend, não 404 do Next.js
-curl -s -o /dev/null -w "HTTP %{http_code}\n" http://localhost/uploads/qualquer-arquivo-existente.png
-                                                                                        # esperado: 200 (se o arquivo existir) — nunca prefixado com /api
-
-# /actuator/health e /swagger-ui não devem ser alcançáveis publicamente pelo Caddy
-curl -s -o /dev/null -w "HTTP %{http_code}\n" http://localhost/actuator/health   # esperado: 404 do Next.js (catch-all), não 200 do Spring
-curl -s -o /dev/null -w "HTTP %{http_code}\n" http://localhost/swagger-ui/index.html
-                                                                                  # esperado: 404 do Next.js
-
-# Healthchecks internos do Docker continuam via rede Docker / dentro do container, não pelo Caddy:
-docker compose -f docker-compose.prod.yml exec backend wget -qO- http://127.0.0.1:8080/actuator/health/readiness
-docker compose -f docker-compose.prod.yml exec frontend wget -qO- http://127.0.0.1:3000/api/health
-
-# ── Headers de segurança — validados ATRAVÉS do Caddy, não direto no Next.js/Spring ──
-curl -sD - -o /dev/null http://localhost/ \
-  | grep -iE "content-security-policy|x-content-type-options|x-frame-options|referrer-policy|strict-transport-security"
-# esperado: os quatro primeiros presentes (vindos do Next.js), strict-transport-security AUSENTE
-
-# ── Compressão do Caddy ──────────────────────────────────────────────────────
-curl -sD - -o /dev/null -H "Accept-Encoding: zstd, gzip" http://localhost/ | grep -i content-encoding
-curl -sD - -o /dev/null -H "Accept-Encoding: gzip" http://localhost/api/company | grep -i content-encoding
-
-# ── CORS permitida vs. rejeitada (backstop — same-origin já não depende disto) ──
-curl -si -X OPTIONS http://localhost/api/auth/login \
-  -H "Origin: https://SEU_DOMINIO_CONFIGURADO" -H "Access-Control-Request-Method: POST" \
-  | grep -i access-control-allow-origin
-curl -si -X OPTIONS http://localhost/api/auth/login \
-  -H "Origin: https://origem-nao-permitida.example" -H "Access-Control-Request-Method: POST" \
-  | grep -i access-control-allow-origin   # esperado: sem correspondência
-
-# ── Limites de memória ──────────────────────────────────────────────────────
-docker stats --no-stream $(docker compose -f docker-compose.prod.yml ps -q)
-
-# ── Persistência: uploads e volumes do Caddy sobrevivem a down/up (NÃO down -v) ──
-docker compose -f docker-compose.prod.yml down
-docker compose --env-file ../env/production.env -f docker-compose.prod.yml up -d
-docker volume ls | grep -E "caddy_data|caddy_config|backend_storage|postgres_data"   # esperado: todos ainda existem
-```
-
-### Troubleshooting
-
-| Sintoma | Causa provável | Ação |
-|---|---|---|
-| `backend` sai (`Exited`) logo após subir, sem ficar `healthy` | `ProductionReadinessValidator` rejeitou a configuração | `docker compose logs backend` — a mensagem indica exatamente qual variável (nunca o valor do segredo) |
-| `backend` nunca fica `healthy`, mas não sai | `/actuator/health/readiness` respondendo `DOWN` | Verificar se o Postgres está `healthy` primeiro (`docker compose ps postgres`) |
-| CORS falha no browser mesmo com a origem "certa" | Espaço/protocolo/porta diferente do configurado, ou variável não redefinida (ainda no exemplo) | Conferir `APP_CORS_ALLOWED_ORIGINS` no `production.env` real, não no `.example` |
-| Mudei `NEXT_PUBLIC_API_BASE_URL` e nada mudou | Variável build-time — precisa de rebuild | `docker compose build frontend` (ou `up --build`), não só `restart` |
-| `docker compose up` recusa subir citando uma variável `is required` | Falta uma variável obrigatória em `production.env` (`POSTGRES_*`, `NEXT_PUBLIC_*`) | Comparar com `production.env.example` |
-| `caddy` nunca fica `healthy` | Config inválida no `Caddyfile`, ou porta 2019 (admin API) inacessível dentro do container | `docker compose logs caddy`; validar sintaxe com `docker run --rm -v "$(pwd)/../caddy/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile` |
-| `GET /api/algumacoisa` retorna 404 do Next.js em vez de resposta do backend | Rota não bate com `handle_path /api/*`, ou backend não está healthy | Conferir se o caminho tem exatamente o prefixo `/api/`; `docker compose ps backend` |
-| `/uploads/...` retorna 404 mesmo com o arquivo existindo | Caminho não corresponde ao que o backend realmente serve, ou volume `backend_storage` vazio (down -v acidental) | Conferir `resolveAdminAssetUrl`/`resolvePublicAssetUrl` no frontend; `docker compose exec backend ls /app/storage` |
-| `curl http://localhost/` dá "connection refused" | `CADDY_HTTP_PORT` diferente do usado no curl, ou `caddy` não subiu | `docker compose ps caddy`; conferir `CADDY_HTTP_PORT` em `production.env` |
+Movidos para o runbook operacional (Sprint 11A.6), que consolida validação
+pós-deploy, health checks e troubleshooting num único lugar em vez de duplicar
+comandos de teste espalhados por cada seção deste documento:
+[docs/operations/runbook.md § Checklist Pós-Deploy](../docs/operations/runbook.md#12-checklist-pós-deploy)
+e [§ Troubleshooting](../docs/operations/runbook.md#23-troubleshooting).
 
 ## GHCR Image Pipeline (Sprint 11A.4)
 
@@ -644,29 +572,12 @@ imagem. Isso já funciona com o `docker-compose.prod.yml` atual sem nenhuma muda
 estrutural: `image:` de `backend`/`frontend` já é
 `${BACKEND_IMAGE:-...}:${APP_VERSION:-local}` — 100% parametrizado.
 
-Fluxo futuro esperado numa VPS (Sprint 11B, ainda não implementado):
-
-```bash
-export APP_VERSION=<full-sha-publicado>
-docker compose --env-file infra/env/production.env -f infra/compose/docker-compose.prod.yml pull
-docker compose --env-file infra/env/production.env -f infra/compose/docker-compose.prod.yml up -d
-```
-
-**Nunca passe `--build`** nesse fluxo — isso reconstruiria a imagem localmente em vez
-de usar a publicada. `up -d` sozinho (sem `--build`) nunca invoca o bloco `build:`
-quando a imagem referenciada já existe (local ou recém-`pull`ada).
-
-### Rollback
-
-```bash
-export APP_VERSION=<sha-anterior>
-docker compose --env-file infra/env/production.env -f infra/compose/docker-compose.prod.yml pull
-docker compose --env-file infra/env/production.env -f infra/compose/docker-compose.prod.yml up -d
-```
-
-Funciona porque toda imagem publicada é imutável e referenciável por SHA
-indefinidamente. **Rollback de container não é rollback de banco de dados** — ver
-limitação do Flyway logo abaixo.
+Passo a passo de deploy e rollback (comandos, `--build` nunca deve ser usado nesse
+fluxo, checklist pós-deploy): [docs/operations/runbook.md § Deploy](../docs/operations/runbook.md#11-deploy)
+e [§ Rollback de Aplicação](../docs/operations/runbook.md#13-rollback-de-aplicação).
+Funciona sem mudança estrutural no Compose porque toda imagem publicada é imutável
+e referenciável por SHA indefinidamente. **Rollback de container não é rollback de
+banco de dados** — ver limitação do Flyway logo abaixo.
 
 ### Limitação do Flyway (importante)
 
@@ -773,8 +684,10 @@ mensurável.
 
 Decisão completa em
 [docs/design/DT-011A.5-backup-restore.md](../docs/design/DT-011A.5-backup-restore.md).
-Runbook operacional completo (setup, comandos, troubleshooting) em
-[infra/backup/README.md](backup/README.md) — esta seção é só o resumo.
+Runbook especializado completo (setup, comandos, troubleshooting) em
+[infra/backup/README.md](backup/README.md) — esta seção é só o resumo. Para o
+comando do dia a dia e como backup/restore se encaixam no ciclo de deploy/rollback,
+ver [docs/operations/runbook.md § Backup/Restore](../docs/operations/runbook.md#15-backup--restore-resumo).
 
 ### O quê e como
 
@@ -824,21 +737,22 @@ runbook completo.
 
 ---
 
-## Limitações desta etapa (Sprints 11A.1 + 11A.2 + 11A.3 + 11A.4)
+## Limitações desta etapa (Sprints 11A.1–11A.6)
 
 - **Sem Cloudflare, sem domínio real, sem TLS/HTTPS real** — `CADDY_HOST=:80` serve
   HTTP puro; o Caddyfile já suporta um domínio real sem alteração (ver "HTTP local
-  hoje, HTTPS real mais tarde" acima), mas isso não foi configurado nem testado nesta
-  sprint.
+  hoje, HTTPS real mais tarde" acima). **Isto é um bloqueador para go-live (Sprint
+  11C), não uma pendência desta etapa** — TLS foi deliberadamente sequenciado para
+  depois de a VPS/domínio reais existirem.
 - **Sem HSTS** — deliberado enquanto não há TLS real (ver seção acima).
 - **CPU/memória provisórios** — calculados sobre uma premissa de VPS (~2 vCPU/4 GB)
   ainda não confirmada; serão revisados na Sprint 11B quando a VPS Hetzner real for
   escolhida — inclui os limites do próprio `caddy`, adicionados nesta sprint com a
   mesma premissa provisória.
-- **Publicação real no GHCR ainda não foi validada em produção** — o workflow existe e
-  foi validado sintaticamente, mas só pode ser confirmado de fato (login, push,
-  visibilidade pública, `linux/amd64`) depois de um push/merge real para `main` — ver
-  "itens que dependem de push" no relatório de implementação.
+- **Publicação e visibilidade pública do GHCR confirmadas** — `docker pull --platform
+  linux/amd64` das duas imagens (`ghcr.io/chicaomsc/contractor-platform-{backend,frontend}:main`)
+  foi executado com sucesso, sem autenticação, confirmando `linux/amd64` e
+  visibilidade pública real (não apenas validação sintática do workflow).
 - **GitHub Actions Variables (`NEXT_PUBLIC_*`) precisam ser configuradas manualmente**
   no repositório antes do primeiro push — o workflow falha explicitamente se
   ausentes, não assume um valor.
@@ -866,14 +780,15 @@ runbook completo.
 
 ## Próximas etapas (fora desta sprint)
 
-- **Sprint 11A.6:** consolidação final da documentação operacional.
 - **Sprint 11B:** provisionamento real da VPS Hetzner, Terraform (se adotado),
   autenticação de `docker pull` na VPS (se a visibilidade do GHCR mudar), revisão
   dos valores provisórios de CPU/memória (incluindo o `caddy`) contra o hardware
   real, provisionamento da Hetzner Storage Box real, instalação dos templates
   systemd de backup, e execução real do disaster recovery total.
-- **Sprint 11C+ (não planejada em detalhe ainda):** domínio real, DNS/Cloudflare, TLS
-  automático via ACME (só trocar `CADDY_HOST`), HSTS.
+- **Sprint 11C:** domínio real, DNS/Cloudflare, TLS automático via ACME (só trocar
+  `CADDY_HOST`), HSTS — bloqueador para go-live, ver `docs/roadmap.md`.
+- **Sprint 11D:** validação final, handover operacional e go-live — ver
+  `docs/roadmap.md` e [Checklist de Go-Live](../docs/operations/runbook.md#25-checklist-de-go-live).
 - **Multi-tenant real no frontend:** eliminar `NEXT_PUBLIC_COMPANY_SLUG` como
   build-arg, resolver tenant via `Host`/domínio em runtime — quando um 2º cliente for
   onboardado.

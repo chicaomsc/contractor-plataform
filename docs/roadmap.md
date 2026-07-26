@@ -1,7 +1,7 @@
 # Roadmap do Produto
 
-**Versão:** 2.16 — Sprint 10D concluída  
-**Data:** 2026-07-18  
+**Versão:** 2.17 — Sprint 11A concluída (infraestrutura de produção)  
+**Data:** 2026-07-26  
 **Horizonte:** MVP + Pós-MVP imediato
 
 ---
@@ -43,6 +43,12 @@
 | Frontend — Estimate Builder (`/dashboard/estimates`) | Concluído |
 | Backend + Frontend — PDF profissional de orçamento | Concluído |
 | Backend + Frontend — Partilha pública de orçamento | Concluído |
+| Infra — Containers de produção (Docker, Compose) | Concluído (11A.1) |
+| Infra — Configuração de produção (profile `prod`, health, JVM) | Concluído (11A.2) |
+| Infra — Caddy como reverse proxy único | Concluído (11A.3) |
+| Infra — Pipeline de imagens no GHCR | Concluído (11A.4) |
+| Infra — Backup e restore (Restic) | Concluído (11A.5) |
+| Infra — Documentação operacional (runbook) | Concluído (11A.6) |
 
 ---
 
@@ -552,26 +558,81 @@
 
 ---
 
-## Sprint 12 — Deploy e Operação
+## Sprint 11A — Production Readiness (Infraestrutura) ✅
 
-**Objectivo:** Sistema em produção com operação mínima.
+**Objectivo:** Preparar toda a infraestrutura de produção — containers, configuração,
+reverse proxy, publicação de imagens, backup e documentação operacional — antes de
+provisionar a VPS real. Substitui integralmente o plano antigo de "Sprint 12"
+(Railway/Vercel/Supabase/PostgreSQL gerenciado), que nunca foi implementado e não
+reflete a arquitetura real adotada.
 
-**Backend:**
-- [ ] Rate limiting no login
-- [ ] Logs estruturados (JSON)
-- [ ] Deploy no Railway com variáveis de produção
+**Arquitetura implementada:** Docker Compose numa VPS própria (Hetzner, ainda a
+provisionar — Sprint 11B), com Caddy como único ponto de entrada público, imagens
+publicadas no GitHub Container Registry (GHCR) por commit SHA, e backup via Restic
+com destino planeado numa Hetzner Storage Box.
 
-**Frontend:**
-- [ ] Deploy no Vercel
-- [ ] Tratamento de erros globais (404, error boundary)
-- [ ] Loading states consistentes
+- [x] **11A.1 — Production Containers:** Dockerfiles multi-stage (backend/frontend), Docker Compose de produção, PostgreSQL 17, healthchecks, volumes nomeados.
+- [x] **11A.2 — Production Configuration:** profile Spring `prod`, fail-fast de configuração (`ProductionReadinessValidator`), liveness/readiness, shutdown gracioso, `NEXT_PUBLIC_*` build-time vs. runtime.
+- [x] **11A.3 — Caddy Reverse Proxy:** Caddy como único serviço com porta publicada; `/` → frontend, `/api/*` → backend (prefixo removido), `/uploads/*` → backend (prefixo mantido); backend/frontend/Postgres sem porta pública.
+- [x] **11A.4 — GHCR Image Pipeline:** `.github/workflows/publish-images.yml` publica `ghcr.io/chicaomsc/contractor-platform-{backend,frontend}` por commit SHA (full/short/`main`, nunca `:latest`), `linux/amd64`; estabilizado em `fix/ghcr-pipeline-stabilization`.
+- [x] **11A.5 — Backup / Restore:** scripts em `infra/backup/` (PostgreSQL via `pg_dump`, `backend_storage` e `caddy_data` via Restic), retenção 7/4/6, restore de banco/arquivo/disaster-recovery testados com dados reais.
+- [x] **11A.6 — Production Operations Documentation:** [docs/operations/runbook.md](operations/runbook.md) consolidado como fonte única de operação cotidiana; `docs/roadmap.md` (este documento) corrigido para refletir a arquitetura real.
 
-**Infra:**
-- [ ] PostgreSQL gerenciado
-- [ ] Backup automático
-- [ ] CORS configurado para domínio de produção
+**Documentação:** [DT-011A.2](design/DT-011A.2-production-configuration.md), [DT-011A.3](design/DT-011A.3-caddy-reverse-proxy.md), [DT-011A.4](design/DT-011A.4-ghcr-image-pipeline.md), [DT-011A.5](design/DT-011A.5-backup-restore.md), [DT-011A.6](design/DT-011A.6-production-operations.md), [infra/README.md](../infra/README.md), [infra/backup/README.md](../infra/backup/README.md).
 
-**Critério de saída:** Sistema em produção com o cliente beta. Fluxos do MVP testados manualmente.
+**Critério de saída:** ✅ Atingido — infraestrutura de produção completa e validada localmente (containers, Caddy, GHCR, backup/restore), documentação operacional consolidada. Falta apenas provisionar a VPS real (Sprint 11B) e o domínio/TLS reais (Sprint 11C).
+
+---
+
+## Sprint 11B — Infraestrutura Real (Hetzner)
+
+**Objectivo:** Provisionar a VPS Hetzner real e a Storage Box real, e colocar a
+infraestrutura já pronta (Sprint 11A) para rodar de fato.
+
+**Recebe pronto da Sprint 11A:** Dockerfiles, `docker-compose.prod.yml`, profile
+`prod`, Caddy, pipeline GHCR com imagens por SHA, scripts de backup/restore,
+templates systemd versionados, e este runbook.
+
+- [ ] Escolher e provisionar a VPS Hetzner (tamanho/sizing final)
+- [ ] Configurar firewall e acesso SSH
+- [ ] Instalar Docker Engine + Docker Compose v2 no host real
+- [ ] Criar estrutura de diretórios real (ex. `/opt/contractor-platform`) e `git clone`
+- [ ] Preencher `infra/env/production.env` real
+- [ ] Provisionar a Hetzner Storage Box real e testar SFTP de fato
+- [ ] Gerar `RESTIC_PASSWORD_FILE` real e guardá-lo externamente (password manager)
+- [ ] Instalar e habilitar os templates systemd de backup (`contractor-platform-backup.{service,timer}`)
+- [ ] Revisar os limites de CPU/memória (hoje provisórios) contra o hardware real
+- [ ] Validar disaster recovery total contra a VPS real (ou parcialmente)
+
+**Critério de saída:** Sistema rodando na VPS real, backup real testado contra a Storage Box real.
+
+---
+
+## Sprint 11C — Domínio, TLS e Deploy
+
+**Objectivo:** Expor o sistema publicamente com domínio real e TLS válido.
+
+- [ ] Configurar domínio real
+- [ ] Configurar DNS
+- [ ] Configurar Cloudflare
+- [ ] `CADDY_HOST` → domínio real (Caddy provisiona/renova TLS automaticamente via ACME — nenhuma outra mudança no `Caddyfile`)
+- [ ] Habilitar HSTS quando apropriado
+- [ ] Primeiro deploy real de ponta a ponta (GHCR → `APP_VERSION` → `pull`/`up -d` → smoke test)
+
+**Critério de saída:** Sistema acessível publicamente via domínio real, com TLS válido.
+
+---
+
+## Sprint 11D — Validação, Handover e Go-Live
+
+**Objectivo:** Validar o sistema em produção real e formalizar o go-live.
+
+- [ ] Executar o checklist de go-live completo ([docs/operations/runbook.md § Checklist de Go-Live](operations/runbook.md#25-checklist-de-go-live))
+- [ ] Validar backup/restore reais contra a Storage Box (não só localmente)
+- [ ] Smoke test completo em produção com domínio real
+- [ ] Handover operacional formal
+
+**Critério de saída:** Sistema em produção com o cliente beta, checklist de go-live 100% concluído.
 
 ---
 
@@ -579,6 +640,8 @@
 
 | Funcionalidade | Justificativa |
 |---|---|
+| Rate limiting no login | Mitigação de força bruta — não implementado ainda, independente de infraestrutura |
+| Logs estruturados (JSON) no backend | Facilita correlação em `docker compose logs`/`journalctl`; não bloqueante para o MVP |
 | Depoimentos na landing page | Prova social para conversão |
 | Transições de status de orçamento com notificação por email | Comunicação com o cliente final |
 | Dashboard com métricas (orçamentos por status, receita prevista) | Visibilidade para o prestador |
@@ -597,8 +660,10 @@
 |---|---|---|
 | Fotografias reais por tenant | Sem fotos, o hero e a galeria perdem força visual | Landing 7C usa fallbacks e omite seções opcionais quando necessário |
 | Logo validado com paleta | Paleta pública pode não funcionar com a logo real | Branding passa por validação e cai para tokens seguros |
-| Supabase Storage | Serviço externo fora do controlo | Interface de storage abstraída — troca por S3/R2 não quebra o domínio |
-| Railway (backend) | Custo pode aumentar com uso | Dockerfile portável |
+| Armazenamento local (`backend_storage`, volume Docker) | Sem redundância entre datacenters até a Sprint 11B | `StorageService` já abstraído (Strategy Pattern) — trocar de storage local não quebra o domínio; backup via Restic cobre perda do host (Sprint 11A.5) |
+| Hetzner VPS (ainda a provisionar — Sprint 11B) | Provisionamento e sizing ainda não confirmados | Dockerfiles portáveis; nada na stack depende de recursos exclusivos da Hetzner |
+| Hetzner Storage Box (destino de backup, ainda a provisionar — Sprint 11B) | Backup remoto ainda não testado contra a Storage Box real (só localmente) | Protocolo (SFTP) e scripts já prontos e testados (Sprint 11A.5); troca de destino é só uma variável (`RESTIC_REPOSITORY`) |
+| GHCR (registro de imagens) | Disponibilidade fora do controlo do projeto | Imagens padrão OCI, portáveis para outro registry se necessário |
 | Java 25 (LTS) | Versão recente, ecossistema em adaptação | Usar apenas features estáveis |
 | Geração de PDF | Bibliotecas Java requerem avaliação de licença | Decidido na Sprint 10C: OpenPDF 1.4.2 (LGPL-2.1+/MPL-2.0) — ver [ADR-008](adr/ADR-008-pdf-generation-strategy.md) |
 
@@ -643,3 +708,11 @@
 - [Release v1.0.2 — Professional Estimate PDF](releases/v1.0.2-estimate-pdf.md)
 - [ADR-009 — Estratégia de Token de Partilha Pública de Orçamentos](adr/ADR-009-estimate-share-token-strategy.md)
 - [Release v1.0.3 — Estimate Sharing](releases/v1.0.3-estimate-sharing.md)
+- [DT-011A.2 — Production Configuration](design/DT-011A.2-production-configuration.md)
+- [DT-011A.3 — Caddy Reverse Proxy](design/DT-011A.3-caddy-reverse-proxy.md)
+- [DT-011A.4 — GHCR Image Pipeline](design/DT-011A.4-ghcr-image-pipeline.md)
+- [DT-011A.5 — Backup / Restore](design/DT-011A.5-backup-restore.md)
+- [DT-011A.6 — Production Operations Documentation](design/DT-011A.6-production-operations.md)
+- [Runbook de Produção](operations/runbook.md)
+- [infra/README.md — Infraestrutura](../infra/README.md)
+- [infra/backup/README.md — Backup e Restore](../infra/backup/README.md)
