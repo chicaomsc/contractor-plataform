@@ -125,6 +125,7 @@ jobs:
           missing=()
           [ -z "${{ vars.NEXT_PUBLIC_API_BASE_URL }}" ] && missing+=(NEXT_PUBLIC_API_BASE_URL)
           [ -z "${{ vars.NEXT_PUBLIC_SITE_URL }}" ] && missing+=(NEXT_PUBLIC_SITE_URL)
+          [ -z "${{ vars.NEXT_PUBLIC_PLATFORM_BASE_DOMAIN }}" ] && missing+=(NEXT_PUBLIC_PLATFORM_BASE_DOMAIN)
           if [ ${#missing[@]} -gt 0 ]; then
             echo "::error::Missing required GitHub Actions Variables: ${missing[*]}. Configure them under Settings > Secrets and variables > Actions > Variables before running this workflow. See infra/README.md (\"GitHub Actions Variables\")."
             exit 1
@@ -163,6 +164,7 @@ jobs:
           build-args: |
             NEXT_PUBLIC_API_BASE_URL=${{ vars.NEXT_PUBLIC_API_BASE_URL }}
             NEXT_PUBLIC_SITE_URL=${{ vars.NEXT_PUBLIC_SITE_URL }}
+            NEXT_PUBLIC_PLATFORM_BASE_DOMAIN=${{ vars.NEXT_PUBLIC_PLATFORM_BASE_DOMAIN }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: |
             ${{ steps.meta.outputs.labels }}

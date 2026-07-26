@@ -1,7 +1,16 @@
 "use client";
 
-import { Building2, Image, Images, Palette, Settings, Wrench } from "lucide-react";
+import {
+  Building2,
+  ExternalLink,
+  Image,
+  Images,
+  Palette,
+  Settings,
+  Wrench,
+} from "lucide-react";
 import Link from "next/link";
+import { buildTenantLandingUrl } from "@/lib/tenant/tenant-landing-url";
 import {
   useBranding,
   useCompany,
@@ -73,6 +82,7 @@ export function DashboardHome() {
   const settings = settingsQuery.data;
   const services = servicesQuery.data ?? [];
   const gallery = galleryQuery.data ?? [];
+  const publicSiteUrl = company?.slug ? buildTenantLandingUrl(company.slug) : null;
   const lastUpdated = latestIsoDate([
     ...services.map((service) => service.updatedAt),
     ...gallery.map((item) => item.updatedAt),
@@ -157,6 +167,17 @@ export function DashboardHome() {
             Próximas ações
           </h2>
           <div className="mt-6 space-y-3">
+            {publicSiteUrl ? (
+              <a
+                href={publicSiteUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 border border-primary bg-primary px-4 py-3 text-sm font-bold text-primary-foreground no-underline transition-colors hover:bg-primary-hover"
+              >
+                <ExternalLink size={18} aria-hidden="true" />
+                Visualizar site
+              </a>
+            ) : null}
             <Link
               href="/dashboard/company"
               className="flex items-center gap-3 border border-border px-4 py-3 text-sm font-semibold no-underline hover:border-primary"

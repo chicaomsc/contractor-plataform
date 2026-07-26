@@ -19,9 +19,11 @@ Crie `.env.local` a partir de `.env.example`.
 ```bash
 NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
+NEXT_PUBLIC_PLATFORM_BASE_DOMAIN=localhost
 ```
 
 O tenant público é resolvido em runtime por `GET /api/public/tenant`, usando o `Host` real recebido pelo backend. Em desenvolvimento, mantenha `PLATFORM_DEFAULT_TENANT_SLUG=jr-pinturas` no backend para preservar o fallback local.
+Os botões "Visualizar site" e "Visualizar landing" constroem URLs públicas com `{slug}.{NEXT_PUBLIC_PLATFORM_BASE_DOMAIN}`, preservando o protocolo e a porta de `NEXT_PUBLIC_SITE_URL`.
 
 ## Execução
 

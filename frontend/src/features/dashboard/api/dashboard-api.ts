@@ -56,6 +56,29 @@ export async function updateBranding(
   return brandingDtoSchema.parse(response);
 }
 
+export async function uploadCompanyLogo(
+  accessToken: string,
+  file: File,
+): Promise<BrandingDto> {
+  const formData = new FormData();
+  formData.set("file", file);
+
+  const response = await adminApiRequest<unknown>("/company/logo", {
+    method: "POST",
+    accessToken,
+    body: formData,
+    timeoutMs: 30000,
+  });
+  return brandingDtoSchema.parse(response);
+}
+
+export async function deleteCompanyLogo(accessToken: string): Promise<void> {
+  await adminApiRequest<void>("/company/logo", {
+    method: "DELETE",
+    accessToken,
+  });
+}
+
 export async function fetchSettings(accessToken: string): Promise<SettingsDto> {
   const response = await adminApiRequest<unknown>("/settings/me", {
     accessToken,

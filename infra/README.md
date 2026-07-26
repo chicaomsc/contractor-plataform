@@ -317,7 +317,7 @@ ativa `backend/src/main/resources/application-prod.yml`, que soma (não substitu
 
 | Categoria | Variáveis | Efeito de mudar o valor |
 |---|---|---|
-| Build-time (`NEXT_PUBLIC_*`) | `NEXT_PUBLIC_API_BASE_URL`, `NEXT_PUBLIC_SITE_URL` | **Exige reconstruir a imagem** (`docker compose build frontend` ou `up --build`) — são inlined no bundle JS do browser durante `next build`; reiniciar o container sozinho não muda nada já compilado |
+| Build-time (`NEXT_PUBLIC_*`) | `NEXT_PUBLIC_API_BASE_URL`, `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_PLATFORM_BASE_DOMAIN` | **Exige reconstruir a imagem** (`docker compose build frontend` ou `up --build`) — são inlined no bundle JS do browser durante `next build`; reiniciar o container sozinho não muda nada já compilado |
 | Runtime | `PORT`, `HOSTNAME`, `NODE_OPTIONS` | Basta recriar o container (`up -d`), sem rebuild |
 | Fixas na imagem | `NODE_ENV=production` | Não configurável fora de um rebuild do `frontend/Dockerfile` |
 
@@ -595,7 +595,7 @@ schema genuína exige uma migration manual revisada ou restauração de backup (
 
 ### Frontend — imagem genérica multi-tenant
 
-`NEXT_PUBLIC_API_BASE_URL` e `NEXT_PUBLIC_SITE_URL` continuam inlined no bundle JS
+`NEXT_PUBLIC_API_BASE_URL`, `NEXT_PUBLIC_SITE_URL` e `NEXT_PUBLIC_PLATFORM_BASE_DOMAIN` continuam inlined no bundle JS
 **no build** (constraint do Next.js, não escolha deste projeto). Tenant identity não
 é build-time: a rota pública chama `GET /api/public/tenant` em runtime, pelo mesmo
 origin, e o backend resolve a empresa pelo `Host` real da requisição.
@@ -615,6 +615,7 @@ bundle JS do browser):
 |---|---|---|
 | `NEXT_PUBLIC_API_BASE_URL` | Sim | Job `frontend` falha explicitamente antes do build (`::error::`), não builda com valor vazio |
 | `NEXT_PUBLIC_SITE_URL` | Sim | Mesmo |
+| `NEXT_PUBLIC_PLATFORM_BASE_DOMAIN` | Sim | Mesmo; usado só para construir links públicos `{slug}.{baseDomain}`, não para escolher tenant no build |
 
 Nenhum valor específico da JR Pinturas fica hardcoded no workflow. Quando um domínio
 real existir (Cloudflare/DNS, Sprint 11C+), basta atualizar as Variables de origin e

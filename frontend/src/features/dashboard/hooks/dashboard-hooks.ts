@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/features/auth/hooks/auth-context";
 import {
   createGalleryItem,
+  deleteCompanyLogo,
   deleteGalleryImage,
   fetchBranding,
   fetchCompany,
@@ -21,10 +22,13 @@ import {
   updateBranding,
   updateCompany,
   updateSettings,
+  uploadCompanyLogo,
   uploadGalleryImage,
 } from "../api/dashboard-api";
 import { dashboardQueryKeys } from "../api/query-keys";
+import { publicSiteQueryKeys } from "@/features/public-site/api/query-keys";
 import type {
+  BrandingDto,
   UpdateBrandingInput,
   UpdateCompanyInput,
   GalleryFormInput,
@@ -84,6 +88,40 @@ export function useUpdateBranding() {
     onSuccess: (branding) => {
       queryClient.setQueryData(dashboardQueryKeys.branding(), branding);
       queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
+    },
+  });
+}
+
+export function useUploadCompanyLogo() {
+  const accessToken = useAccessToken();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (file: File) => uploadCompanyLogo(accessToken, file),
+    onSuccess: (branding) => {
+      queryClient.setQueryData(dashboardQueryKeys.branding(), branding);
+      queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
+      queryClient.invalidateQueries({ queryKey: publicSiteQueryKeys.all });
+    },
+  });
+}
+
+export function useDeleteCompanyLogo() {
+  const accessToken = useAccessToken();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => deleteCompanyLogo(accessToken),
+    onSuccess: () => {
+      queryClient.setQueryData<BrandingDto | undefined>(dashboardQueryKeys.branding(), (current) => {
+        if (!current) {
+          return current;
+        }
+
+        return { ...current, logoUrl: null };
+      });
+      queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
+      queryClient.invalidateQueries({ queryKey: publicSiteQueryKeys.all });
     },
   });
 }

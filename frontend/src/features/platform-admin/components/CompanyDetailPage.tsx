@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@/features/dashboard/utils/zod-resolver";
-import { ArrowLeft, Plus, RefreshCw, ShieldOff, Trash2 } from "lucide-react";
+import { ArrowLeft, ExternalLink, Plus, RefreshCw, ShieldOff, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
@@ -9,6 +9,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/features/auth/hooks/auth-context";
 import { ApiError } from "@/lib/api/errors";
+import { buildTenantLandingUrl } from "@/lib/tenant/tenant-landing-url";
 import {
   getCompany,
   inviteOwner,
@@ -117,6 +118,7 @@ export function CompanyDetailPage({ companyId }: { companyId: string }) {
 
   const { company, owners } = query.data;
   const nextStatus = company.status === "ACTIVE" ? "INACTIVE" : "ACTIVE";
+  const landingUrl = buildTenantLandingUrl(company.slug);
 
   function requestStatusChange() {
     if (
@@ -151,16 +153,33 @@ export function CompanyDetailPage({ companyId }: { companyId: string }) {
             {company.slug} · {company.country ?? "-"} · criada em {formatDate(company.createdAt)}
           </p>
         </div>
-        <Button
-          type="button"
-          variant={nextStatus === "INACTIVE" ? "secondary" : "primary"}
-          onClick={requestStatusChange}
-          disabled={statusMutation.isPending}
-        >
-          <ShieldOff size={16} aria-hidden="true" />
-          {nextStatus === "INACTIVE" ? "Desativar" : "Ativar"}
-        </Button>
+        <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+          <a
+            href={landingUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex min-h-12 items-center justify-center gap-2 border-2 border-foreground bg-transparent px-5 py-3 text-sm font-semibold text-foreground no-underline transition-colors hover:bg-foreground hover:text-surface"
+          >
+            <ExternalLink size={16} aria-hidden="true" />
+            Visualizar landing
+          </a>
+          <Button
+            type="button"
+            variant={nextStatus === "INACTIVE" ? "secondary" : "primary"}
+            onClick={requestStatusChange}
+            disabled={statusMutation.isPending}
+          >
+            <ShieldOff size={16} aria-hidden="true" />
+            {nextStatus === "INACTIVE" ? "Desativar" : "Ativar"}
+          </Button>
+        </div>
       </header>
+
+      {company.status !== "ACTIVE" ? (
+        <p className="m-0 text-sm font-semibold text-[var(--muted-foreground)]">
+          Esta Company está inativa; a landing pública pode retornar indisponível.
+        </p>
+      ) : null}
 
       {actionError ? <AdminError message={actionError} /> : null}
 

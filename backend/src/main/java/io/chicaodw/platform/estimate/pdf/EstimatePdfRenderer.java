@@ -121,10 +121,15 @@ public class EstimatePdfRenderer {
         header.addCell(infoCell);
 
         document.add(header);
-        document.add(rule(accent, 12f));
+        // This gap (rule spacingAfter + title spacingBefore) was the single largest
+        // source of wasted vertical space on the page — measured against a real
+        // one-item/one-material estimate with a logo, it was pushing the signature
+        // block onto a spurious second page. Kept small but non-zero so the title
+        // doesn't visually collide with the rule.
+        document.add(rule(accent, 3f));
 
         Paragraph title = new Paragraph("Orçamento", TITLE_FONT);
-        title.setSpacingBefore(8f);
+        title.setSpacingBefore(1f);
         document.add(title);
     }
 
@@ -151,7 +156,7 @@ public class EstimatePdfRenderer {
         var meta = doc.metadata();
         PdfPTable table = new PdfPTable(4);
         table.setWidthPercentage(100);
-        table.setSpacingBefore(8f);
+        table.setSpacingBefore(6f);
         table.getDefaultCell().setBorder(Rectangle.NO_BORDER);
 
         addMetaCell(table, "Número", meta.number());
@@ -177,18 +182,18 @@ public class EstimatePdfRenderer {
         document.add(table);
 
         Paragraph jobTitle = new Paragraph(meta.title(), HEADING_FONT);
-        jobTitle.setSpacingBefore(6f);
+        jobTitle.setSpacingBefore(4f);
         document.add(jobTitle);
     }
 
     private void renderCustomer(Document document, EstimatePdfDocument doc) throws DocumentException {
         var customer = doc.customer();
         Paragraph heading = new Paragraph("Cliente", HEADING_FONT);
-        heading.setSpacingBefore(8f);
+        heading.setSpacingBefore(6f);
         document.add(heading);
 
         Paragraph name = new Paragraph(customer.name(), BODY_FONT);
-        name.setSpacingBefore(4f);
+        name.setSpacingBefore(3f);
         document.add(name);
 
         StringBuilder contact = new StringBuilder();
@@ -208,7 +213,7 @@ public class EstimatePdfRenderer {
             return;
         }
         Paragraph description = new Paragraph(doc.metadata().description(), BODY_FONT);
-        description.setSpacingBefore(4f);
+        description.setSpacingBefore(3f);
         document.add(description);
     }
 
@@ -218,12 +223,12 @@ public class EstimatePdfRenderer {
         }
 
         Paragraph title = new Paragraph(heading, HEADING_FONT);
-        title.setSpacingBefore(10f);
+        title.setSpacingBefore(8f);
         document.add(title);
 
         PdfPTable table = new PdfPTable(5);
         table.setWidthPercentage(100);
-        table.setSpacingBefore(6f);
+        table.setSpacingBefore(5f);
         table.setWidths(new float[]{3.4f, 1f, 1.2f, 1.2f, 1.2f});
         table.setHeaderRows(1);
         // A row must never be cut mid-text across a page break — the whole row moves to
@@ -255,13 +260,13 @@ public class EstimatePdfRenderer {
     private void renderSummary(Document document, EstimatePdfDocument doc, Color accent) throws DocumentException {
         var summary = doc.summary();
         Paragraph heading = new Paragraph("Resumo financeiro", HEADING_FONT);
-        heading.setSpacingBefore(10f);
+        heading.setSpacingBefore(8f);
         document.add(heading);
 
         PdfPTable table = new PdfPTable(2);
         table.setWidthPercentage(60);
         table.setHorizontalAlignment(Element.ALIGN_RIGHT);
-        table.setSpacingBefore(6f);
+        table.setSpacingBefore(5f);
         table.setKeepTogether(true);
 
         addSummaryRow(table, "Mão de obra", summary.laborSubtotalLabel(), false);
@@ -278,13 +283,13 @@ public class EstimatePdfRenderer {
     private void renderNotesAndTerms(Document document, EstimatePdfDocument doc) throws DocumentException {
         if (doc.notes() != null) {
             Paragraph heading = new Paragraph("Observações", HEADING_FONT);
-            heading.setSpacingBefore(12f);
+            heading.setSpacingBefore(8f);
             document.add(heading);
             document.add(new Paragraph(doc.notes(), BODY_FONT));
         }
         if (doc.terms() != null) {
             Paragraph heading = new Paragraph("Condições", HEADING_FONT);
-            heading.setSpacingBefore(10f);
+            heading.setSpacingBefore(8f);
             document.add(heading);
             document.add(new Paragraph(doc.terms(), BODY_FONT));
         }
@@ -293,7 +298,7 @@ public class EstimatePdfRenderer {
     private void renderSignatureArea(Document document) throws DocumentException {
         PdfPTable table = new PdfPTable(2);
         table.setWidthPercentage(100);
-        table.setSpacingBefore(10f);
+        table.setSpacingBefore(8f);
         table.setKeepTogether(true);
         table.getDefaultCell().setBorder(Rectangle.NO_BORDER);
 
@@ -322,7 +327,7 @@ public class EstimatePdfRenderer {
     private static void addMetaCell(PdfPTable table, String label, String value) {
         PdfPCell cell = new PdfPCell();
         cell.setBorder(Rectangle.NO_BORDER);
-        cell.setPaddingBottom(4f);
+        cell.setPaddingBottom(2f);
         Paragraph p = new Paragraph();
         p.add(new Chunk(label.toUpperCase() + "\n", MUTED_FONT));
         p.add(new Chunk(value != null ? value : "—", BODY_FONT));
@@ -339,7 +344,7 @@ public class EstimatePdfRenderer {
     private static void addHeaderCell(PdfPTable table, String text, Color accent, int alignment) {
         PdfPCell cell = new PdfPCell(new Phrase(text, TABLE_HEADER_FONT));
         cell.setBackgroundColor(accent);
-        cell.setPadding(5f);
+        cell.setPadding(4f);
         cell.setHorizontalAlignment(alignment);
         cell.setBorder(Rectangle.NO_BORDER);
         table.addCell(cell);
@@ -347,7 +352,7 @@ public class EstimatePdfRenderer {
 
     private static void addBodyCell(PdfPTable table, String text, int alignment, Color background) {
         PdfPCell cell = new PdfPCell(new Phrase(text != null ? text : "", BODY_FONT));
-        cell.setPadding(4f);
+        cell.setPadding(3f);
         cell.setHorizontalAlignment(alignment);
         cell.setBackgroundColor(background);
         cell.setBorderColor(new Color(0xE8, 0xE5, 0xDF));
@@ -362,12 +367,12 @@ public class EstimatePdfRenderer {
 
         PdfPCell labelCell = new PdfPCell(new Phrase(label, labelFont));
         labelCell.setBorder(emphasize ? Rectangle.TOP : Rectangle.NO_BORDER);
-        labelCell.setPadding(4f);
+        labelCell.setPadding(3f);
         table.addCell(labelCell);
 
         PdfPCell valueCell = new PdfPCell(new Phrase(value, valueFont));
         valueCell.setBorder(emphasize ? Rectangle.TOP : Rectangle.NO_BORDER);
-        valueCell.setPadding(4f);
+        valueCell.setPadding(3f);
         valueCell.setHorizontalAlignment(Element.ALIGN_RIGHT);
         table.addCell(valueCell);
     }
@@ -375,7 +380,7 @@ public class EstimatePdfRenderer {
     private static PdfPCell signatureCell(String label) {
         PdfPCell cell = new PdfPCell();
         cell.setBorder(Rectangle.NO_BORDER);
-        cell.setPaddingTop(10f);
+        cell.setPaddingTop(6f);
         cell.setPaddingRight(16f);
         Paragraph line = new Paragraph("_______________________________", BODY_FONT);
         cell.addElement(line);

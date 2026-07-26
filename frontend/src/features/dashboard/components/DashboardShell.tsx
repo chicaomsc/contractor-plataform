@@ -94,7 +94,10 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         </Link>
       </div>
 
-      <nav className="flex-1 px-3 py-5" aria-label="Navegação do dashboard">
+      <nav
+        className="min-h-0 flex-1 overflow-y-auto px-3 py-5"
+        aria-label="Navegação do dashboard"
+      >
         <ul className="m-0 space-y-1 p-0">
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -123,7 +126,10 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         </ul>
       </nav>
 
-      <div className="border-t border-white/10 p-5">
+      <div
+        className="shrink-0 border-t border-white/10 p-5"
+        data-testid="dashboard-sidebar-account"
+      >
         <p className="m-0 truncate text-sm font-semibold">
           {session?.company?.name}
         </p>
@@ -174,8 +180,11 @@ export function DashboardShell({ children }: DashboardShellProps) {
   );
 
   return (
-    <div className="min-h-screen bg-background lg:grid lg:grid-cols-[280px_minmax(0,1fr)]">
-      <aside className="sticky top-0 hidden h-screen lg:block">
+    <div className="min-h-screen bg-background lg:grid lg:grid-cols-[280px_minmax(0,1fr)] lg:bg-[linear-gradient(to_right,var(--surface-dark)_0,var(--surface-dark)_280px,var(--background)_280px,var(--background)_100%)]">
+      <aside
+        className="sticky top-0 hidden h-screen self-start bg-[var(--surface-dark)] lg:block"
+        data-testid="dashboard-sidebar"
+      >
         <SidebarContent />
       </aside>
 
