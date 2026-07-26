@@ -40,8 +40,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             Claims claims = jwtService.parseClaims(header.substring(7));
 
             if (SecurityContextHolder.getContext().getAuthentication() == null) {
-                UUID userId    = UUID.fromString(claims.getSubject());
-                UUID companyId = UUID.fromString(claims.get("companyId", String.class));
+                UUID userId = UUID.fromString(claims.getSubject());
+                String companyIdClaim = claims.get("companyId", String.class);
+                UUID companyId = companyIdClaim != null ? UUID.fromString(companyIdClaim) : null;
                 String email   = claims.get("email", String.class);
                 UserRole role  = UserRole.valueOf(claims.get("role", String.class));
 

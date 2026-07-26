@@ -1,12 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "./errors";
-import { getPublicSite } from "./public-site";
+import { fetchPublicTenant, getPublicSite } from "./public-site";
 
 const originalEnv = process.env;
 
 beforeEach(() => {
   process.env.NEXT_PUBLIC_API_BASE_URL = "http://api.test";
-  process.env.NEXT_PUBLIC_COMPANY_SLUG = "tenant-slug";
 });
 
 afterEach(() => {
@@ -53,6 +52,26 @@ describe("public site API", () => {
     );
 
     await expect(getPublicSite("missing")).rejects.toBeInstanceOf(ApiError);
+  });
+
+  it("resolves tenant without query parameters or custom host headers", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      Response.json({
+        slug: "tenant-a",
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(fetchPublicTenant()).resolves.toEqual({ slug: "tenant-a" });
+    expect(fetchMock).toHaveBeenCalledWith(
+      new URL("/api/public/tenant", "http://api.test"),
+      expect.objectContaining({
+        headers: expect.not.objectContaining({
+          Host: expect.any(String),
+          "X-Forwarded-Host": expect.any(String),
+        }),
+      }),
+    );
   });
 
   it("rejects invalid public site responses", async () => {

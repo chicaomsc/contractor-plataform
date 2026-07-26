@@ -1,5 +1,7 @@
 export const publicSiteQueryKeys = {
   all: ["public-site"] as const,
+  tenant: (host: string) =>
+    [...publicSiteQueryKeys.all, "tenant", host] as const,
   site: (companySlug: string) =>
     [...publicSiteQueryKeys.all, "site", companySlug] as const,
   services: (companySlug: string) =>

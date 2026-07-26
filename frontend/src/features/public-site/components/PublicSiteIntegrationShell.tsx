@@ -8,14 +8,11 @@ import {
   usePublicGallery,
   usePublicServices,
   usePublicSite,
+  usePublicTenant,
 } from "../hooks/public-site-hooks";
 import { LandingBlockingError, LandingLoadingState } from "./LandingStates";
 import { PublicLandingPage } from "./PublicLandingPage";
 import type { NavLink } from "./landing-types";
-
-type PublicSiteIntegrationShellProps = {
-  companySlug: string | null;
-};
 
 export const publicLandingNavLinks: NavLink[] = [
   { label: "Serviços", href: "#servicos" },
@@ -38,15 +35,31 @@ function getSiteErrorMessage(error: Error | null) {
 }
 
 export function PublicSiteIntegrationShell({
-  companySlug,
-}: PublicSiteIntegrationShellProps) {
+  companySlug: initialCompanySlug = null,
+}: {
+  companySlug?: string | null;
+}) {
+  const tenantQuery = usePublicTenant();
+  const companySlug = initialCompanySlug ?? tenantQuery.data?.slug ?? null;
   const siteQuery = usePublicSite(companySlug);
   const siteLoaded = siteQuery.isSuccess;
   const servicesQuery = usePublicServices(companySlug, siteLoaded);
   const galleryQuery = usePublicGallery(companySlug, siteLoaded);
   const site = siteQuery.data ?? FALLBACK_SITE_VIEW_MODEL;
 
-  if (!companySlug) {
+  if (tenantQuery.isLoading && !companySlug) {
+    return (
+      <PublicLayout
+        site={site}
+        navLinks={publicLandingNavLinks}
+        style={getBrandingStyle(site)}
+      >
+        <LandingLoadingState />
+      </PublicLayout>
+    );
+  }
+
+  if (tenantQuery.isError && !companySlug) {
     return (
       <PublicLayout
         site={site}
@@ -54,8 +67,8 @@ export function PublicSiteIntegrationShell({
         style={getBrandingStyle(site)}
       >
         <LandingBlockingError
-          title="Site público não configurado"
-          message="Configure NEXT_PUBLIC_COMPANY_SLUG para carregar a landing pública."
+          title="Site público indisponível"
+          message={getSiteErrorMessage(tenantQuery.error)}
         />
       </PublicLayout>
     );

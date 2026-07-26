@@ -32,3 +32,15 @@ export async function me(accessToken: string): Promise<MeResponse> {
 
   return meResponseSchema.parse(response);
 }
+
+export async function acceptInvite(request: {
+  token: string;
+  password: string;
+}): Promise<AuthResponse> {
+  const response = await adminApiRequest<unknown>("/auth/invites/accept", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+
+  return authResponseSchema.parse(response);
+}

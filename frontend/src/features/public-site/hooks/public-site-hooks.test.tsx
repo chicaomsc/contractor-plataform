@@ -4,6 +4,7 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/lib/api/errors";
 import {
+  usePublicTenant,
   usePublicGallery,
   usePublicServices,
   usePublicSite,
@@ -25,7 +26,6 @@ function createWrapper() {
 
 beforeEach(() => {
   process.env.NEXT_PUBLIC_API_BASE_URL = "http://api.test";
-  process.env.NEXT_PUBLIC_COMPANY_SLUG = "empresa-teste";
 });
 
 afterEach(() => {
@@ -102,5 +102,19 @@ describe("public site hooks", () => {
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(result.current.error).toBeInstanceOf(ApiError);
     expect((result.current.error as ApiError).status).toBe(404);
+  });
+
+  it("usePublicTenant resolves the slug at runtime", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(Response.json({ slug: "tenant-b" })),
+    );
+
+    const { result } = renderHook(() => usePublicTenant(), {
+      wrapper: createWrapper(),
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.slug).toBe("tenant-b");
   });
 });

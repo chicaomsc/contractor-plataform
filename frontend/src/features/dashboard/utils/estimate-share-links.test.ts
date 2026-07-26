@@ -6,7 +6,6 @@ const originalEnv = process.env;
 beforeEach(() => {
   process.env = { ...originalEnv };
   process.env.NEXT_PUBLIC_API_BASE_URL = "http://api.test";
-  process.env.NEXT_PUBLIC_COMPANY_SLUG = "empresa-teste";
 });
 
 afterEach(() => {

@@ -3,8 +3,10 @@ import { defineConfig, devices } from "@playwright/test";
 const isCI = Boolean(process.env.CI);
 const frontendPort = process.env.E2E_FRONTEND_PORT ?? "3001";
 const backendPort = process.env.E2E_BACKEND_PORT ?? "8081";
-const frontendUrl = `http://127.0.0.1:${frontendPort}`;
+const frontendUrl = `http://jr-pinturas.localhost:${frontendPort}`;
 const backendUrl = `http://127.0.0.1:${backendPort}`;
+const platformAdminEmail = "platform.e2e@contractor.test";
+const platformAdminPassword = "SecureAdmin123!";
 
 export default defineConfig({
   testDir: "./e2e",
@@ -26,7 +28,7 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: `docker compose -f ../docker/docker-compose.yml up -d postgres && cd ../backend && ./mvnw spring-boot:run -Dspring-boot.run.profiles=local -Dspring-boot.run.arguments="--server.port=${backendPort} --app.cors.allowed-origins=${frontendUrl}"`,
+      command: `docker compose -f ../docker/docker-compose.yml up -d postgres && cd ../backend && PLATFORM_ADMIN_BOOTSTRAP_EMAIL=${platformAdminEmail} PLATFORM_ADMIN_BOOTSTRAP_PASSWORD=${platformAdminPassword} ./mvnw spring-boot:run -Dspring-boot.run.profiles=local -Dspring-boot.run.arguments="--server.port=${backendPort} --app.cors.allowed-origins=${frontendUrl} --app.platform.base-domain=localhost --app.platform.default-tenant-slug=jr-pinturas"`,
       url: `${backendUrl}/actuator/health`,
       reuseExistingServer: true,
       timeout: 120_000,
@@ -41,7 +43,7 @@ export default defineConfig({
       // stripping, so API_PROXY_TARGET tells next.config.ts's dev-only rewrite where
       // the real backend is — see next.config.ts for why this is safe in production
       // (API_PROXY_TARGET is never set there, so the rewrite is a no-op).
-      command: `NEXT_PUBLIC_API_BASE_URL=${frontendUrl} NEXT_PUBLIC_SITE_URL=${frontendUrl} NEXT_PUBLIC_COMPANY_SLUG=e2e-hardening API_PROXY_TARGET=${backendUrl} npm run dev -- --hostname 127.0.0.1 --port ${frontendPort}`,
+      command: `NEXT_PUBLIC_API_BASE_URL=${frontendUrl} NEXT_PUBLIC_SITE_URL=${frontendUrl} API_PROXY_TARGET=${backendUrl} npm run dev -- --hostname 0.0.0.0 --port ${frontendPort}`,
       url: `${frontendUrl}/login`,
       reuseExistingServer: true,
       timeout: 120_000,

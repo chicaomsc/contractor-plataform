@@ -18,11 +18,10 @@ Crie `.env.local` a partir de `.env.example`.
 
 ```bash
 NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
-NEXT_PUBLIC_COMPANY_SLUG=jr-pinturas
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 ```
 
-`NEXT_PUBLIC_COMPANY_SLUG` define o tenant inicial. No futuro, o slug poderá ser resolvido por domínio/host, mas essa lógica ainda não faz parte do frontend.
+O tenant público é resolvido em runtime por `GET /api/public/tenant`, usando o `Host` real recebido pelo backend. Em desenvolvimento, mantenha `PLATFORM_DEFAULT_TENANT_SLUG=jr-pinturas` no backend para preservar o fallback local.
 
 ## Execução
 
@@ -181,7 +180,7 @@ O build não depende de `next/font/google`; a tipografia usa system fonts nos to
 
 ## Integração pública
 
-`NEXT_PUBLIC_COMPANY_SLUG` define o tenant carregado em `/`. Os três endpoints consumidos são:
+O tenant carregado em `/` é resolvido em runtime por `/public/tenant`. Depois disso, os endpoints públicos consumidos são:
 
 - `GET /public/sites/{companySlug}`
 - `GET /public/sites/{companySlug}/services`

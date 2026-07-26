@@ -22,16 +22,11 @@ FROM node:22-alpine AS build
 WORKDIR /app
 
 # NEXT_PUBLIC_* variables are inlined into the client JS bundle by Next.js at build
-# time — this is a Next.js constraint, not a choice made here (see infra/README.md
-# for the full explanation). Given this deployment currently serves a single tenant,
-# baking them in at build time (rather than adding a runtime-rewrite entrypoint
-# script) is the proportionate choice. Changing any of these three values requires
-# rebuilding the image, not just restarting the container.
+# time. Tenant identity is intentionally not included here: the public landing
+# resolves the tenant at runtime via GET /api/public/tenant.
 ARG NEXT_PUBLIC_API_BASE_URL
-ARG NEXT_PUBLIC_COMPANY_SLUG
 ARG NEXT_PUBLIC_SITE_URL
 ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL} \
-    NEXT_PUBLIC_COMPANY_SLUG=${NEXT_PUBLIC_COMPANY_SLUG} \
     NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL} \
     NODE_ENV=production
 

@@ -14,6 +14,7 @@ import io.chicaodw.platform.company.api.dto.UpdateCompanyRequest;
 import io.chicaodw.platform.company.api.mapper.CompanyMapper;
 import io.chicaodw.platform.company.domain.Branding;
 import io.chicaodw.platform.company.domain.Company;
+import io.chicaodw.platform.company.domain.CompanyStatus;
 import io.chicaodw.platform.company.domain.Settings;
 import io.chicaodw.platform.company.infrastructure.persistence.BrandingRepository;
 import io.chicaodw.platform.company.infrastructure.persistence.CompanyRepository;
@@ -54,6 +55,12 @@ public class CompanyService {
     @Transactional(readOnly = true)
     public PublicSiteResponse getPublicSite(String slug) {
         var company = findBySlug(slug);
+        // An inactive company's public site must not resolve at all — treat it
+        // identically to an unknown slug (404), never revealing that a deactivated
+        // tenant exists (DT-011A.7 §13).
+        if (company.getStatus() != CompanyStatus.ACTIVE) {
+            throw new ResourceNotFoundException("Company", slug);
+        }
         var branding = brandingRepository.findByCompanyId(company.getId()).orElse(null);
         var address = company.getAddress();
 

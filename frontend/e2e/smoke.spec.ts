@@ -1,5 +1,10 @@
 import { expect, test } from "@playwright/test";
-import { apiBaseUrl, loginViaUi, registerAccount } from "./helpers";
+import {
+  apiBaseUrl,
+  loginAdminViaUi,
+  loginViaUi,
+  registerAccount,
+} from "./helpers";
 
 async function createEstimateWithPdfData(
   request: import("@playwright/test").APIRequestContext,
@@ -58,6 +63,47 @@ test("tenant inexistente retorna 404 no endpoint público", async ({
   );
 
   expect(response.status()).toBe(404);
+});
+
+test("SUPER_ADMIN provisiona company e OWNER aceita convite", async ({
+  page,
+}) => {
+  const suffix = Date.now();
+  const companyName = `Admin E2E ${suffix}`;
+  const slug = `admin-e2e-${suffix}`;
+  const ownerEmail = `owner.${suffix}@contractor.test`;
+  const ownerPassword = "OwnerPass123!";
+
+  await loginAdminViaUi(page);
+  await page.getByRole("link", { name: /Nova empresa/ }).click();
+  await page.getByLabel("Nome da empresa").fill(companyName);
+  await page.getByLabel("Slug").fill(slug);
+  await page.getByLabel("País").fill("PT");
+  await page.getByLabel("Responsável").fill(`Owner ${suffix}`);
+  await page.getByLabel("Email do owner").fill(ownerEmail);
+  await page.getByRole("button", { name: /Criar Company e OWNER/ }).click();
+
+  await expect(page.getByText("Company criada")).toBeVisible();
+  const inviteLink = await page.getByLabel("Link de convite").inputValue();
+  expect(inviteLink).toContain("/invite?token=");
+
+  await page.getByRole("link", { name: /Abrir detalhe/ }).click();
+  await expect(page.getByRole("heading", { name: companyName })).toBeVisible();
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Desativar" }).click();
+  await expect(page.getByText("INACTIVE").first()).toBeVisible();
+  await page.getByRole("button", { name: "Ativar" }).click();
+  await expect(page.getByText("ACTIVE").first()).toBeVisible();
+
+  await page.goto(inviteLink);
+  await page.getByLabel("Password", { exact: true }).fill(ownerPassword);
+  await page.getByLabel("Confirmar password").fill(ownerPassword);
+  await page.getByRole("button", { name: "Ativar conta" }).click();
+  await expect(page).toHaveURL(/\/dashboard/);
+  await expect(page.getByText("Status do site")).toBeVisible();
+
+  await page.goto("/admin");
+  await expect(page).toHaveURL(/\/dashboard/);
 });
 
 test("logout encerra a sessão e bloqueia rota administrativa", async ({

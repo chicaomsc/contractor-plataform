@@ -5,6 +5,7 @@ import {
   publicGalleryDtoSchema,
   publicServicesDtoSchema,
   publicSiteDtoSchema,
+  tenantResolutionDtoSchema,
 } from "../types/api";
 
 type PublicSiteRequestOptions = {
@@ -38,6 +39,15 @@ export async function fetchPublicSite(
     },
   );
   return parseApiResponse(publicSiteDtoSchema, data);
+}
+
+export async function fetchPublicTenant(
+  options: PublicSiteRequestOptions = {},
+) {
+  const data = await apiRequest<unknown>("/public/tenant", {
+    signal: options.signal,
+  });
+  return parseApiResponse(tenantResolutionDtoSchema, data);
 }
 
 export async function fetchPublicServices(

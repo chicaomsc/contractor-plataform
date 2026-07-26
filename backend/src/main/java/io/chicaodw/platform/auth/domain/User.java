@@ -23,7 +23,10 @@ import java.util.UUID;
 @NoArgsConstructor
 public class User extends BaseEntity {
 
-    @Column(name = "company_id", nullable = false, updatable = false)
+    // Nullable: a SUPER_ADMIN belongs to no company. The chk_users_role_company_id
+    // DB constraint (V11) is the enforced invariant — see UserRoleInvariant for the
+    // matching application-level check.
+    @Column(name = "company_id", updatable = false)
     private UUID companyId;
 
     @Column(nullable = false)

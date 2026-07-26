@@ -5,6 +5,7 @@ const REFRESH_TOKEN_KEY = "contractor.refreshToken";
 const USER_KEY = "contractor.user";
 const COMPANY_KEY = "contractor.company";
 const SESSION_COOKIE = "contractor_session";
+const ROLE_COOKIE = "contractor_role";
 
 function isBrowser() {
   return typeof window !== "undefined";
@@ -36,6 +37,7 @@ export function persistAuthSession(auth: AuthResponse) {
   window.localStorage.setItem(USER_KEY, JSON.stringify(auth.user));
   window.localStorage.setItem(COMPANY_KEY, JSON.stringify(auth.company));
   document.cookie = `${SESSION_COOKIE}=active; path=/; SameSite=Lax`;
+  document.cookie = `${ROLE_COOKIE}=${auth.user.role}; path=/; SameSite=Lax`;
 }
 
 export function clearAuthSession() {
@@ -48,4 +50,5 @@ export function clearAuthSession() {
   window.localStorage.removeItem(USER_KEY);
   window.localStorage.removeItem(COMPANY_KEY);
   document.cookie = `${SESSION_COOKIE}=; path=/; max-age=0; SameSite=Lax`;
+  document.cookie = `${ROLE_COOKIE}=; path=/; max-age=0; SameSite=Lax`;
 }
