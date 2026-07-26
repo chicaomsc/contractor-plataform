@@ -12,14 +12,13 @@ afterEach(() => {
 });
 
 describe("resolveAdminAssetUrl", () => {
-  it("resolves a relative /uploads path against NEXT_PUBLIC_API_BASE_URL without an /api prefix", () => {
-    process.env.NEXT_PUBLIC_API_BASE_URL = "http://localhost:8080";
+  it("resolves a relative /uploads path against the configured same-origin URL without an /api prefix", () => {
+    process.env.NEXT_PUBLIC_API_BASE_URL = "http://localhost:3001";
 
-    // /uploads/** is routed directly to the backend by Caddy (no prefix stripped,
-    // no /api namespace involved) — see docs/design/DT-011A.3-caddy-reverse-proxy.md
-    // §7. This must never become /api/uploads/....
+    // /uploads/** is routed directly to the backend by Caddy in production and by
+    // next.config.ts rewrites in local dev. This must never become /api/uploads/....
     expect(resolveAdminAssetUrl("/uploads/company/x/logo/y.png")).toBe(
-      "http://localhost:8080/uploads/company/x/logo/y.png",
+      "http://localhost:3001/uploads/company/x/logo/y.png",
     );
   });
 

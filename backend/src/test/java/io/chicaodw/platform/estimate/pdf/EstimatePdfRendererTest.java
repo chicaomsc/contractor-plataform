@@ -67,6 +67,34 @@ class EstimatePdfRendererTest {
     }
 
     @Test
+    void render_typicalEstimateWithLogoNotesAndTerms_fitsOnASinglePageIncludingSignatures() throws Exception {
+        // Regression test for the layout fix: before compacting the vertical spacing
+        // (see EstimatePdfRenderer — gap after the header rule, section spacingBefore
+        // values), a realistic small estimate with a logo, notes and terms spilled the
+        // signature block onto a spurious second page. This is the "this example must
+        // fit on one A4 page" case from manual validation.
+        byte[] pngLogo = tinyPng();
+        var base = document(3, 2, false, false);
+        var withLogo = new EstimatePdfDocument(
+                new EstimatePdfDocument.SellerInfo(
+                        base.seller().displayName(), base.seller().legalName(), base.seller().taxNumber(),
+                        base.seller().phone(), base.seller().email(), base.seller().website(),
+                        base.seller().addressLine(), pngLogo, base.seller().primaryColorHex()
+                ),
+                base.metadata(), base.customer(), base.items(), base.materials(), base.summary(),
+                base.notes(), base.terms(), base.draft(), base.cancelled()
+        );
+
+        byte[] bytes = renderer.render(withLogo);
+
+        try (PdfReader reader = new PdfReader(bytes)) {
+            assertThat(reader.getNumberOfPages()).isEqualTo(1);
+            String page1 = new PdfTextExtractor(reader).getTextFromPage(1);
+            assertThat(page1).contains("Assinatura");
+        }
+    }
+
+    @Test
     void render_neverSplitsARowAcrossPages() throws Exception {
         // Regression test: PdfPTable#setSplitRows(true) would let OpenPDF cut a row's text
         // mid-line at the page boundary. Each row here carries a START/END marker; if a row

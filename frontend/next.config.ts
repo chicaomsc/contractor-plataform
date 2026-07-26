@@ -6,13 +6,9 @@ const connectSrc = new URL(apiBaseUrl).origin;
 // Sprint 11A.3 made NEXT_PUBLIC_API_BASE_URL the frontend's own origin and put
 // `/api/*` prefix-stripping (frontend/src/lib/api/api-path.ts, withApiPrefix) on
 // the assumption that Caddy always sits in front to strip it before forwarding to
-// the backend (docs/design/DT-011A.3-caddy-reverse-proxy.md). Local `next dev` and
-// the Playwright E2E harness (playwright.config.ts) don't run Caddy, so nothing
-// else strips that prefix — this rewrite is the substitute, active only when
-// API_PROXY_TARGET is set (E2E/local dev). It's never set in the production Docker
-// build/compose, so this is a no-op there — and even if it were set, Caddy already
-// intercepts every `/api/*` request before it reaches the frontend at all in
-// production, so this rewrite would never actually be evaluated.
+// the backend. Caddy also forwards `/uploads/*` to the backend without stripping
+// the prefix. Local `next dev` and the Playwright E2E harness don't run Caddy, so
+// these rewrites are the local substitute, active only when API_PROXY_TARGET is set.
 const apiProxyTarget = process.env.API_PROXY_TARGET;
 
 const nextConfig: NextConfig = {
@@ -26,7 +22,13 @@ const nextConfig: NextConfig = {
     if (!apiProxyTarget) {
       return [];
     }
-    return [{ source: "/api/:path*", destination: `${apiProxyTarget}/:path*` }];
+    return [
+      { source: "/api/:path*", destination: `${apiProxyTarget}/:path*` },
+      {
+        source: "/uploads/:path*",
+        destination: `${apiProxyTarget}/uploads/:path*`,
+      },
+    ];
   },
   images: {
     remotePatterns: [

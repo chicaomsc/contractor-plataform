@@ -115,4 +115,28 @@ describe("public site mappers", () => {
       "http://localhost:8081/uploads/company/before.jpg",
     );
   });
+
+  it("keeps a null public logo so the landing can fall back to the company name", () => {
+    const site = mapPublicSiteDto({
+      slug: "empresa-teste",
+      name: "Empresa Teste",
+      tradeName: null,
+      publicPhone: null,
+      whatsapp: null,
+      website: null,
+      location: null,
+      branding: {
+        logoUrl: null,
+        primaryColor: null,
+        secondaryColor: null,
+        accentColor: null,
+        tagline: null,
+        aboutText: null,
+        footerText: null,
+      },
+    });
+
+    expect(site.branding.logoUrl).toBeNull();
+    expect(site.displayName).toBe("Empresa Teste");
+  });
 });

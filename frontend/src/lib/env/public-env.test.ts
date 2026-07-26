@@ -11,10 +11,12 @@ describe("getPublicEnv", () => {
   it("returns validated public env values", () => {
     process.env.NEXT_PUBLIC_API_BASE_URL = "http://localhost:8080";
     process.env.NEXT_PUBLIC_SITE_URL = "http://localhost:3000";
+    process.env.NEXT_PUBLIC_PLATFORM_BASE_DOMAIN = "localhost";
 
     expect(getPublicEnv()).toMatchObject({
       NEXT_PUBLIC_API_BASE_URL: "http://localhost:8080",
       NEXT_PUBLIC_SITE_URL: "http://localhost:3000",
+      NEXT_PUBLIC_PLATFORM_BASE_DOMAIN: "localhost",
     });
   });
 
@@ -29,6 +31,16 @@ describe("getPublicEnv", () => {
     delete process.env["NEXT_PUBLIC_" + "COMPANY_" + "SLUG"];
 
     expect(getPublicEnv()).toMatchObject({
+      NEXT_PUBLIC_API_BASE_URL: "http://localhost:8080",
+    });
+  });
+
+  it("treats blank optional public values as absent", () => {
+    process.env.NEXT_PUBLIC_API_BASE_URL = "http://localhost:8080";
+    process.env.NEXT_PUBLIC_SITE_URL = "";
+    process.env.NEXT_PUBLIC_PLATFORM_BASE_DOMAIN = "";
+
+    expect(getPublicEnv()).toEqual({
       NEXT_PUBLIC_API_BASE_URL: "http://localhost:8080",
     });
   });

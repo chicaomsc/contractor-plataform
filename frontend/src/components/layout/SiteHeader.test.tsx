@@ -21,6 +21,28 @@ describe("SiteHeader", () => {
     ).toHaveAttribute("href", "#servicos");
   });
 
+  it("renders the public logo when available", () => {
+    render(
+      <SiteHeader
+        site={{
+          ...FALLBACK_SITE_VIEW_MODEL,
+          displayName: "JR Pinturas",
+          branding: {
+            ...FALLBACK_SITE_VIEW_MODEL.branding,
+            logoUrl: "http://localhost:8080/uploads/company/company-1/logo/logo.png",
+          },
+        }}
+        navLinks={navLinks}
+      />,
+    );
+
+    expect(screen.getByAltText("Logótipo JR Pinturas")).toHaveAttribute(
+      "src",
+      "http://localhost:8080/uploads/company/company-1/logo/logo.png",
+    );
+    expect(screen.queryByText("JR Pinturas")).not.toBeInTheDocument();
+  });
+
   it("renders public phone when available", () => {
     render(
       <SiteHeader
