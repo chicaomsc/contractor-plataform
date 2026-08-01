@@ -41,7 +41,7 @@ async function resetPasswordViaUi(
 ) {
   await page.goto(resetLink);
   await expect(page).toHaveURL((url) => url.hash === "");
-  await page.getByLabel("Nova password").fill(newPassword);
+  await page.getByLabel("Nova senha").fill(newPassword);
   await page.getByLabel("Confirmar password").fill(newPassword);
   await page.getByRole("button", { name: /Atualizar password/ }).click();
   await expect(
@@ -49,7 +49,7 @@ async function resetPasswordViaUi(
   ).toBeVisible();
 }
 
-test("OWNER solicita reset, define nova password e login antigo falha", async ({
+test("OWNER solicita reset, define nova senha e login antigo falha", async ({
   page,
   request,
 }) => {

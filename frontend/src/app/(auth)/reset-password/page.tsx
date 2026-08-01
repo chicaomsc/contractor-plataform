@@ -1,7 +1,7 @@
 import { ResetPasswordPage } from "@/features/auth/components/ResetPasswordPage";
 
 export const metadata = {
-  title: "Definir nova password",
+  title: "Definir nova senha",
 };
 
 export default function ResetPasswordRoute() {
