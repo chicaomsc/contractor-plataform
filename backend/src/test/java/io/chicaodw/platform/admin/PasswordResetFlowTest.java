@@ -234,7 +234,7 @@ class PasswordResetFlowTest extends AbstractAdminIntegrationTest {
 
         attemptReset(rawToken, owner.password())
                 .andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.detail").value("A nova password deve ser diferente da atual."));
+                .andExpect(jsonPath("$.detail").value("A nova senha deve ser diferente da atual."));
     }
 
     @Test
