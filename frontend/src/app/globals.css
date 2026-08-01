@@ -31,7 +31,8 @@ a {
 }
 
 :focus-visible {
-  outline: 4px solid var(--focus);
+  /* outline: 2px solid var(--focus); */
+  outline: 2px solid color-mix(in srgb, var(--focus) 45%, transparent);
   outline-offset: 2px;
 }
 

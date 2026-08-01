@@ -1,6 +1,9 @@
 package io.chicaodw.platform.admin;
 
 import io.chicaodw.platform.admin.api.dto.UpdateCompanyStatusRequest;
+import io.chicaodw.platform.auth.api.dto.ForgotPasswordRequest;
+import io.chicaodw.platform.auth.api.dto.ForgotPasswordResponse;
+import io.chicaodw.platform.auth.api.dto.ResetPasswordRequest;
 import io.chicaodw.platform.auth.domain.UserStatus;
 import io.chicaodw.platform.auth.infrastructure.persistence.UserRepository;
 import io.chicaodw.platform.company.infrastructure.persistence.CompanyRepository;
@@ -12,6 +15,7 @@ import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -59,6 +63,32 @@ class ActiveAccountFilterTest extends AbstractAdminIntegrationTest {
         user.setStatus(UserStatus.INACTIVE);
         userRepository.save(user);
 
+        mockMvc.perform(get("/company/me").header("Authorization", "Bearer " + ownerToken))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.title").value("Account Disabled"));
+    }
+
+    @Test
+    void accessTokenIssuedBeforePasswordReset_isRejectedOnNextRequest() throws Exception {
+        var owner = registerOwner();
+        String ownerToken = owner.accessToken();
+
+        mockMvc.perform(get("/company/me").header("Authorization", "Bearer " + ownerToken))
+                .andExpect(status().isOk());
+
+        String forgotBody = mockMvc.perform(post("/auth/password/forgot")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new ForgotPasswordRequest(owner.email()))))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String rawToken = objectMapper.readValue(forgotBody, ForgotPasswordResponse.class).debugToken();
+
+        mockMvc.perform(post("/auth/password/reset")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new ResetPasswordRequest(rawToken, "BrandNewPass1"))))
+                .andExpect(status().isOk());
+
+        // Same access token, no new login — auth_version bump must reject it immediately.
         mockMvc.perform(get("/company/me").header("Authorization", "Bearer " + ownerToken))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.title").value("Account Disabled"));

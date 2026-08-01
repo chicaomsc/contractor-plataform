@@ -45,4 +45,10 @@ public class User extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private UserStatus status = UserStatus.ACTIVE;
+
+    // Incremented on a successful password reset — ActiveAccountFilter compares this
+    // against the JWT's "authVersion" claim by equality, so bumping it immediately
+    // invalidates every access token issued before the bump. See DT-011A.10 §5.
+    @Column(name = "auth_version", nullable = false)
+    private long authVersion = 0;
 }

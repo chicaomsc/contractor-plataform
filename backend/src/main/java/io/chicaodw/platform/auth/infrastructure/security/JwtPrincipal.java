@@ -17,5 +17,6 @@ public record JwtPrincipal(
         UUID userId,
         UUID companyId,
         String email,
-        UserRole role
+        UserRole role,
+        long authVersion
 ) {}

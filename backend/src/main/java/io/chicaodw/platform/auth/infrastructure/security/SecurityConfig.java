@@ -51,6 +51,8 @@ public class SecurityConfig {
                                 "/auth/login",
                                 "/auth/refresh",
                                 "/auth/invites/accept",
+                                "/auth/password/forgot",
+                                "/auth/password/reset",
                                 "/public/**",
                                 "/uploads/**",
                                 "/actuator/health",

@@ -2,12 +2,17 @@ package io.chicaodw.platform.auth.api;
 
 import io.chicaodw.platform.auth.api.dto.AcceptInviteRequest;
 import io.chicaodw.platform.auth.api.dto.AuthResponse;
+import io.chicaodw.platform.auth.api.dto.ForgotPasswordRequest;
+import io.chicaodw.platform.auth.api.dto.ForgotPasswordResponse;
 import io.chicaodw.platform.auth.api.dto.LoginRequest;
 import io.chicaodw.platform.auth.api.dto.MeResponse;
 import io.chicaodw.platform.auth.api.dto.RefreshTokenRequest;
 import io.chicaodw.platform.auth.api.dto.RegisterRequest;
+import io.chicaodw.platform.auth.api.dto.ResetPasswordRequest;
+import io.chicaodw.platform.auth.api.dto.ResetPasswordResponse;
 import io.chicaodw.platform.auth.application.AuthService;
 import io.chicaodw.platform.auth.application.InviteService;
+import io.chicaodw.platform.auth.application.PasswordResetTokenService;
 import io.chicaodw.platform.auth.infrastructure.security.JwtPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -30,6 +35,7 @@ public class AuthController {
 
     private final AuthService authService;
     private final InviteService inviteService;
+    private final PasswordResetTokenService passwordResetTokenService;
 
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
@@ -60,5 +66,17 @@ public class AuthController {
     @Operation(summary = "Accept an owner invite: set the account password and log in")
     public AuthResponse acceptInvite(@Valid @RequestBody AcceptInviteRequest request) {
         return inviteService.acceptInvite(request.token(), request.password());
+    }
+
+    @PostMapping("/password/forgot")
+    @Operation(summary = "Request a password-reset link — response is always identical, regardless of account state")
+    public ForgotPasswordResponse forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        return passwordResetTokenService.forgotPassword(request.email());
+    }
+
+    @PostMapping("/password/reset")
+    @Operation(summary = "Complete a password reset using a token issued by /auth/password/forgot")
+    public ResetPasswordResponse resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        return passwordResetTokenService.resetPassword(request.token(), request.newPassword());
     }
 }

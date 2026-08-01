@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@/features/dashboard/utils/zod-resolver";
-import { ArrowLeft, ExternalLink, Plus, RefreshCw, ShieldOff, Trash2 } from "lucide-react";
+import { ArrowLeft, ExternalLink, KeyRound, Plus, RefreshCw, ShieldOff, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
@@ -12,6 +12,7 @@ import { ApiError } from "@/lib/api/errors";
 import { buildTenantLandingUrl } from "@/lib/tenant/tenant-landing-url";
 import {
   getCompany,
+  generateOwnerPasswordResetLink,
   inviteOwner,
   reissueInvite,
   revokeInvite,
@@ -22,10 +23,12 @@ import {
   inviteOwnerSchema,
   type InviteOwnerInput,
   type InviteResponse,
+  type AdminPasswordResetResponse,
   type OwnerInviteResponse,
 } from "../types/admin";
 import { AdminError, AdminLoading, StatusBadge, formatDate } from "./AdminPrimitives";
 import { InviteLinkPanel } from "./InviteLinkPanel";
+import { PasswordResetLinkPanel } from "./PasswordResetLinkPanel";
 
 function getErrorMessage(error: unknown, fallback: string) {
   if (error instanceof ApiError && error.status === 409) {
@@ -41,6 +44,8 @@ export function CompanyDetailPage({ companyId }: { companyId: string }) {
   const [inviteResult, setInviteResult] = useState<
     OwnerInviteResponse | InviteResponse | null
   >(null);
+  const [passwordResetResult, setPasswordResetResult] =
+    useState<AdminPasswordResetResponse | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const {
     register,
@@ -105,6 +110,16 @@ export function CompanyDetailPage({ companyId }: { companyId: string }) {
     },
     onError: (error) =>
       setActionError(getErrorMessage(error, "Não foi possível revogar convite.")),
+  });
+
+  const passwordResetMutation = useMutation({
+    mutationFn: (ownerId: string) =>
+      generateOwnerPasswordResetLink(accessToken ?? "", companyId, ownerId),
+    onSuccess: (response) => {
+      setPasswordResetResult(response);
+    },
+    onError: (error) =>
+      setActionError(getErrorMessage(error, "Não foi possível gerar link de recuperação.")),
   });
 
   if (query.isLoading) return <AdminLoading label="A carregar company" />;
@@ -209,6 +224,14 @@ export function CompanyDetailPage({ companyId }: { companyId: string }) {
         />
       ) : null}
 
+      {passwordResetResult ? (
+        <PasswordResetLinkPanel
+          resetLink={passwordResetResult.resetLink}
+          expiresAt={passwordResetResult.expiresAt}
+          onClose={() => setPasswordResetResult(null)}
+        />
+      ) : null}
+
       <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="border border-border bg-surface">
           <div className="border-b border-border px-5 py-4">
@@ -264,6 +287,24 @@ export function CompanyDetailPage({ companyId }: { companyId: string }) {
                           >
                             <Trash2 size={15} aria-hidden="true" />
                             Revogar
+                          </Button>
+                        </div>
+                      ) : owner.status === "ACTIVE" ? (
+                        <div className="flex justify-end">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            disabled={passwordResetMutation.isPending}
+                            onClick={() => {
+                              setPasswordResetResult(null);
+                              if (window.confirm("Gerar um link de recuperação de password para este owner?")) {
+                                passwordResetMutation.mutate(owner.id);
+                              }
+                            }}
+                          >
+                            <KeyRound size={15} aria-hidden="true" />
+                            Gerar link de recuperação
                           </Button>
                         </div>
                       ) : (

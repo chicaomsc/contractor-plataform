@@ -2,6 +2,7 @@ package io.chicaodw.platform.auth.infrastructure.security;
 
 import io.chicaodw.platform.auth.domain.UserRole;
 import io.chicaodw.platform.auth.domain.UserStatus;
+import io.chicaodw.platform.auth.infrastructure.persistence.UserActiveState;
 import io.chicaodw.platform.auth.infrastructure.persistence.UserRepository;
 import io.chicaodw.platform.company.domain.CompanyStatus;
 import io.chicaodw.platform.company.infrastructure.persistence.CompanyRepository;
@@ -23,11 +24,13 @@ import java.io.IOException;
  * authorize a request — the account (and, for an OWNER, its company) must still be
  * ACTIVE right now, not just at the moment the token was issued (DT-011A.7 §13/§14).
  *
- * Two plain single-entity scalar queries (User.status, then Company.status only when
- * the principal is not a SUPER_ADMIN) — deliberately not a single cross-entity ad-hoc
- * join: that shape was tried first and dropped in favor of this simpler, unambiguous
- * pair of queries after it proved unreliable for a NULL company_id (SUPER_ADMIN) in a
- * real Testcontainers run. No Redis, no cache, no distributed session (DT §14).
+ * Two plain single-entity scalar queries (User.status + User.authVersion via one
+ * projection, then Company.status only when the principal is not a SUPER_ADMIN) —
+ * deliberately not a single cross-entity ad-hoc join: that shape was tried first and
+ * dropped in favor of this simpler, unambiguous pair of queries after it proved
+ * unreliable for a NULL company_id (SUPER_ADMIN) in a real Testcontainers run. No
+ * Redis, no cache, no distributed session (DT-011A.7 §14; auth_version comparison
+ * added by DT-011A.10 §5).
  *
  * This filter runs before Spring Security's ExceptionTranslationFilter in the chain
  * (registered right after JwtAuthenticationFilter, itself before
@@ -62,8 +65,15 @@ public class ActiveAccountFilter extends OncePerRequestFilter {
     }
 
     private boolean isActive(JwtPrincipal principal) {
-        UserStatus userStatus = userRepository.findStatusById(principal.userId()).orElse(null);
-        if (userStatus != UserStatus.ACTIVE) {
+        UserActiveState state = userRepository.findActiveStateById(principal.userId()).orElse(null);
+        if (state == null || state.status() != UserStatus.ACTIVE) {
+            return false;
+        }
+
+        // Desigualdade em qualquer direção — não só "mais antigo que" (DT-011A.10 §5):
+        // a password reset bumps auth_version, invalidating every access token issued
+        // before the bump on the very next request, regardless of TTL.
+        if (state.authVersion() != principal.authVersion()) {
             return false;
         }
 

@@ -24,7 +24,8 @@ public class JwtService {
         var builder = Jwts.builder()
                 .subject(user.getId().toString())
                 .claim("email", user.getEmail())
-                .claim("role", user.getRole().name());
+                .claim("role", user.getRole().name())
+                .claim("authVersion", user.getAuthVersion());
         // SUPER_ADMIN has no company — the claim is simply omitted rather than
         // encoding a sentinel value (see DT-011A.7 §5).
         if (user.getCompanyId() != null) {

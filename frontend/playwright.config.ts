@@ -28,7 +28,7 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: `docker compose -f ../docker/docker-compose.yml up -d postgres && cd ../backend && PLATFORM_ADMIN_BOOTSTRAP_EMAIL=${platformAdminEmail} PLATFORM_ADMIN_BOOTSTRAP_PASSWORD=${platformAdminPassword} ./mvnw spring-boot:run -Dspring-boot.run.profiles=local -Dspring-boot.run.arguments="--server.port=${backendPort} --app.cors.allowed-origins=${frontendUrl} --app.platform.base-domain=localhost --app.platform.default-tenant-slug=jr-pinturas"`,
+      command: `docker compose -f ../docker/docker-compose.yml up -d postgres && cd ../backend && PLATFORM_ADMIN_BOOTSTRAP_EMAIL=${platformAdminEmail} PLATFORM_ADMIN_BOOTSTRAP_PASSWORD=${platformAdminPassword} ./mvnw spring-boot:run -Dspring-boot.run.profiles=local -Dspring-boot.run.arguments="--server.port=${backendPort} --app.cors.allowed-origins=${frontendUrl} --app.platform.base-domain=localhost --app.platform.default-tenant-slug=jr-pinturas --app.platform.frontend-base-url=${frontendUrl} --app.password-reset.request-cooldown=0"`,
       url: `${backendUrl}/actuator/health`,
       reuseExistingServer: true,
       timeout: 120_000,

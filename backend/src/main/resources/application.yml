@@ -53,6 +53,14 @@ app:
     # Temporary fallback tenant used when Host doesn't resolve to any known subdomain —
     # explicitly a transition mechanism, not permanent architecture (DT §16/§22/§24).
     default-tenant-slug: ${PLATFORM_DEFAULT_TENANT_SLUG:}
+    # Platform-wide frontend origin used to build absolute links the backend hands out
+    # directly — today: the password-reset link (DT-011A.10 §3/§13). Not tenant-specific.
+    frontend-base-url: ${PLATFORM_FRONTEND_BASE_URL:http://localhost:3000}
+  password-reset:
+    # 30 minutes — see DT-011A.10 §7.
+    token-ttl: ${PASSWORD_RESET_TOKEN_TTL:1800}
+    # 3 minutes — see DT-011A.10 §7.
+    request-cooldown: ${PASSWORD_RESET_REQUEST_COOLDOWN:180}
   admin-bootstrap:
     # Read once at startup by PlatformAdminBootstrapRunner to create the first
     # SUPER_ADMIN — idempotent, fails fast if only one of the two is set. See DT §8.
