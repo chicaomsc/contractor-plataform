@@ -161,7 +161,7 @@ describe("ResetPasswordPage", () => {
       "fetch",
       mockResetResponse(
         Response.json(
-          { detail: "A nova password deve ser diferente da atual." },
+          { detail: "A nova senha deve ser diferente da atual." },
           { status: 422 },
         ),
       ),
@@ -182,7 +182,7 @@ describe("ResetPasswordPage", () => {
     );
 
     expect(
-      await screen.findByText("A nova password deve ser diferente da atual."),
+      await screen.findByText("A nova senha deve ser diferente da atual."),
     ).toBeInTheDocument();
   });
 
