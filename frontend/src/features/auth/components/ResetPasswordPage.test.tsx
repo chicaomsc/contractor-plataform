@@ -64,20 +64,12 @@ describe("ResetPasswordPage", () => {
 
     render(<ResetPasswordPage />);
 
-    await user.type(
-      await screen.findByLabelText(/nova password/i),
-      "Password123",
-    );
-    await user.type(
-      screen.getByLabelText(/confirmar password/i),
-      "Different123",
-    );
-    await user.click(
-      screen.getByRole("button", { name: /atualizar password/i }),
-    );
+    await user.type(await screen.findByLabelText(/nova senha/i), "Password123");
+    await user.type(screen.getByLabelText(/confirmar senha/i), "Different123");
+    await user.click(screen.getByRole("button", { name: /atualizar senha/i }));
 
     expect(
-      await screen.findByText("As Senhas não coincidem."),
+      await screen.findByText("As senhas não coincidem."),
     ).toBeInTheDocument();
     expect(fetch).not.toHaveBeenCalled();
   });
@@ -94,17 +86,9 @@ describe("ResetPasswordPage", () => {
 
     render(<ResetPasswordPage />);
 
-    await user.type(
-      await screen.findByLabelText(/nova password/i),
-      "Password123",
-    );
-    await user.type(
-      screen.getByLabelText(/confirmar password/i),
-      "Password123",
-    );
-    await user.click(
-      screen.getByRole("button", { name: /atualizar password/i }),
-    );
+    await user.type(await screen.findByLabelText(/nova senha/i), "Password123");
+    await user.type(screen.getByLabelText(/confirmar senha/i), "Password123");
+    await user.click(screen.getByRole("button", { name: /atualizar senha/i }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     expect(JSON.parse(fetchMock.mock.calls[0][1]?.body as string)).toEqual({
@@ -136,17 +120,9 @@ describe("ResetPasswordPage", () => {
 
     render(<ResetPasswordPage />);
 
-    await user.type(
-      await screen.findByLabelText(/nova password/i),
-      "Password123",
-    );
-    await user.type(
-      screen.getByLabelText(/confirmar password/i),
-      "Password123",
-    );
-    await user.click(
-      screen.getByRole("button", { name: /atualizar password/i }),
-    );
+    await user.type(await screen.findByLabelText(/nova senha/i), "Password123");
+    await user.type(screen.getByLabelText(/confirmar senha/i), "Password123");
+    await user.click(screen.getByRole("button", { name: /atualizar senha/i }));
 
     expect(
       await screen.findByText(
@@ -169,17 +145,9 @@ describe("ResetPasswordPage", () => {
 
     render(<ResetPasswordPage />);
 
-    await user.type(
-      await screen.findByLabelText(/nova password/i),
-      "Password123",
-    );
-    await user.type(
-      screen.getByLabelText(/confirmar password/i),
-      "Password123",
-    );
-    await user.click(
-      screen.getByRole("button", { name: /atualizar password/i }),
-    );
+    await user.type(await screen.findByLabelText(/nova senha/i), "Password123");
+    await user.type(screen.getByLabelText(/confirmar senha/i), "Password123");
+    await user.click(screen.getByRole("button", { name: /atualizar senha/i }));
 
     expect(
       await screen.findByText("A nova senha deve ser diferente da atual."),
