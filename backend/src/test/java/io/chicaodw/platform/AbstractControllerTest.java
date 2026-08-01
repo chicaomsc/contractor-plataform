@@ -2,6 +2,7 @@ package io.chicaodw.platform;
 
 import io.chicaodw.platform.auth.domain.UserRole;
 import io.chicaodw.platform.auth.domain.UserStatus;
+import io.chicaodw.platform.auth.infrastructure.persistence.UserActiveState;
 import io.chicaodw.platform.auth.infrastructure.persistence.UserRepository;
 import io.chicaodw.platform.auth.infrastructure.security.JwtPrincipal;
 import io.chicaodw.platform.common.storage.StorageService;
@@ -64,19 +65,20 @@ public abstract class AbstractControllerTest extends AbstractIntegrationTest {
 
     @BeforeEach
     void stubDefaultActiveAccount() {
-        when(userRepository.findStatusById(eq(USER_ID))).thenReturn(Optional.of(UserStatus.ACTIVE));
+        when(userRepository.findActiveStateById(eq(USER_ID)))
+                .thenReturn(Optional.of(new UserActiveState(UserStatus.ACTIVE, 0L)));
         when(companyRepository.findStatusById(eq(COMPANY_ID))).thenReturn(Optional.of(CompanyStatus.ACTIVE));
     }
 
     protected static Authentication ownerAuth() {
-        var principal = new JwtPrincipal(USER_ID, COMPANY_ID, "owner@test.com", UserRole.OWNER);
+        var principal = new JwtPrincipal(USER_ID, COMPANY_ID, "owner@test.com", UserRole.OWNER, 0L);
         return new UsernamePasswordAuthenticationToken(
                 principal, null,
                 List.of(new SimpleGrantedAuthority("ROLE_OWNER")));
     }
 
     protected static Authentication nonOwnerAuth() {
-        var principal = new JwtPrincipal(USER_ID, COMPANY_ID, "user@test.com", UserRole.OWNER);
+        var principal = new JwtPrincipal(USER_ID, COMPANY_ID, "user@test.com", UserRole.OWNER, 0L);
         return new UsernamePasswordAuthenticationToken(
                 principal, null,
                 List.of(new SimpleGrantedAuthority("ROLE_VIEWER")));

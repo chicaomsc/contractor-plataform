@@ -71,6 +71,11 @@ export const inviteResponseSchema = z.object({
   invite: inviteSchema,
 });
 
+export const adminPasswordResetResponseSchema = z.object({
+  resetLink: z.string(),
+  expiresAt: z.string(),
+});
+
 export const companiesPageSchema = z.object({
   content: z.array(companyAdminSummarySchema),
   totalElements: z.number(),
@@ -105,6 +110,7 @@ export type CompanyAdminDetailResponse = z.infer<typeof companyAdminDetailRespon
 export type CompanyOnboardingResponse = z.infer<typeof companyOnboardingResponseSchema>;
 export type OwnerInviteResponse = z.infer<typeof ownerInviteResponseSchema>;
 export type InviteResponse = z.infer<typeof inviteResponseSchema>;
+export type AdminPasswordResetResponse = z.infer<typeof adminPasswordResetResponseSchema>;
 export type CompaniesPage = z.infer<typeof companiesPageSchema>;
 export type CreateCompanyInput = z.infer<typeof createCompanySchema>;
 export type InviteOwnerInput = z.infer<typeof inviteOwnerSchema>;

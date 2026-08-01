@@ -1,5 +1,6 @@
 package io.chicaodw.platform.admin.application;
 
+import io.chicaodw.platform.admin.api.dto.AdminPasswordResetResponse;
 import io.chicaodw.platform.admin.api.dto.CompanyAdminDetail;
 import io.chicaodw.platform.admin.api.dto.CompanyAdminDetailResponse;
 import io.chicaodw.platform.admin.api.dto.CompanyAdminSummary;
@@ -12,6 +13,7 @@ import io.chicaodw.platform.admin.api.dto.OwnerAdminResponse;
 import io.chicaodw.platform.admin.api.dto.OwnerInviteResponse;
 import io.chicaodw.platform.admin.api.dto.OwnerSummary;
 import io.chicaodw.platform.auth.application.InviteService;
+import io.chicaodw.platform.auth.application.PasswordResetTokenService;
 import io.chicaodw.platform.auth.domain.User;
 import io.chicaodw.platform.auth.domain.UserRole;
 import io.chicaodw.platform.auth.domain.UserRoleInvariant;
@@ -62,6 +64,7 @@ public class AdminCompanyService {
     private final SettingsRepository settingsRepository;
     private final PasswordEncoder passwordEncoder;
     private final InviteService inviteService;
+    private final PasswordResetTokenService passwordResetTokenService;
 
     public CompanyOnboardingResponse createCompanyWithOwner(CreateCompanyRequest request, UUID actingSuperAdminId) {
         if (userRepository.existsByEmail(request.ownerEmail())) {
@@ -184,6 +187,12 @@ public class AdminCompanyService {
     public void revokeInvite(UUID companyId, UUID ownerId) {
         requireOwnerInCompany(companyId, ownerId);
         inviteService.revokeInvite(ownerId);
+    }
+
+    public AdminPasswordResetResponse generatePasswordResetLink(UUID companyId, UUID ownerId, UUID actingSuperAdminId) {
+        requireOwnerInCompany(companyId, ownerId);
+        PasswordResetTokenService.IssuedToken issued = passwordResetTokenService.issueForActiveOwner(ownerId, actingSuperAdminId);
+        return new AdminPasswordResetResponse(passwordResetTokenService.buildResetLink(issued.rawToken()), issued.expiresAt());
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────

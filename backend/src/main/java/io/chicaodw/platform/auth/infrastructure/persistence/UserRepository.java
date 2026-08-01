@@ -1,7 +1,6 @@
 package io.chicaodw.platform.auth.infrastructure.persistence;
 
 import io.chicaodw.platform.auth.domain.User;
-import io.chicaodw.platform.auth.domain.UserStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -16,13 +15,18 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     Optional<User> findByEmail(String email);
 
+    /** Case-insensitive lookup used by POST /auth/password/forgot (DT-011A.10 §2) — deliberately
+     * different from findByEmail, which stays case-sensitive for register/login (pre-existing behavior). */
+    Optional<User> findByEmailIgnoreCase(String email);
+
     boolean existsByEmail(String email);
 
     List<User> findByCompanyId(UUID companyId);
 
     List<User> findByCompanyIdIn(List<UUID> companyIds);
 
-    /** Single-column scalar lookup used by ActiveAccountFilter — no full entity hydration. */
-    @Query("SELECT u.status FROM User u WHERE u.id = :userId")
-    Optional<UserStatus> findStatusById(@Param("userId") UUID userId);
+    /** Scalar projection used by ActiveAccountFilter — no full entity hydration (DT-011A.10 §5). */
+    @Query("SELECT new io.chicaodw.platform.auth.infrastructure.persistence.UserActiveState(u.status, u.authVersion) "
+            + "FROM User u WHERE u.id = :userId")
+    Optional<UserActiveState> findActiveStateById(@Param("userId") UUID userId);
 }

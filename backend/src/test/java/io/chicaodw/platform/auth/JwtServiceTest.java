@@ -65,6 +65,19 @@ class JwtServiceTest {
         assertThat(claims.get("email",     String.class)).isEqualTo("alice@example.com");
         assertThat(claims.get("role",      String.class)).isEqualTo("OWNER");
         assertThat(claims.get("companyId", String.class)).isEqualTo(user.getCompanyId().toString());
+        assertThat(claims.get("authVersion", Long.class)).isEqualTo(0L);
+    }
+
+    // ── authVersion (DT-011A.10 §5) ─────────────────────────────────────────────
+
+    @Test
+    void shouldContainCurrentAuthVersion_whenNonZero() {
+        user.setAuthVersion(3);
+
+        String token  = jwtService.generateAccessToken(user);
+        Claims claims = jwtService.parseClaims(token);
+
+        assertThat(claims.get("authVersion", Long.class)).isEqualTo(3L);
     }
 
     @Test

@@ -3,6 +3,7 @@
 import { zodResolver } from "@/features/dashboard/utils/zod-resolver";
 import { Button } from "@/components/ui/Button";
 import { ApiError } from "@/lib/api/errors";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
@@ -59,23 +60,23 @@ export function LoginForm({ variant = "owner" }: LoginFormProps) {
 
   return (
     <form
-      className="w-full max-w-md border border-border bg-surface p-6 shadow-sm md:p-8"
+      className="w-full max-w-md border border-border bg-surface p-6 shadow-sm md:p-8 rounded-xl"
       onSubmit={handleSubmit(onSubmit)}
       noValidate
     >
-      <div className="space-y-2">
+      <div className="space-y-2 text-center">
         <p className="text-sm font-semibold uppercase tracking-[0.18em] text-primary">
           {variant === "admin" ? "Platform Admin" : "Dashboard"}
         </p>
         <h1 className="m-0 font-display text-3xl font-bold">
           {variant === "admin"
-            ? "Entrar na administração da plataforma"
-            : "Entrar na área administrativa"}
+            ? "administração da plataforma"
+            : "Área administrativa"}
         </h1>
         <p className="m-0 text-sm text-[var(--muted-foreground)]">
           {variant === "admin"
             ? "Acesso restrito a contas SUPER_ADMIN."
-            : "Use a conta criada no backend da plataforma."}
+            : "Acesse o painel para gerenciar sua empresa."}
         </p>
       </div>
 
@@ -85,7 +86,7 @@ export function LoginForm({ variant = "owner" }: LoginFormProps) {
           <input
             type="email"
             autoComplete="email"
-            className="min-h-12 w-full border border-border bg-background px-4 text-base outline-none transition-colors focus:border-primary"
+            className="min-h-12 w-full border border-border bg-background px-4 text-base outline-none transition-colors focus:border-primary rounded-lg"
             {...register("email")}
           />
           {errors.email ? (
@@ -96,11 +97,11 @@ export function LoginForm({ variant = "owner" }: LoginFormProps) {
         </label>
 
         <label className="block space-y-2">
-          <span className="text-sm font-semibold">Password</span>
+          <span className="text-sm font-semibold">Senha</span>
           <input
             type="password"
             autoComplete="current-password"
-            className="min-h-12 w-full border border-border bg-background px-4 text-base outline-none transition-colors focus:border-primary"
+            className="min-h-12 w-full border border-border bg-background px-4 text-base outline-none transition-colors focus:border-primary rounded-lg"
             {...register("password")}
           />
           {errors.password ? (
@@ -112,12 +113,29 @@ export function LoginForm({ variant = "owner" }: LoginFormProps) {
       </div>
 
       {formError ? (
-        <p className="mt-5 border border-error bg-background px-4 py-3 text-sm font-semibold text-error">
+        <p className="mt-5 border border-error bg-background px-4 py-3 text-sm font-semibold text-error text-center rounded-lg">
           {formError}
         </p>
       ) : null}
 
-      <Button className="mt-8 w-full" type="submit" disabled={isSubmitting}>
+      <div className="text-right mt-4">
+        <Link
+          href={
+            variant === "admin"
+              ? "/forgot-password?variant=admin"
+              : "/forgot-password"
+          }
+          className=" inline-flex text-sm font-semibold text-primary no-underline hover:underline"
+        >
+          Esqueci minha senha
+        </Link>
+      </div>
+
+      <Button
+        className="mt-6 w-full rounded-lg border shadow-sm"
+        type="submit"
+        disabled={isSubmitting}
+      >
         {isSubmitting ? "A entrar" : "Entrar"}
       </Button>
     </form>

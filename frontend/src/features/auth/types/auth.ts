@@ -68,6 +68,33 @@ export const loginFormSchema = z.object({
   password: z.string().min(1, "Indique a password."),
 });
 
+export const forgotPasswordFormSchema = z.object({
+  email: z.string().email("Indique um email válido."),
+});
+
+export const forgotPasswordResponseSchema = z.object({
+  message: z.string(),
+  debugToken: z.string().optional(),
+  debugResetLink: z.string().optional(),
+});
+
+export const resetPasswordFormSchema = z
+  .object({
+    password: z
+      .string()
+      .min(8, "Use pelo menos 8 caracteres.")
+      .max(128, "Use no máximo 128 caracteres."),
+    passwordConfirmation: z.string().min(1, "Confirme a senha."),
+  })
+  .refine((value) => value.password === value.passwordConfirmation, {
+    path: ["passwordConfirmation"],
+    message: "As senhas não coincidem.",
+  });
+
+export const resetPasswordResponseSchema = z.object({
+  message: z.string(),
+});
+
 export type AuthUserDto = z.infer<typeof authUserDtoSchema>;
 export type AuthCompanyDto = z.infer<typeof authCompanyDtoSchema>;
 export type UserRole = z.infer<typeof userRoleSchema>;
@@ -76,3 +103,13 @@ export type CompanyStatus = z.infer<typeof companyStatusSchema>;
 export type AuthResponse = z.infer<typeof authResponseSchema>;
 export type MeResponse = z.infer<typeof meResponseSchema>;
 export type LoginFormValues = z.infer<typeof loginFormSchema>;
+export type ForgotPasswordRequest = z.infer<typeof forgotPasswordFormSchema>;
+export type ForgotPasswordResponse = z.infer<
+  typeof forgotPasswordResponseSchema
+>;
+export type ResetPasswordFormValues = z.infer<typeof resetPasswordFormSchema>;
+export type ResetPasswordRequest = {
+  token: string;
+  newPassword: string;
+};
+export type ResetPasswordResponse = z.infer<typeof resetPasswordResponseSchema>;

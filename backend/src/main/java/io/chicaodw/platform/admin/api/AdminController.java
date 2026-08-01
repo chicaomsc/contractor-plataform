@@ -1,5 +1,6 @@
 package io.chicaodw.platform.admin.api;
 
+import io.chicaodw.platform.admin.api.dto.AdminPasswordResetResponse;
 import io.chicaodw.platform.admin.api.dto.CompanyAdminDetailResponse;
 import io.chicaodw.platform.admin.api.dto.CompanyAdminSummary;
 import io.chicaodw.platform.admin.api.dto.CompanyOnboardingResponse;
@@ -104,5 +105,15 @@ public class AdminController {
     @Operation(summary = "Revoke a still-PENDING owner's invite without reissuing")
     public void revokeInvite(@PathVariable UUID companyId, @PathVariable UUID ownerId) {
         adminCompanyService.revokeInvite(companyId, ownerId);
+    }
+
+    @PostMapping("/{companyId}/owners/{ownerId}/password-reset")
+    @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "Generate a one-time password-reset link for an ACTIVE owner (revokes any previous one)")
+    public AdminPasswordResetResponse generatePasswordResetLink(
+            @AuthenticationPrincipal JwtPrincipal principal,
+            @PathVariable UUID companyId,
+            @PathVariable UUID ownerId) {
+        return adminCompanyService.generatePasswordResetLink(companyId, ownerId, principal.userId());
     }
 }

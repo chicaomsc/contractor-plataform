@@ -6,9 +6,11 @@ import {
   companyAdminDetailResponseSchema,
   companyAdminSummarySchema,
   companyOnboardingResponseSchema,
+  adminPasswordResetResponseSchema,
   inviteResponseSchema,
   ownerInviteResponseSchema,
   type CompaniesPage,
+  type AdminPasswordResetResponse,
   type CompanyAdminDetailResponse,
   type CompanyAdminSummary,
   type CompanyOnboardingResponse,
@@ -136,4 +138,19 @@ export async function revokeInvite(
       method: "DELETE",
     },
   );
+}
+
+export async function generateOwnerPasswordResetLink(
+  accessToken: string,
+  companyId: string,
+  ownerId: string,
+): Promise<AdminPasswordResetResponse> {
+  const response = await adminApiRequest<unknown>(
+    `/admin/companies/${encodeURIComponent(companyId)}/owners/${encodeURIComponent(ownerId)}/password-reset`,
+    {
+      accessToken,
+      method: "POST",
+    },
+  );
+  return parseApiResponse(adminPasswordResetResponseSchema, response);
 }

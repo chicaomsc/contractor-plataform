@@ -45,8 +45,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 UUID companyId = companyIdClaim != null ? UUID.fromString(companyIdClaim) : null;
                 String email   = claims.get("email", String.class);
                 UserRole role  = UserRole.valueOf(claims.get("role", String.class));
+                // Defaults to 0 for a token issued before this claim existed — matches
+                // every user's auth_version at that point (column DEFAULT 0, DT-011A.10 §5).
+                Long authVersionClaim = claims.get("authVersion", Long.class);
+                long authVersion = authVersionClaim != null ? authVersionClaim : 0L;
 
-                var principal  = new JwtPrincipal(userId, companyId, email, role);
+                var principal  = new JwtPrincipal(userId, companyId, email, role, authVersion);
                 var authorities = List.of(new SimpleGrantedAuthority("ROLE_" + role.name()));
                 var auth = new UsernamePasswordAuthenticationToken(principal, null, authorities);
                 SecurityContextHolder.getContext().setAuthentication(auth);
