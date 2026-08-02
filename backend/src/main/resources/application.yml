@@ -45,6 +45,14 @@ app:
     refresh-token-ttl: 2592000  # 30 days (seconds)
   storage:
     base-path: ${STORAGE_PATH:./storage}
+  image-normalization:
+    # Enforced before ImageIO decodes the full pixel buffer — rejects decompression-bomb-
+    # style images (tiny file, huge declared dimensions) reading only the header first.
+    # See ImageNormalizationService (Sprint 11B.6C, SEC-STORAGE-02).
+    max-width-px: ${IMAGE_MAX_WIDTH_PX:6000}
+    max-height-px: ${IMAGE_MAX_HEIGHT_PX:6000}
+    max-pixels: ${IMAGE_MAX_PIXELS:30000000}
+    jpeg-quality: ${IMAGE_JPEG_QUALITY:0.85}
   platform:
     # Base domain used to extract a tenant slug from a Host value ("{slug}.{base-domain}")
     # at GET /public/tenant — see DT-011A.7 §16. "localhost" is correct for local/E2E

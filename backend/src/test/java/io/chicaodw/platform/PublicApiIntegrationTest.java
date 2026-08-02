@@ -217,7 +217,9 @@ class PublicApiIntegrationTest extends AbstractIntegrationTest {
         Files.write(storageFile, new byte[]{1, 2, 3});
 
         mockMvc.perform(get("/uploads/company/" + companyId + "/logo/public-api-test.png"))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Type", "image/png"))
+                .andExpect(header().string("Cache-Control", org.hamcrest.Matchers.containsString("no-cache")));
 
         Files.deleteIfExists(storageFile);
     }

@@ -3,13 +3,14 @@ package io.chicaodw.platform.common.storage;
 import io.chicaodw.platform.common.exception.StorageException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.springframework.mock.web.MockMultipartFile;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.assertThatNoException;
 
 class LocalStorageServiceTest {
 
@@ -19,9 +20,8 @@ class LocalStorageServiceTest {
     @Test
     void store_rejectsFolderTraversal() {
         var service = service();
-        var file = new MockMultipartFile("file", "image.png", "image/png", new byte[]{1});
 
-        assertThatThrownBy(() -> service.store("../outside", file))
+        assertThatThrownBy(() -> service.store("../outside", new byte[]{1}, "png"))
                 .isInstanceOf(StorageException.class)
                 .hasMessageContaining("Invalid storage folder");
     }
@@ -36,14 +36,57 @@ class LocalStorageServiceTest {
     }
 
     @Test
-    void store_writesInsideBaseDirectoryWithGeneratedName() throws Exception {
+    void store_writesInsideBaseDirectoryWithGeneratedName() {
         var service = service();
-        var file = new MockMultipartFile("file", "image.png", "image/png", new byte[]{1, 2, 3});
 
-        String storedPath = service.store("company/test/gallery", file);
+        String storedPath = service.store("company/test/gallery", new byte[]{1, 2, 3}, "png");
 
-        assertThat(storedPath).startsWith("/uploads/company/test/gallery/");
+        assertThat(storedPath).startsWith("/uploads/company/test/gallery/").endsWith(".png");
         assertThat(Files.exists(tempDir.resolve(storedPath.replaceFirst("^/uploads/", "")))).isTrue();
+    }
+
+    @Test
+    void deleteQuietly_neverThrows_evenForInvalidPath() {
+        var service = service();
+
+        assertThatNoException().isThrownBy(() -> service.deleteQuietly("/uploads/../../outside.png"));
+        assertThatNoException().isThrownBy(() -> service.deleteQuietly(null));
+    }
+
+    @Test
+    void deleteQuietly_removesFileJustLikeDelete() {
+        var service = service();
+        String storedPath = service.store("company/test/logo", new byte[]{1}, "png");
+
+        service.deleteQuietly(storedPath);
+
+        assertThat(Files.exists(tempDir.resolve(storedPath.replaceFirst("^/uploads/", "")))).isFalse();
+    }
+
+    @Test
+    void list_returnsEveryStoredFileUnderPrefix() {
+        var service = service();
+        String a = service.store("company/test/logo", new byte[]{1}, "png");
+        String b = service.store("company/test/gallery", new byte[]{2}, "jpg");
+        service.store("company/other/logo", new byte[]{3}, "png");
+
+        List<String> files = service.list("company/test");
+
+        assertThat(files).containsExactlyInAnyOrder(a, b);
+    }
+
+    @Test
+    void list_rejectsPrefixTraversal() {
+        var service = service();
+
+        assertThat(service.list("../outside")).isEmpty();
+    }
+
+    @Test
+    void list_missingFolder_returnsEmpty() {
+        var service = service();
+
+        assertThat(service.list("company/does-not-exist")).isEmpty();
     }
 
     private LocalStorageService service() {

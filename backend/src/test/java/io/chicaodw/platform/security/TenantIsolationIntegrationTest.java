@@ -155,7 +155,7 @@ class TenantIsolationIntegrationTest extends AbstractIntegrationTest {
         assertThatThrownBy(() -> galleryService.deleteItem(companyB, itemA.id()))
                 .isInstanceOf(ResourceNotFoundException.class);
 
-        verify(storageService, never()).store(any(), any());
+        verify(storageService, never()).store(any(), any(), any());
         assertThat(galleryRepository.findById(itemA.id()).orElseThrow().getTitle()).isEqualTo("Obra A");
     }
 
@@ -163,12 +163,12 @@ class TenantIsolationIntegrationTest extends AbstractIntegrationTest {
     void galleryUploadsUseAuthenticatedCompanyFolder() {
         var itemA = galleryService.createItem(companyA,
                 new CreateGalleryRequest("Obra A", null, 0, false, true));
-        when(storageService.store(eq("company/" + companyA + "/gallery"), any()))
+        when(storageService.store(eq("company/" + companyA + "/gallery"), any(), any()))
                 .thenReturn("/uploads/company/" + companyA + "/gallery/image.png");
 
         galleryService.uploadBeforeImage(companyA, itemA.id(), pngFile());
 
-        verify(storageService).store(eq("company/" + companyA + "/gallery"), any());
+        verify(storageService).store(eq("company/" + companyA + "/gallery"), any(), any());
     }
 
     @Test
@@ -274,8 +274,17 @@ class TenantIsolationIntegrationTest extends AbstractIntegrationTest {
     }
 
     private MockMultipartFile pngFile() {
-        return new MockMultipartFile("file", "image.png", "image/png", new byte[]{
-                (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00
-        });
+        // A real, decodable PNG — ImageNormalizationService is a real bean in this
+        // @SpringBootTest context (only StorageService is mocked), so a fixture with
+        // just the magic-byte header (enough for ImageUploadPolicy alone) isn't enough
+        // once normalization actually decodes the image.
+        try {
+            var image = new java.awt.image.BufferedImage(4, 4, java.awt.image.BufferedImage.TYPE_INT_RGB);
+            var out = new java.io.ByteArrayOutputStream();
+            javax.imageio.ImageIO.write(image, "png", out);
+            return new MockMultipartFile("file", "image.png", "image/png", out.toByteArray());
+        } catch (java.io.IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 }

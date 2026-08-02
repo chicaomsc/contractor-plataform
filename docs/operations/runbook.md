@@ -323,6 +323,62 @@ requisição ao backend. Não introduzir uma lista de proxies confiáveis
 (Cloudflare) na frente do Caddy — fazer isso agora criaria uma falsa sensação
 de proteção sem uma borda que de fato a imponha.
 
+### 21.2 Uploads de imagem — normalização, limites, limpeza e cache (Sprint 11B.6C)
+
+**Formatos aceitos:** PNG, JPEG, WebP (validados por `ImageUploadPolicy` — tamanho,
+extensão, assinatura de bytes — e depois de fato decodificados por
+`ImageNormalizationService`, que rejeita qualquer arquivo que passe pela validação
+superficial mas não seja uma imagem real). Toda imagem aceita é **descartada e
+recriada** a partir de um `BufferedImage` decodificado — nunca é uma cópia binária do
+upload original — o que remove EXIF/XMP/ICC e aplica a orientação EXIF nos próprios
+pixels antes de salvar. PNG e JPEG mantêm o formato original; **WebP é sempre
+convertido para PNG** na gravação (o JDK não grava WebP, e não há biblioteca Java
+pura mantida que o faça — ver javadoc de `ImageNormalizationService`).
+
+**Limites** (configuráveis via `app.image-normalization.*` / env vars
+`IMAGE_MAX_WIDTH_PX` / `IMAGE_MAX_HEIGHT_PX` / `IMAGE_MAX_PIXELS` /
+`IMAGE_JPEG_QUALITY`, padrões 6000×6000px / 30 megapixels / qualidade 0.85):
+aplicados **antes** de decodificar o buffer de pixels completo (lendo só o
+cabeçalho da imagem), especificamente para rejeitar imagens do tipo
+"decompression bomb" (arquivo pequeno, dimensões declaradas enormes) sem alocar
+memória para elas.
+
+**Limpeza de arquivos substituídos/removidos:** ao trocar um logo ou foto de
+galeria, a ordem é sempre gravar o novo arquivo → persistir a nova URL no banco →
+só então apagar o arquivo antigo (nunca o inverso); a remoção do arquivo antigo é
+best-effort (`StorageService.deleteQuietly`, nunca lança exceção) — uma falha ao
+apagar fisicamente o arquivo antigo nunca desfaz ou bloqueia a troca que já foi
+persistida. Isso significa que, em caso de falha (raríssima — permissão de
+filesystem, disco cheio), um arquivo antigo pode ficar órfão em disco.
+
+**Detecção de órfãos (dry-run apenas):** `GET /admin/storage/orphans`
+(SUPER_ADMIN, mesmo padrão de autorização do `AdminController`) lista arquivos em
+disco não referenciados por nenhuma linha de `branding`/`gallery_items`. **Não
+apaga nada** — é um relatório para um operador revisar manualmente. Para remover
+um órfão confirmado: parar o backend (ou aceitar a janela de corrida) e apagar o
+arquivo diretamente do volume `backend_storage` pelo path retornado no relatório
+(`storedPath`, relativo a `STORAGE_PATH`/`app.storage.base-path`). Não existe
+comando de limpeza automática nesta sprint deliberadamente — ver `DT-011B.4 §13`
+(`SEC-STORAGE-05`).
+
+**Cache:** `/uploads/**` responde `Cache-Control: no-cache` (não `no-store`, mas
+sem validador — ETag/Last-Modified — para revalidar contra, o que na prática força
+uma busca nova a cada vez). Substituiu o `max-age` de 30 dias anterior
+especificamente para que a desativação de uma empresa (`SEC-TENANT-03`) revogue o
+acesso imediatamente, mesmo para quem já tinha a imagem em cache. Estratégia
+futura, ainda não implementada: URLs com conteúdo versionado/hash (ex.:
+`{uuid}.{hash}.png`) permitiriam voltar a um `max-age` longo com segurança, já que
+trocar o arquivo trocaria a própria URL.
+
+**Preparação para storage remoto (S3-compatible):** `StorageService` já é
+independente de filesystem — todo conteúdo passa como `byte[]`, todo arquivo é
+endereçado por uma storage key (`String`, ex.
+`/uploads/company/{id}/logo/{uuid}.png`), nunca um `java.nio.file.Path` ou
+`MultipartFile`. Uma implementação S3 precisaria apenas: `store` → `PutObject`;
+`load`/`delete`/`deleteQuietly` → `GetObject`/`DeleteObject`; `list` →
+`ListObjectsV2` com prefixo. Não implementado nesta sprint (fora de escopo) —
+`LocalStorageService` continua sendo a única implementação real.
+
 ## 22. Banco de Dados
 
 ```bash

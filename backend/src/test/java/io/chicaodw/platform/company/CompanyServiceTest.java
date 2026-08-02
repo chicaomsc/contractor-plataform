@@ -2,7 +2,9 @@ package io.chicaodw.platform.company;
 
 import io.chicaodw.platform.common.exception.BusinessRuleException;
 import io.chicaodw.platform.common.exception.ResourceNotFoundException;
+import io.chicaodw.platform.common.storage.ImageNormalizationService;
 import io.chicaodw.platform.common.storage.ImageUploadPolicy;
+import io.chicaodw.platform.common.storage.NormalizedImage;
 import io.chicaodw.platform.common.storage.StorageService;
 import io.chicaodw.platform.company.api.dto.BrandingResponse;
 import io.chicaodw.platform.company.api.dto.CompanyResponse;
@@ -44,6 +46,7 @@ class CompanyServiceTest {
     @Mock SettingsRepository settingsRepository;
     @Mock StorageService     storageService;
     @Spy ImageUploadPolicy   imageUploadPolicy = new ImageUploadPolicy();
+    @Mock ImageNormalizationService imageNormalizationService;
     @Mock CompanyMapper      companyMapper;
 
     @InjectMocks CompanyService companyService;
@@ -142,18 +145,20 @@ class CompanyServiceTest {
     @Test
     void uploadLogo_validImage_savesFileAndUpdatesLogoUrl() {
         var file = new MockMultipartFile("file", "logo.png", "image/png", pngBytes());
+        var normalized = new NormalizedImage(new byte[]{9, 9}, "png");
         var expected = new BrandingResponse(branding.getId(), companyId, "/uploads/company/" + companyId + "/logo/abc.png",
                 "#1E40AF", null, null, null, null, null, null, null);
 
         when(brandingRepository.findByCompanyId(companyId)).thenReturn(Optional.of(branding));
-        when(storageService.store(anyString(), any())).thenReturn("/uploads/company/" + companyId + "/logo/abc.png");
+        when(imageNormalizationService.normalize(file)).thenReturn(normalized);
+        when(storageService.store(anyString(), any(), any())).thenReturn("/uploads/company/" + companyId + "/logo/abc.png");
         when(brandingRepository.save(branding)).thenReturn(branding);
         when(companyMapper.toBrandingResponse(branding)).thenReturn(expected);
 
         BrandingResponse result = companyService.uploadLogo(companyId, file);
 
         assertThat(result.logoUrl()).contains("/uploads/");
-        verify(storageService).store("company/" + companyId + "/logo", file);
+        verify(storageService).store("company/" + companyId + "/logo", normalized.bytes(), normalized.extension());
     }
 
     @Test
@@ -178,9 +183,11 @@ class CompanyServiceTest {
     void uploadLogo_existingLogo_deletesOldFile() {
         branding.setLogoUrl("/uploads/company/" + companyId + "/logo/old.png");
         var file = new MockMultipartFile("file", "new.png", "image/png", pngBytes());
+        var normalized = new NormalizedImage(new byte[]{9, 9}, "png");
 
         when(brandingRepository.findByCompanyId(companyId)).thenReturn(Optional.of(branding));
-        when(storageService.store(anyString(), any())).thenReturn("/uploads/company/" + companyId + "/logo/new.png");
+        when(imageNormalizationService.normalize(file)).thenReturn(normalized);
+        when(storageService.store(anyString(), any(), any())).thenReturn("/uploads/company/" + companyId + "/logo/new.png");
         when(brandingRepository.save(branding)).thenReturn(branding);
         when(companyMapper.toBrandingResponse(branding)).thenReturn(
                 new BrandingResponse(branding.getId(), companyId, "/uploads/company/" + companyId + "/logo/new.png",
@@ -188,7 +195,7 @@ class CompanyServiceTest {
 
         companyService.uploadLogo(companyId, file);
 
-        verify(storageService).delete("/uploads/company/" + companyId + "/logo/old.png");
+        verify(storageService).deleteQuietly("/uploads/company/" + companyId + "/logo/old.png");
     }
 
     // ── deleteLogo ────────────────────────────────────────────────────────────
@@ -205,7 +212,7 @@ class CompanyServiceTest {
 
         BrandingResponse result = companyService.deleteLogo(companyId);
 
-        verify(storageService).delete("/uploads/company/" + companyId + "/logo/logo.png");
+        verify(storageService).deleteQuietly("/uploads/company/" + companyId + "/logo/logo.png");
         assertThat(result.logoUrl()).isNull();
     }
 
@@ -220,7 +227,7 @@ class CompanyServiceTest {
 
         companyService.deleteLogo(companyId);
 
-        verify(storageService, never()).delete(anyString());
+        verify(storageService, never()).deleteQuietly(anyString());
     }
 
     private static byte[] pngBytes() {

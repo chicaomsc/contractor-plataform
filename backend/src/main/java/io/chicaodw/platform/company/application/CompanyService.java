@@ -3,7 +3,9 @@ package io.chicaodw.platform.company.application;
 import io.chicaodw.platform.common.entity.Address;
 import io.chicaodw.platform.common.exception.BusinessRuleException;
 import io.chicaodw.platform.common.exception.ResourceNotFoundException;
+import io.chicaodw.platform.common.storage.ImageNormalizationService;
 import io.chicaodw.platform.common.storage.ImageUploadPolicy;
+import io.chicaodw.platform.common.storage.NormalizedImage;
 import io.chicaodw.platform.common.storage.StorageService;
 import io.chicaodw.platform.company.api.dto.BrandingResponse;
 import io.chicaodw.platform.company.api.dto.CompanyResponse;
@@ -36,6 +38,7 @@ public class CompanyService {
     private final SettingsRepository settingsRepository;
     private final StorageService     storageService;
     private final ImageUploadPolicy  imageUploadPolicy;
+    private final ImageNormalizationService imageNormalizationService;
     private final CompanyMapper      companyMapper;
 
     // ── Internal (used by AuthService during onboarding) ─────────────────────
@@ -173,30 +176,38 @@ public class CompanyService {
 
     public BrandingResponse uploadLogo(UUID companyId, MultipartFile file) {
         imageUploadPolicy.validate(file);
+        NormalizedImage normalized = imageNormalizationService.normalize(file);
 
         var branding = brandingRepository.findByCompanyId(companyId)
                 .orElseThrow(() -> new ResourceNotFoundException("Branding", companyId));
 
-        // Delete the existing logo file before storing the new one
-        if (branding.getLogoUrl() != null) {
-            storageService.delete(branding.getLogoUrl());
-        }
+        String previousLogoUrl = branding.getLogoUrl();
 
         String folder  = "company/" + companyId + "/logo";
-        String logoUrl = storageService.store(folder, file);
+        String logoUrl = storageService.store(folder, normalized.bytes(), normalized.extension());
         branding.setLogoUrl(logoUrl);
 
-        return companyMapper.toBrandingResponse(brandingRepository.save(branding));
+        var response = companyMapper.toBrandingResponse(brandingRepository.save(branding));
+
+        // Only remove the superseded file after the new reference is durably persisted —
+        // a failed physical delete must never affect a write that already succeeded
+        // (DT-011B.5, Sprint 11B.6C item 3).
+        if (previousLogoUrl != null) {
+            storageService.deleteQuietly(previousLogoUrl);
+        }
+
+        return response;
     }
 
     public BrandingResponse deleteLogo(UUID companyId) {
         var branding = brandingRepository.findByCompanyId(companyId)
                 .orElseThrow(() -> new ResourceNotFoundException("Branding", companyId));
 
-        if (branding.getLogoUrl() != null) {
-            storageService.delete(branding.getLogoUrl());
+        String previousLogoUrl = branding.getLogoUrl();
+        if (previousLogoUrl != null) {
             branding.setLogoUrl(null);
             brandingRepository.save(branding);
+            storageService.deleteQuietly(previousLogoUrl);
         }
 
         return companyMapper.toBrandingResponse(branding);

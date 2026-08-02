@@ -51,6 +51,14 @@ public class PublicUploadController {
         String storedPath = request.getRequestURI();
         byte[] bytes = storageService.load(storedPath).orElseThrow(PublicUploadController::notFound);
 
+        // no-cache (not no-store): the response is still cacheable, but a client must
+        // revalidate before reusing it — and since no ETag/Last-Modified is set, there's
+        // nothing to revalidate against, so in practice this forces a fresh request every
+        // time. That's deliberate: a 30-day public max-age (the pre-11B.6B behavior) would
+        // let a browser keep serving a deactivated company's logo/gallery from its own
+        // cache long after CompanyStatus flips to INACTIVE, regardless of what the server
+        // does. Content-addressed/versioned URLs (§5, Sprint 11B.6C) would let us go back
+        // to a long max-age safely later, since the URL itself would change on replace.
         return ResponseEntity.ok()
                 .contentType(resolveMediaType(storedPath))
                 .cacheControl(CacheControl.noCache().cachePublic())
