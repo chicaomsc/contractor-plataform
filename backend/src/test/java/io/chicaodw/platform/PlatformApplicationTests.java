@@ -18,9 +18,10 @@ class PlatformApplicationTests extends AbstractIntegrationTest {
 
     @Test
     void flywayAppliedAllMigrations() {
-        // Verify all migrations ran: uuid-ossp extension + domain tables through V13
+        // Verify all migrations ran: uuid-ossp extension + domain tables through V14
         // (Sprint 11A.7 added owner_invites via V11/V12; Sprint 11A.10 added
-        // password_reset_tokens via V13 — see DT-011A.10 §14).
+        // password_reset_tokens via V13; Sprint 11B.6A hashed refresh_tokens via V14 —
+        // same table set, no new/removed table).
         var tables = jdbc.queryForList(
                 "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename",
                 String.class
@@ -33,9 +34,9 @@ class PlatformApplicationTests extends AbstractIntegrationTest {
     }
 
     @Test
-    void flywayAppliedExactlyThirteenMigrations() {
+    void flywayAppliedExactlyFourteenMigrations() {
         Integer count = jdbc.queryForObject(
                 "SELECT count(*) FROM flyway_schema_history WHERE success = true", Integer.class);
-        assertThat(count).isEqualTo(13);
+        assertThat(count).isEqualTo(14);
     }
 }

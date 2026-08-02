@@ -32,6 +32,7 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http,
+                                           AuthRateLimitFilter rateLimitFilter,
                                            JwtAuthenticationFilter jwtFilter,
                                            ActiveAccountFilter activeAccountFilter,
                                            JwtAuthenticationEntryPoint entryPoint) throws Exception {
@@ -69,6 +70,7 @@ public class SecurityConfig {
                 )
                 .exceptionHandling(ex -> ex.authenticationEntryPoint(entryPoint))
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(rateLimitFilter, JwtAuthenticationFilter.class)
                 .addFilterAfter(activeAccountFilter, JwtAuthenticationFilter.class)
                 .build();
     }

@@ -18,6 +18,7 @@ import io.chicaodw.platform.auth.infrastructure.security.PlatformUserDetails;
 import io.chicaodw.platform.auth.api.dto.UserResponse;
 import io.chicaodw.platform.auth.api.dto.CompanyResponse;
 import io.chicaodw.platform.common.exception.BusinessRuleException;
+import io.chicaodw.platform.common.security.TokenHasher;
 import io.chicaodw.platform.company.domain.Branding;
 import io.chicaodw.platform.company.domain.Company;
 import io.chicaodw.platform.company.domain.CompanyStatus;
@@ -220,10 +221,10 @@ class AuthServiceTest {
         RefreshToken stored = new RefreshToken();
         ReflectionTestUtils.setField(stored, "id", UUID.randomUUID());
         stored.setUserId(userId);
-        stored.setToken("valid-token");
+        stored.setTokenHash(TokenHasher.sha256Hex("valid-token"));
         stored.setExpiresAt(Instant.now().plusSeconds(3600));
 
-        when(refreshTokenRepository.findByToken("valid-token")).thenReturn(Optional.of(stored));
+        when(refreshTokenRepository.findByTokenHash(TokenHasher.sha256Hex("valid-token"))).thenReturn(Optional.of(stored));
         when(refreshTokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(companyRepository.findById(companyId)).thenReturn(Optional.of(company));
@@ -242,10 +243,10 @@ class AuthServiceTest {
     @Test
     void refresh_expiredToken_throwsBusinessRuleException() {
         RefreshToken expired = new RefreshToken();
-        expired.setToken("expired-token");
+        expired.setTokenHash(TokenHasher.sha256Hex("expired-token"));
         expired.setExpiresAt(Instant.now().minusSeconds(1));
 
-        when(refreshTokenRepository.findByToken("expired-token")).thenReturn(Optional.of(expired));
+        when(refreshTokenRepository.findByTokenHash(TokenHasher.sha256Hex("expired-token"))).thenReturn(Optional.of(expired));
 
         assertThatThrownBy(() -> authService.refresh("expired-token"))
                 .isInstanceOf(BusinessRuleException.class)
@@ -257,11 +258,11 @@ class AuthServiceTest {
         RefreshToken stored = new RefreshToken();
         ReflectionTestUtils.setField(stored, "id", UUID.randomUUID());
         stored.setUserId(userId);
-        stored.setToken("valid-token");
+        stored.setTokenHash(TokenHasher.sha256Hex("valid-token"));
         stored.setExpiresAt(Instant.now().plusSeconds(3600));
 
         company.setStatus(CompanyStatus.INACTIVE);
-        when(refreshTokenRepository.findByToken("valid-token")).thenReturn(Optional.of(stored));
+        when(refreshTokenRepository.findByTokenHash(TokenHasher.sha256Hex("valid-token"))).thenReturn(Optional.of(stored));
         when(refreshTokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(companyRepository.findById(companyId)).thenReturn(Optional.of(company));
@@ -275,11 +276,11 @@ class AuthServiceTest {
         RefreshToken stored = new RefreshToken();
         ReflectionTestUtils.setField(stored, "id", UUID.randomUUID());
         stored.setUserId(userId);
-        stored.setToken("valid-token");
+        stored.setTokenHash(TokenHasher.sha256Hex("valid-token"));
         stored.setExpiresAt(Instant.now().plusSeconds(3600));
 
         user.setStatus(UserStatus.INACTIVE);
-        when(refreshTokenRepository.findByToken("valid-token")).thenReturn(Optional.of(stored));
+        when(refreshTokenRepository.findByTokenHash(TokenHasher.sha256Hex("valid-token"))).thenReturn(Optional.of(stored));
         when(refreshTokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 

@@ -103,11 +103,11 @@ public class InviteService {
                 .orElseThrow(() -> new ResourceNotFoundException("Company", owner.getCompanyId()));
 
         String accessToken = jwtService.generateAccessToken(owner);
-        RefreshToken refresh = issueRefreshToken(owner.getId());
+        IssuedRefreshToken refresh = issueRefreshToken(owner.getId());
 
         return new AuthResponse(
                 accessToken,
-                refresh.getToken(),
+                refresh.rawToken(),
                 authMapper.toUserResponse(owner),
                 authMapper.toCompanyResponse(company)
         );
@@ -153,11 +153,18 @@ public class InviteService {
         return new IssuedInvite(rawToken, invite.getExpiresAt());
     }
 
-    private RefreshToken issueRefreshToken(UUID userId) {
+    /** Mirrors AuthService's own private record of the same name/shape — hash-only persistence. */
+    private record IssuedRefreshToken(String rawToken, Instant expiresAt) {}
+
+    private IssuedRefreshToken issueRefreshToken(UUID userId) {
+        String rawToken = UUID.randomUUID() + "-" + UUID.randomUUID();
+
         RefreshToken token = new RefreshToken();
         token.setUserId(userId);
-        token.setToken(UUID.randomUUID() + "-" + UUID.randomUUID());
+        token.setTokenHash(TokenHasher.sha256Hex(rawToken));
         token.setExpiresAt(Instant.now().plusSeconds(jwtProperties.getRefreshTokenTtl()));
-        return refreshTokenRepository.save(token);
+        refreshTokenRepository.save(token);
+
+        return new IssuedRefreshToken(rawToken, token.getExpiresAt());
     }
 }
