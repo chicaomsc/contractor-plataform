@@ -25,7 +25,7 @@ public class PublicGalleryController {
     @GetMapping("/{companySlug}/gallery")
     @Operation(summary = "List active gallery items for a company (by slug) — featured first, no authentication required")
     public List<PublicGalleryResponse> listGallery(@PathVariable String companySlug) {
-        var company = companyService.findBySlug(companySlug);
+        var company = companyService.findActiveBySlug(companySlug);
         return galleryService.listPublicItems(company.getId());
     }
 }

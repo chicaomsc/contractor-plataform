@@ -23,8 +23,9 @@
 	}
 
 	# /uploads/* → backend, WITHOUT stripping the prefix — the backend's own route
-	# already is /uploads/** (StorageWebConfig), and the frontend's asset-URL
-	# resolvers already build exactly this path from the API's own responses.
+	# already is /uploads/** (PublicUploadController, which additionally checks the
+	# owning Company's status — see SEC-TENANT-03/DT-011B.6B), and the frontend's
+	# asset-URL resolvers already build exactly this path from the API's own responses.
 	handle /uploads/* {
 		reverse_proxy backend:8080
 	}

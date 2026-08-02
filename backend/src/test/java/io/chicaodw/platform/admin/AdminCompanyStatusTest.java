@@ -1,6 +1,5 @@
 package io.chicaodw.platform.admin;
 
-import io.chicaodw.platform.admin.api.dto.UpdateCompanyStatusRequest;
 import io.chicaodw.platform.auth.api.dto.AuthResponse;
 import io.chicaodw.platform.auth.api.dto.LoginRequest;
 import io.chicaodw.platform.auth.api.dto.RefreshTokenRequest;
@@ -12,7 +11,6 @@ import org.springframework.http.MediaType;
 import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -75,13 +73,5 @@ class AdminCompanyStatusTest extends AbstractAdminIntegrationTest {
                         .content(objectMapper.writeValueAsString(new RefreshTokenRequest(refreshToken))))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.title").value("Account Disabled"));
-    }
-
-    private void setStatus(String adminToken, UUID companyId, String status) throws Exception {
-        mockMvc.perform(patch("/admin/companies/" + companyId + "/status")
-                        .header("Authorization", "Bearer " + adminToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new UpdateCompanyStatusRequest(status))))
-                .andExpect(status().isOk());
     }
 }

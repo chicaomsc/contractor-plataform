@@ -25,7 +25,7 @@ public class PublicServiceController {
     @GetMapping("/{companySlug}/services")
     @Operation(summary = "List active services for a company (by slug) — no authentication required")
     public List<PublicServiceResponse> listServices(@PathVariable String companySlug) {
-        var company = companyService.findBySlug(companySlug);
+        var company = companyService.findActiveBySlug(companySlug);
         return catalogService.listPublicServices(company.getId());
     }
 }

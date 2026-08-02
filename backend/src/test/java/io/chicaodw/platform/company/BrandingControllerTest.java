@@ -42,6 +42,12 @@ class BrandingControllerTest extends AbstractControllerTest {
                 .andExpect(jsonPath("$.primaryColor").value("#1E40AF"));
     }
 
+    @Test
+    void getBranding_superAdmin_returns403NotServerError() throws Exception {
+        mockMvc.perform(get("/branding/me").with(authentication(superAdminAuth())))
+                .andExpect(status().isForbidden());
+    }
+
     // ── PUT /branding/me ──────────────────────────────────────────────────────
 
     @Test

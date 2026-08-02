@@ -31,6 +31,7 @@ public class CompanyController {
     private final CompanyService companyService;
 
     @GetMapping("/me")
+    @PreAuthorize("hasRole('OWNER')")
     public CompanyResponse getProfile(@AuthenticationPrincipal JwtPrincipal principal) {
         return companyService.getProfile(principal.companyId());
     }

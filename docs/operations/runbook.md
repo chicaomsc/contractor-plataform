@@ -288,6 +288,41 @@ quando `CADDY_HOST` apontar para um domínio real (Sprint 11C).
 `/actuator/**` e Swagger/OpenAPI **não têm rota pública no Caddy** — caem no
 catch-all e recebem o 404 do Next.js, não uma resposta do backend.
 
+**Mudança operacional (Sprint 11B.6B, `SEC-TENANT-03`):** `/uploads/*` deixou
+de ser um resource handler estático do Spring — passou a ser servido por
+`PublicUploadController`, que resolve o `companyId` a partir do próprio
+caminho (`/uploads/company/{companyId}/...`) e só serve o arquivo se
+`Company.status = ACTIVE`. Na prática: **desativar uma empresa (`PATCH
+/admin/companies/{id}/status`) agora também bloqueia o logo/galeria dela em
+`/uploads/*`** (antes continuavam servíveis indefinidamente); reativar a
+empresa restaura o acesso imediatamente, sem nenhuma ação manual sobre os
+arquivos em `backend_storage`. Nenhuma mudança de rota no Caddy, cache
+(30 dias) ou convenção de path — apenas a autorização por trás de `/uploads/*`
+no backend.
+
+### 21.1 Host header e resolução de tenant (SEC-TENANT-04)
+
+`GET /public/tenant` (`PublicTenantController`) resolve o slug do tenant a
+partir do header `Host` da própria requisição (`request.getHeader("Host")`) —
+nunca de `X-Forwarded-Host` nem de um parâmetro de query, e o backend não lê
+`X-Forwarded-Host` em nenhum ponto do código (confirmado em
+`DT-011B.3-authorization-multitenancy-review.md` e reafirmado nesta sprint).
+Isso significa que **a confiabilidade da resolução de tenant depende
+inteiramente do `Host` que chega à borda (Caddy) ser o `Host` real do
+cliente**, sem forjamento.
+
+Hoje (`CADDY_HOST=:80`, sem domínio real) o bloco do Caddyfile casa **qualquer**
+`Host`, e o `reverse_proxy` repassa o header `Host` do cliente sem alteração —
+ou seja, nada na borda valida ainda que o `Host` recebido é legítimo. Isso é
+uma limitação arquitetural conhecida e deliberadamente **não fechada nesta
+sprint** (11B.6B) — o fechamento definitivo depende de `CADDY_HOST` apontar
+para um domínio real/wildcard (Sprint 11C), quando o próprio Caddy passa a
+rejeitar `Host` fora do domínio configurado antes mesmo de repassar a
+requisição ao backend. Não introduzir uma lista de proxies confiáveis
+(`ForwardedHeaderFilter`/trusted proxies) antes de existir uma borda real
+(Cloudflare) na frente do Caddy — fazer isso agora criaria uma falsa sensação
+de proteção sem uma borda que de fato a imponha.
+
 ## 22. Banco de Dados
 
 ```bash

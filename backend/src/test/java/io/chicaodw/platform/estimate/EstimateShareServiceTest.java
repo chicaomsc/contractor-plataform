@@ -3,6 +3,7 @@ package io.chicaodw.platform.estimate;
 import io.chicaodw.platform.common.exception.ResourceNotFoundException;
 import io.chicaodw.platform.common.security.TokenHasher;
 import io.chicaodw.platform.company.domain.Company;
+import io.chicaodw.platform.company.domain.CompanyStatus;
 import io.chicaodw.platform.company.infrastructure.persistence.BrandingRepository;
 import io.chicaodw.platform.company.infrastructure.persistence.CompanyRepository;
 import io.chicaodw.platform.company.infrastructure.persistence.SettingsRepository;
@@ -239,6 +240,7 @@ class EstimateShareServiceTest {
         when(estimateShareRepository.findByTokenHash(TokenHasher.sha256Hex(rawToken))).thenReturn(Optional.of(share));
         when(estimateRepository.findDetailByIdAndCompanyId(estimateId, companyId)).thenReturn(Optional.of(estimate()));
         when(companyRepository.findById(companyId)).thenReturn(Optional.of(company()));
+        when(companyRepository.findStatusById(companyId)).thenReturn(Optional.of(CompanyStatus.ACTIVE));
         when(brandingRepository.findByCompanyId(companyId)).thenReturn(Optional.empty());
         when(settingsRepository.findByCompanyId(companyId)).thenReturn(Optional.empty());
 
@@ -258,6 +260,7 @@ class EstimateShareServiceTest {
         ReflectionTestUtils.setField(share, "companyId", companyId);
         ReflectionTestUtils.setField(share, "estimateId", estimateId);
         when(estimateShareRepository.findByTokenHash(TokenHasher.sha256Hex(rawToken))).thenReturn(Optional.of(share));
+        when(companyRepository.findStatusById(companyId)).thenReturn(Optional.of(CompanyStatus.ACTIVE));
         var pdfResult = new EstimatePdfService.PdfResult(new byte[]{1, 2, 3}, "orcamento-ORC-2026-0001.pdf");
         when(estimatePdfService.generatePdf(companyId, estimateId)).thenReturn(pdfResult);
 

@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
-const connectSrc = new URL(apiBaseUrl).origin;
+const apiUrl = new URL(apiBaseUrl);
+const connectSrc = apiUrl.origin;
 
 // Sprint 11A.3 made NEXT_PUBLIC_API_BASE_URL the frontend's own origin and put
 // `/api/*` prefix-stripping (frontend/src/lib/api/api-path.ts, withApiPrefix) on
@@ -30,10 +31,20 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  // SEC-STORAGE-01 (DT-011B.4/§13 HARD-04): a wildcard hostname here turns Next's
+  // built-in /_next/image endpoint into an open server-side proxy — any visitor could
+  // pass an arbitrary internal URL and have this server fetch it. Every image the app
+  // ever renders is one of our own /uploads/** assets (see resolveAdminAssetUrl/
+  // resolvePublicAssetUrl), served from this exact same API origin in every
+  // environment — so that's the only origin/path allowed, never a wildcard.
   images: {
     remotePatterns: [
-      { protocol: "https", hostname: "**" },
-      { protocol: "http", hostname: "**" },
+      {
+        protocol: apiUrl.protocol === "https:" ? "https" : "http",
+        hostname: apiUrl.hostname,
+        port: apiUrl.port,
+        pathname: "/uploads/**",
+      },
     ],
   },
   async headers() {
