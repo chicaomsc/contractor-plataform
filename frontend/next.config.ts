@@ -70,6 +70,19 @@ const nextConfig: NextConfig = {
           { key: "X-Frame-Options", value: "DENY" },
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
         ],
+        // HSTS is deliberately NOT set here: it would apply even to plain-HTTP local
+        // dev (there's no real TLS termination yet — Sprint 11C). Add it once
+        // CADDY_HOST is a real domain, not before (Sprint 11B.6D item 10).
+      },
+      {
+        // Authenticated pages (dashboard, platform admin) must never be cached by the
+        // browser/a shared proxy — same intent as the Cache-Control Spring Security
+        // already sends by default on every backend API response (Sprint 11B.6D
+        // item 10). /admin/login is included too (harmless — a login page doesn't
+        // benefit from caching either, and scoping this more finely isn't worth the
+        // extra surface for a route pattern that has no cacheable content anyway).
+        source: "/(dashboard|admin)/:path*",
+        headers: [{ key: "Cache-Control", value: "no-store" }],
       },
     ];
   },

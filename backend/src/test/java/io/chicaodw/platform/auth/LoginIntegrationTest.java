@@ -6,6 +6,8 @@ import io.chicaodw.platform.auth.api.dto.AuthResponse;
 import io.chicaodw.platform.auth.api.dto.LoginRequest;
 import io.chicaodw.platform.auth.api.dto.RefreshTokenRequest;
 import io.chicaodw.platform.auth.api.dto.RegisterRequest;
+import io.chicaodw.platform.auth.application.AuthService;
+import io.chicaodw.platform.common.exception.BusinessRuleException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,6 +15,14 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -23,6 +33,7 @@ class LoginIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired MockMvc mockMvc;
     @Autowired ObjectMapper objectMapper;
+    @Autowired AuthService authService;
 
     private String email;
     private static final String PASSWORD = "securePass1";
@@ -85,6 +96,51 @@ class LoginIntegrationTest extends AbstractIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(new RefreshTokenRequest("invalid-token"))))
                 .andExpect(status().isUnprocessableEntity());
+    }
+
+    /**
+     * SEC-AUTH-14/Sprint 11B.6D — two concurrent /auth/refresh calls with the same
+     * token must never both rotate successfully. Calls AuthService directly (not
+     * through MockMvc) so both threads race against the same real database via the
+     * atomic RefreshTokenRepository.markRevokedIfStillValid UPDATE.
+     */
+    @Test
+    void refresh_concurrentCalls_onlyOneWins() throws Exception {
+        String loginBody = mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new LoginRequest(email, PASSWORD))))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String refreshToken = objectMapper.readValue(loginBody, AuthResponse.class).refreshToken();
+
+        int attempts = 8;
+        ExecutorService pool = Executors.newFixedThreadPool(attempts);
+        CountDownLatch ready = new CountDownLatch(attempts);
+        CountDownLatch go = new CountDownLatch(1);
+
+        List<Future<Boolean>> results = new ArrayList<>();
+        for (int i = 0; i < attempts; i++) {
+            results.add(pool.submit(() -> {
+                ready.countDown();
+                go.await();
+                try {
+                    authService.refresh(refreshToken);
+                    return true;
+                } catch (BusinessRuleException e) {
+                    return false;
+                }
+            }));
+        }
+        ready.await();
+        go.countDown();
+
+        long successes = 0;
+        for (Future<Boolean> result : results) {
+            if (result.get()) successes++;
+        }
+        pool.shutdown();
+
+        assertThat(successes).isEqualTo(1);
     }
 
     // ── /me ───────────────────────────────────────────────────────────────────

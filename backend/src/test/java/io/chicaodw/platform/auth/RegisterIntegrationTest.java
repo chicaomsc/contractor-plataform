@@ -54,7 +54,7 @@ class RegisterIntegrationTest extends AbstractIntegrationTest {
     // ── Duplicate email ───────────────────────────────────────────────────────
 
     @Test
-    void register_duplicateEmail_returnsUnprocessableEntity() throws Exception {
+    void register_duplicateEmail_returnsConflictWithoutEchoingTheEmail() throws Exception {
         String email = "dup-reg-" + System.nanoTime() + "@example.com";
         RegisterRequest req = new RegisterRequest("Maria", email, "securePass1", "Maria Obras", "PT");
 
@@ -64,13 +64,15 @@ class RegisterIntegrationTest extends AbstractIntegrationTest {
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isCreated());
 
-        // second with same email must fail
+        // second with same email must fail — 409 (SEC-AUTH-05/Sprint 11B.6D: accepted
+        // as a documented risk that duplicate registration is still distinguishable,
+        // but the response no longer echoes the submitted email back).
         mockMvc.perform(post("/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
-                .andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.title").value("Business Rule Violation"))
-                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString(email)));
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title").value("Conflict"))
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString(email))));
     }
 
     // ── Bean Validation ───────────────────────────────────────────────────────

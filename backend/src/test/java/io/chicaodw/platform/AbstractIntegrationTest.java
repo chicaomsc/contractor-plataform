@@ -22,8 +22,13 @@ import org.testcontainers.containers.PostgreSQLContainer;
  * whole suite would eventually trip the limiter and fail tests that have nothing to do
  * with rate limiting. Dedicated rate-limit tests re-enable it with their own tight
  * limits via their own @SpringBootTest(properties = ...), which gets its own context.
+ *
+ * BCrypt strength is pinned to 4 (its minimum valid value) here — the production
+ * default of 12 (Sprint 11B.6D, SEC-AUTH-10) is deliberately expensive, and this suite
+ * hashes a password in most auth-related tests; running all of them at strength 12
+ * would measurably slow the suite for no correctness benefit in tests.
  */
-@SpringBootTest(properties = "app.rate-limit.enabled=false")
+@SpringBootTest(properties = {"app.rate-limit.enabled=false", "app.security.bcrypt-strength=4"})
 public abstract class AbstractIntegrationTest {
 
     static final PostgreSQLContainer<?> postgres;

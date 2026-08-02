@@ -379,6 +379,88 @@ endereçado por uma storage key (`String`, ex.
 `ListObjectsV2` com prefixo. Não implementado nesta sprint (fora de escopo) —
 `LocalStorageService` continua sendo a única implementação real.
 
+### 21.3 Autenticação — senha, BCrypt, JWT, refresh, convites (Sprint 11B.6D)
+
+**Política de senha (final):** comprimento 8–128 caracteres, sem regra de
+composição (sem exigência de maiúscula/número/símbolo — deliberado, segue NIST
+800-63B). Fonte única: `PasswordPolicy` (backend, `auth.domain`) e
+`passwordFieldSchema` (frontend, `features/auth/types/auth.ts`) — nunca duplicar
+os números 8/128 em um novo formulário/DTO; importar dessas duas fontes. Checagem
+contra senhas vazadas (HaveIBeenPwned k-anonymity) **não implementada** — não há
+provedor externo integrado; item em aberto (`SEC-AUTH-09`).
+
+**BCrypt:** fator de trabalho configurável via `app.security.bcrypt-strength`
+(env `BCRYPT_STRENGTH`), padrão **12** (o padrão do Spring Security é 10). Hashes
+existentes continuam validando sem qualquer ação — o BCrypt grava o próprio fator
+de trabalho no hash (`$2a$<cost>$...`), então mudar a configuração só afeta
+hashes *novos*. **Estratégia futura de rehash** (não implementada): no login
+bem-sucedido, extrair o fator de trabalho do hash armazenado (prefixo
+`$2a$<cost>$...`) e, se menor que `bcryptStrength` atual, regravar o hash com a
+senha em texto plano que o próprio login já tem em mãos naquele momento — migra a
+base gradualmente, sem uma migration em massa nem exigir reset de senha de
+ninguém. `PasswordEncoder.upgradeEncoding(String)` (interface do Spring
+Security) é o ponto de extensão pensado para esse tipo de checagem — validar seu
+comportamento exato com `BCryptPasswordEncoder` antes de depender dele.
+
+**JWT — issuer/audience/algoritmo:** todo token emitido carrega `issuer`
+(`app.jwt.issuer`, padrão `contractor-platform`) e `audience`
+(`app.jwt.audience`, padrão `contractor-platform-api`), exigidos em toda
+verificação — um token de outro deployment/ambiente é rejeitado mesmo com
+assinatura válida. Algoritmo fixo (`HS256`, explícito na assinatura);
+`verifyWith(SecretKey)` restringe a verificação à família HMAC, então um token
+assinado com RS/ES/PS, ou não-assinado (`alg: none`), nunca é aceito. Clock skew
+configurável via `app.jwt.clock-skew-seconds` (padrão 30s). `ProductionReadinessValidator`
+falha o startup em produção se `JWT_ISSUER`/`JWT_AUDIENCE` estiverem em branco,
+além das checagens já existentes de `JWT_SECRET` (ausente, placeholder conhecido,
+curto demais). **Rotação de chave com `kid` não implementada** — aceitável
+enquanto houver um único backend emissor/verificador (`SEC-AUTH-11`); se isso
+mudar, reconsiderar RS256/ES256 com chave pública distribuída ou um mapa de
+chaves ativas por `kid`.
+
+**Geração e rotação do segredo JWT:** gerar com
+`openssl rand -base64 48` (ou equivalente ≥ 32 bytes) — nunca reaproveitar o
+placeholder de `infra/env/production.env.example`. Rotação de emergência (suspeita
+de vazamento): trocar `JWT_SECRET` e reiniciar a aplicação invalida **todos** os
+access tokens emitidos anteriormente de uma vez (não há rotação gradual sem
+`kid` — ver acima); refresh tokens não são afetados diretamente pela troca do
+segredo (são opacos, validados por hash no banco, não por JWT), mas o próximo
+`/auth/refresh` de cada sessão já emitirá um access token com o novo segredo
+normalmente.
+
+**Estratégia de refresh token:** opção B — rotação a cada uso (`AuthService.refresh`
+sempre revoga o token consumido e emite um novo par). A revogação usa um
+`UPDATE` condicional atômico (`RefreshTokenRepository.markRevokedIfStillValid`),
+então duas chamadas concorrentes com o mesmo token nunca rotacionam ambas com
+sucesso — exatamente uma vence, a outra recebe o mesmo erro de "token
+inválido/expirado" que um token genuinamente expirado receberia (nenhum sinal
+distinto). Mesmo padrão em `InviteService.acceptInvite`
+(`OwnerInviteRepository.markUsedIfStillValid`) para a aceitação de convite.
+
+**Convites — link via fragmento:** `buildInviteLink` gera
+`.../invite#token=...` (nunca `?token=...`) — o token nunca aparece em log de
+acesso HTTP (Caddy, CDN, proxy) porque um fragmento de URL nunca é enviado ao
+servidor. `AcceptInvitePage` lê o token de `window.location.hash` uma única vez,
+reescreve a URL imediatamente (`history.replaceState`) e nunca persiste o token
+em `localStorage`/`sessionStorage` — mesmo padrão já usado por
+`ResetPasswordPage`/`PasswordResetTokenService.buildResetLink`.
+
+**MFA:** não implementado — ver `DT-011B.2` (`SEC-AUTH-12`) para os pontos de
+extensão já identificados no código (emissão de token centralizada, `AuthResponse`
+não precisa mudar de formato, `UserStatus` já modela "não totalmente autenticado
+ainda"). Nenhuma tabela/coluna especulativa foi criada.
+
+**Riscos aceitos restantes desta área (não fechados por decisão explícita):**
+- `SEC-AUTH-04` — canal de tempo em `POST /auth/password/forgot` ainda permite
+  enumeração por timing, apesar da resposta uniforme. Não corrigido nesta sprint.
+- `SEC-AUTH-05` — `POST /auth/register` com e-mail duplicado continua retornando
+  um sinal distinto (`409`, mensagem sem o e-mail) — aceito para o MVP B2B
+  self-serve atual; reabrir se/quando existir um provedor de e-mail para
+  confirmação out-of-band.
+- `SEC-AUTH-08` — cookies `contractor_session`/`contractor_role` continuam sendo
+  sinais de UX, não de autorização — nunca tratar como fonte de verdade.
+- `SEC-AUTH-09` (parcial) — sem checagem de senha vazada.
+- `SEC-AUTH-11` (parcial) — sem rotação de chave com `kid`.
+
 ## 22. Banco de Dados
 
 ```bash

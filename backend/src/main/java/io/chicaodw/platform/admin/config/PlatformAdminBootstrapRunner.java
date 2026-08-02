@@ -1,5 +1,6 @@
 package io.chicaodw.platform.admin.config;
 
+import io.chicaodw.platform.auth.domain.PasswordPolicy;
 import io.chicaodw.platform.auth.domain.User;
 import io.chicaodw.platform.auth.domain.UserRole;
 import io.chicaodw.platform.auth.domain.UserRoleInvariant;
@@ -40,9 +41,6 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class PlatformAdminBootstrapRunner implements ApplicationRunner {
 
-    private static final int MIN_PASSWORD_LENGTH = 8;
-    private static final int MAX_PASSWORD_LENGTH = 128;
-
     private final PlatformAdminBootstrapProperties properties;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -73,10 +71,10 @@ public class PlatformAdminBootstrapRunner implements ApplicationRunner {
                             + "non-SUPER_ADMIN account.");
         }
 
-        if (password.length() < MIN_PASSWORD_LENGTH || password.length() > MAX_PASSWORD_LENGTH) {
+        if (password.length() < PasswordPolicy.MIN_LENGTH || password.length() > PasswordPolicy.MAX_LENGTH) {
             throw new IllegalStateException(
                     "Platform admin bootstrap misconfigured: PLATFORM_ADMIN_BOOTSTRAP_PASSWORD must be between "
-                            + MIN_PASSWORD_LENGTH + " and " + MAX_PASSWORD_LENGTH + " characters.");
+                            + PasswordPolicy.MIN_LENGTH + " and " + PasswordPolicy.MAX_LENGTH + " characters.");
         }
 
         User admin = new User();

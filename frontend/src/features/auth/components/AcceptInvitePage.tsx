@@ -3,19 +3,17 @@
 import { zodResolver } from "@/features/dashboard/utils/zod-resolver";
 import { Button } from "@/components/ui/Button";
 import { ApiError } from "@/lib/api/errors";
-import { useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { readTokenFromHash } from "@/lib/auth/token-fragment";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { acceptInvite } from "../api/auth-api";
 import { persistAuthSession } from "../api/auth-storage";
+import { passwordFieldSchema } from "../types/auth";
 
 const acceptInviteFormSchema = z
   .object({
-    password: z
-      .string()
-      .min(8, "Use pelo menos 8 caracteres.")
-      .max(128, "Use no máximo 128 caracteres."),
+    password: passwordFieldSchema,
     passwordConfirmation: z.string().min(1, "Confirme a password."),
   })
   .refine((value) => value.password === value.passwordConfirmation, {
@@ -42,8 +40,9 @@ function getInviteErrorMessage(error: unknown) {
 }
 
 export function AcceptInvitePage() {
-  const searchParams = useSearchParams();
-  const token = useMemo(() => searchParams.get("token"), [searchParams]);
+  const didReadToken = useRef(false);
+  const [token, setToken] = useState<string | null>(null);
+  const [hasReadHash, setHasReadHash] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const {
     register,
@@ -56,6 +55,24 @@ export function AcceptInvitePage() {
       passwordConfirmation: "",
     },
   });
+
+  // Same fragment-only handling as ResetPasswordPage (SEC-AUTH-07, Sprint 11B.6D):
+  // the token is read once from window.location.hash — never the query string, so
+  // it never reaches the server in a request line/Referer/access log — then the URL
+  // is rewritten immediately so it also never lingers in browser history, and it's
+  // kept only in this component's state, never localStorage/sessionStorage.
+  useEffect(() => {
+    if (didReadToken.current) return;
+    didReadToken.current = true;
+    const nextToken = readTokenFromHash(window.location.hash);
+    setToken(nextToken);
+    setHasReadHash(true);
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${window.location.search}`,
+    );
+  }, []);
 
   async function onSubmit(values: AcceptInviteFormValues) {
     if (!token) {
@@ -72,6 +89,8 @@ export function AcceptInvitePage() {
       setFormError(getInviteErrorMessage(error));
     }
   }
+
+  const canSubmit = Boolean(token);
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-6 py-12">
@@ -98,7 +117,8 @@ export function AcceptInvitePage() {
             <input
               type="password"
               autoComplete="new-password"
-              className="min-h-12 w-full border border-border bg-background px-4 text-base outline-none transition-colors focus:border-primary"
+              disabled={!canSubmit || isSubmitting}
+              className="min-h-12 w-full border border-border bg-background px-4 text-base outline-none transition-colors focus:border-primary disabled:opacity-60"
               {...register("password")}
             />
             {errors.password ? (
@@ -113,7 +133,8 @@ export function AcceptInvitePage() {
             <input
               type="password"
               autoComplete="new-password"
-              className="min-h-12 w-full border border-border bg-background px-4 text-base outline-none transition-colors focus:border-primary"
+              disabled={!canSubmit || isSubmitting}
+              className="min-h-12 w-full border border-border bg-background px-4 text-base outline-none transition-colors focus:border-primary disabled:opacity-60"
               {...register("passwordConfirmation")}
             />
             {errors.passwordConfirmation ? (
@@ -124,7 +145,7 @@ export function AcceptInvitePage() {
           </label>
         </div>
 
-        {!token || formError ? (
+        {(hasReadHash && !token) || formError ? (
           <p className="mt-5 border border-error bg-background px-4 py-3 text-sm font-semibold text-error">
             {formError ?? "O link de convite está incompleto."}
           </p>
@@ -133,7 +154,7 @@ export function AcceptInvitePage() {
         <Button
           className="mt-8 w-full"
           type="submit"
-          disabled={isSubmitting || !token}
+          disabled={isSubmitting || !canSubmit}
         >
           {isSubmitting ? "A ativar" : "Ativar conta"}
         </Button>

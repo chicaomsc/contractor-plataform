@@ -145,6 +145,38 @@ class ProductionReadinessValidatorTest {
                 .hasMessageNotContaining(secretThatMustNotLeak);
     }
 
+    // ── JWT_ISSUER / JWT_AUDIENCE (Sprint 11B.6D) ───────────────────────────────
+
+    @Test
+    void run_prodWithBlankIssuer_throws() {
+        activeProfiles("prod");
+        jwtProperties.setIssuer("  ");
+
+        assertThatThrownBy(() -> validator.run(null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("JWT_ISSUER is missing");
+    }
+
+    @Test
+    void run_prodWithNullIssuer_throws() {
+        activeProfiles("prod");
+        jwtProperties.setIssuer(null);
+
+        assertThatThrownBy(() -> validator.run(null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("JWT_ISSUER is missing");
+    }
+
+    @Test
+    void run_prodWithBlankAudience_throws() {
+        activeProfiles("prod");
+        jwtProperties.setAudience("   ");
+
+        assertThatThrownBy(() -> validator.run(null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("JWT_AUDIENCE is missing");
+    }
+
     // ── APP_CORS_ALLOWED_ORIGINS ─────────────────────────────────────────────
 
     @Test

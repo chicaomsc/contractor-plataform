@@ -52,6 +52,7 @@ public class ProductionReadinessValidator implements ApplicationRunner {
         }
 
         validateJwtSecret();
+        validateJwtIssuerAudience();
         validateCorsOrigins();
         validateStoragePath();
 
@@ -82,6 +83,19 @@ public class ProductionReadinessValidator implements ApplicationRunner {
             throw new IllegalStateException(
                     "JWT_SECRET is too short (" + byteLength + " bytes; HS256 requires at least "
                             + MIN_JWT_SECRET_BYTES + "). Generate a stronger secret.");
+        }
+    }
+
+    private void validateJwtIssuerAudience() {
+        if (jwtProperties.getIssuer() == null || jwtProperties.getIssuer().isBlank()) {
+            throw new IllegalStateException(
+                    "JWT_ISSUER is missing. Every issued token must carry an issuer, and it is required on "
+                            + "every parse — see docs/design/DT-011B.2 for why.");
+        }
+        if (jwtProperties.getAudience() == null || jwtProperties.getAudience().isBlank()) {
+            throw new IllegalStateException(
+                    "JWT_AUDIENCE is missing. Every issued token must carry an audience, and it is required on "
+                            + "every parse — see docs/design/DT-011B.2 for why.");
         }
     }
 

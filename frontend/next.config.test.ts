@@ -60,3 +60,45 @@ describe("next.config images.remotePatterns (SEC-STORAGE-01)", () => {
     ]);
   });
 });
+
+describe("next.config headers (Sprint 11B.6D item 10)", () => {
+  it("sends the baseline security headers on every path, with no HSTS", async () => {
+    process.env.NEXT_PUBLIC_API_BASE_URL = "http://localhost:8080";
+    vi.resetModules();
+
+    const { default: nextConfig } = await import("./next.config");
+    const entries =
+      typeof nextConfig.headers === "function" ? await nextConfig.headers() : [];
+    const baseline = entries.find((entry) => entry.source === "/:path*");
+
+    expect(baseline).toBeDefined();
+    const keys = baseline!.headers.map((h) => h.key);
+    expect(keys).toEqual(
+      expect.arrayContaining([
+        "Content-Security-Policy",
+        "X-Content-Type-Options",
+        "Referrer-Policy",
+        "X-Frame-Options",
+        "Permissions-Policy",
+      ]),
+    );
+    expect(keys).not.toContain("Strict-Transport-Security");
+  });
+
+  it("marks dashboard and admin routes as never cached", async () => {
+    process.env.NEXT_PUBLIC_API_BASE_URL = "http://localhost:8080";
+    vi.resetModules();
+
+    const { default: nextConfig } = await import("./next.config");
+    const entries =
+      typeof nextConfig.headers === "function" ? await nextConfig.headers() : [];
+    const authenticated = entries.find(
+      (entry) => entry.source === "/(dashboard|admin)/:path*",
+    );
+
+    expect(authenticated).toBeDefined();
+    expect(authenticated!.headers).toEqual(
+      expect.arrayContaining([{ key: "Cache-Control", value: "no-store" }]),
+    );
+  });
+});
