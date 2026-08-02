@@ -31,6 +31,17 @@ export async function refresh(refreshToken: string): Promise<AuthResponse> {
   return authResponseSchema.parse(response);
 }
 
+export async function logout(params: {
+  accessToken: string;
+  refreshToken: string;
+}): Promise<void> {
+  await adminApiRequest<void>("/auth/logout", {
+    method: "POST",
+    accessToken: params.accessToken,
+    body: JSON.stringify({ refreshToken: params.refreshToken }),
+  });
+}
+
 export async function me(accessToken: string): Promise<MeResponse> {
   const response = await adminApiRequest<unknown>("/auth/me", {
     accessToken,

@@ -15,10 +15,11 @@ import {
   type ReactNode,
 } from "react";
 import { ApiError } from "@/lib/api/errors";
-import { login as loginRequest, me } from "../api/auth-api";
+import { login as loginRequest, logout as logoutRequest, me } from "../api/auth-api";
 import {
   clearAuthSession,
   getAccessToken,
+  getRefreshToken,
   persistAuthSession,
 } from "../api/auth-storage";
 import type { AuthResponse, LoginFormValues, MeResponse } from "../types/auth";
@@ -29,7 +30,7 @@ type AuthContextValue = {
   isAuthenticated: boolean;
   isCheckingSession: boolean;
   login: (values: LoginFormValues) => Promise<AuthResponse>;
-  logout: () => void;
+  logout: () => Promise<void>;
   refetchSession: () => Promise<unknown>;
 };
 
@@ -69,7 +70,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
   });
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    const currentAccessToken = getAccessToken();
+    const currentRefreshToken = getRefreshToken();
+
+    if (currentAccessToken && currentRefreshToken) {
+      try {
+        await logoutRequest({
+          accessToken: currentAccessToken,
+          refreshToken: currentRefreshToken,
+        });
+      } catch {
+        // Best-effort: the local session is cleared below regardless of whether the
+        // backend call succeeded (offline, expired access token, server error, ...).
+      }
+    }
+
     clearAuthSession();
     setAccessToken(null);
     queryClient.removeQueries({ queryKey: ["auth"] });

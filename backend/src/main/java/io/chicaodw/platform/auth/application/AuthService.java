@@ -16,6 +16,7 @@ import io.chicaodw.platform.auth.infrastructure.security.JwtProperties;
 import io.chicaodw.platform.auth.infrastructure.security.PlatformUserDetails;
 import io.chicaodw.platform.common.exception.BusinessRuleException;
 import io.chicaodw.platform.common.exception.ResourceNotFoundException;
+import io.chicaodw.platform.common.security.TokenHasher;
 import io.chicaodw.platform.company.application.CompanySlugGenerator;
 import io.chicaodw.platform.company.domain.Branding;
 import io.chicaodw.platform.company.domain.Company;
@@ -95,11 +96,11 @@ public class AuthService {
         user = userRepository.save(user);
 
         String accessToken  = jwtService.generateAccessToken(user);
-        RefreshToken refresh = issueRefreshToken(user.getId());
+        IssuedRefreshToken refresh = issueRefreshToken(user.getId());
 
         return new AuthResponse(
                 accessToken,
-                refresh.getToken(),
+                refresh.rawToken(),
                 authMapper.toUserResponse(user),
                 authMapper.toCompanyResponse(company)
         );
@@ -121,11 +122,11 @@ public class AuthService {
         Company company = loadCompanyAndAssertActive(user);
 
         String accessToken  = jwtService.generateAccessToken(user);
-        RefreshToken refresh = issueRefreshToken(user.getId());
+        IssuedRefreshToken refresh = issueRefreshToken(user.getId());
 
         return new AuthResponse(
                 accessToken,
-                refresh.getToken(),
+                refresh.rawToken(),
                 authMapper.toUserResponse(user),
                 authMapper.toCompanyResponse(company)
         );
@@ -134,7 +135,7 @@ public class AuthService {
     // ── Refresh ───────────────────────────────────────────────────────────────
 
     public AuthResponse refresh(String tokenValue) {
-        RefreshToken existing = refreshTokenRepository.findByToken(tokenValue)
+        RefreshToken existing = refreshTokenRepository.findByTokenHash(TokenHasher.sha256Hex(tokenValue))
                 .filter(t -> !t.isRevoked() && t.getExpiresAt().isAfter(Instant.now()))
                 .orElseThrow(() -> new BusinessRuleException("Refresh token is invalid or expired"));
 
@@ -151,14 +152,33 @@ public class AuthService {
         Company company = loadCompanyAndAssertActive(user);
 
         String accessToken  = jwtService.generateAccessToken(user);
-        RefreshToken newToken = issueRefreshToken(user.getId());
+        IssuedRefreshToken newToken = issueRefreshToken(user.getId());
 
         return new AuthResponse(
                 accessToken,
-                newToken.getToken(),
+                newToken.rawToken(),
                 authMapper.toUserResponse(user),
                 authMapper.toCompanyResponse(company)
         );
+    }
+
+    // ── Logout ────────────────────────────────────────────────────────────────
+
+    /**
+     * Revokes the given refresh token so it can never be used again via /auth/refresh.
+     * Idempotent by design — a token that's already revoked, unknown, or belongs to a
+     * different user is silently a no-op (no error, no signal either way), matching
+     * the anti-enumeration posture already used elsewhere in this module. The access
+     * token used to authenticate this call is deliberately left untouched — it stays
+     * valid until its own natural expiry (DT-011B.5 §9 HARD-02).
+     */
+    public void logout(UUID userId, String refreshTokenValue) {
+        refreshTokenRepository.findByTokenHash(TokenHasher.sha256Hex(refreshTokenValue))
+                .filter(t -> t.getUserId().equals(userId))
+                .ifPresent(t -> {
+                    t.setRevoked(true);
+                    refreshTokenRepository.save(t);
+                });
     }
 
     // ── Me ────────────────────────────────────────────────────────────────────
@@ -207,11 +227,19 @@ public class AuthService {
         return company;
     }
 
-    private RefreshToken issueRefreshToken(UUID userId) {
+    /** Mirrors InviteService.IssuedInvite/PasswordResetTokenService.IssuedToken — the raw
+     * value is only ever available here, at issuance; only its hash is persisted. */
+    private record IssuedRefreshToken(String rawToken, Instant expiresAt) {}
+
+    private IssuedRefreshToken issueRefreshToken(UUID userId) {
+        String rawToken = UUID.randomUUID() + "-" + UUID.randomUUID();
+
         RefreshToken token = new RefreshToken();
         token.setUserId(userId);
-        token.setToken(UUID.randomUUID() + "-" + UUID.randomUUID());
+        token.setTokenHash(TokenHasher.sha256Hex(rawToken));
         token.setExpiresAt(Instant.now().plusSeconds(jwtProperties.getRefreshTokenTtl()));
-        return refreshTokenRepository.save(token);
+        refreshTokenRepository.save(token);
+
+        return new IssuedRefreshToken(rawToken, token.getExpiresAt());
     }
 }

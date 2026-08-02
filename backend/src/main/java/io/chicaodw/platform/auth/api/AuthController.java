@@ -62,6 +62,13 @@ public class AuthController {
         return authService.me(principal.userId());
     }
 
+    @PostMapping("/logout")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Operation(summary = "Revoke the given refresh token — idempotent; the access token used to call this stays valid until it naturally expires")
+    public void logout(@AuthenticationPrincipal JwtPrincipal principal, @Valid @RequestBody RefreshTokenRequest request) {
+        authService.logout(principal.userId(), request.refreshToken());
+    }
+
     @PostMapping("/invites/accept")
     @Operation(summary = "Accept an owner invite: set the account password and log in")
     public AuthResponse acceptInvite(@Valid @RequestBody AcceptInviteRequest request) {

@@ -20,7 +20,7 @@ export function AuthGuard({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!session && !isCheckingSession && accessToken) {
-      logout();
+      void logout();
     }
   }, [accessToken, isCheckingSession, logout, session]);
 
@@ -64,7 +64,7 @@ export function AdminGuard({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!session && !isCheckingSession && accessToken) {
-      logout();
+      void logout();
     }
   }, [accessToken, isCheckingSession, logout, session]);
 

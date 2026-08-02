@@ -30,7 +30,7 @@ abstract class AbstractAdminIntegrationTest extends AbstractIntegrationTest {
     @Autowired UserRepository userRepository;
     @Autowired PasswordEncoder passwordEncoder;
 
-    record RegisteredOwner(String email, String password, String companySlug, String accessToken) {}
+    record RegisteredOwner(String email, String password, String companySlug, String accessToken, String refreshToken) {}
 
     /** Bypasses PlatformAdminBootstrapRunner (env vars aren't set in tests) by inserting the row directly. */
     String createSuperAdminAndLogin() throws Exception {
@@ -62,7 +62,8 @@ abstract class AbstractAdminIntegrationTest extends AbstractIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
 
         AuthResponse response = objectMapper.readValue(body, AuthResponse.class);
-        return new RegisteredOwner(email, OWNER_PASSWORD, response.company().slug(), response.accessToken());
+        return new RegisteredOwner(
+                email, OWNER_PASSWORD, response.company().slug(), response.accessToken(), response.refreshToken());
     }
 
     String registerOwnerAndLogin() throws Exception {

@@ -66,6 +66,26 @@ app:
     # SUPER_ADMIN — idempotent, fails fast if only one of the two is set. See DT §8.
     email: ${PLATFORM_ADMIN_BOOTSTRAP_EMAIL:}
     password: ${PLATFORM_ADMIN_BOOTSTRAP_PASSWORD:}
+  rate-limit:
+    # In-memory only, authentication endpoints only — never global (DT-011B.5 §9 HARD-01,
+    # SEC-AUTH-03). Keyed by remote address + path; disabled entirely in the shared test
+    # context (AbstractIntegrationTest) to avoid unrelated tests tripping the limiter.
+    enabled: ${AUTH_RATE_LIMIT_ENABLED:true}
+    login:
+      capacity: ${AUTH_RATE_LIMIT_LOGIN_CAPACITY:10}
+      window-seconds: ${AUTH_RATE_LIMIT_LOGIN_WINDOW_SECONDS:60}
+    forgot-password:
+      capacity: ${AUTH_RATE_LIMIT_FORGOT_PASSWORD_CAPACITY:5}
+      window-seconds: ${AUTH_RATE_LIMIT_FORGOT_PASSWORD_WINDOW_SECONDS:60}
+    reset-password:
+      capacity: ${AUTH_RATE_LIMIT_RESET_PASSWORD_CAPACITY:10}
+      window-seconds: ${AUTH_RATE_LIMIT_RESET_PASSWORD_WINDOW_SECONDS:60}
+    invite-accept:
+      capacity: ${AUTH_RATE_LIMIT_INVITE_ACCEPT_CAPACITY:10}
+      window-seconds: ${AUTH_RATE_LIMIT_INVITE_ACCEPT_WINDOW_SECONDS:60}
+    admin-password-reset:
+      capacity: ${AUTH_RATE_LIMIT_ADMIN_PASSWORD_RESET_CAPACITY:10}
+      window-seconds: ${AUTH_RATE_LIMIT_ADMIN_PASSWORD_RESET_WINDOW_SECONDS:60}
 
 server:
   port: ${PORT:8080}
