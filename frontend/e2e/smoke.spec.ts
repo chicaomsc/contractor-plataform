@@ -23,7 +23,12 @@ async function createEstimateWithPdfData(
       customerId: customer.id,
       title: "E2E PDF Estimate",
       items: [
-        { description: "Serviço E2E", quantity: 1, unit: "UNIT", unitPrice: 100 },
+        {
+          description: "Serviço E2E",
+          quantity: 1,
+          unit: "UNIT",
+          unitPrice: 100,
+        },
       ],
       materials: [],
     },
@@ -43,7 +48,7 @@ test("landing pública responde sem erro de aplicação", async ({ page }) => {
 test("login inválido mostra erro útil", async ({ page }) => {
   await page.goto("/login");
   await page.getByLabel("Email").fill("invalid@example.test");
-  await page.getByLabel("Password").fill("wrong-password");
+  await page.getByLabel("Senha").fill("wrong-password");
   await page.getByRole("button", { name: "Entrar" }).click();
 
   await expect(page.getByText("Sessão expirada")).toBeVisible();
@@ -176,7 +181,10 @@ test("partilhar um orçamento gera um link público, funcional sem sessão, com 
   expect(shareUrl).not.toContain(`/estimate/${estimate.id}`);
 
   const whatsappLink = page.getByRole("link", { name: /WhatsApp/ });
-  await expect(whatsappLink).toHaveAttribute("href", /^https:\/\/wa\.me\/\?text=/);
+  await expect(whatsappLink).toHaveAttribute(
+    "href",
+    /^https:\/\/wa\.me\/\?text=/,
+  );
 
   // Open the link in a brand-new, cookie-less browser context — proves it needs no session.
   const publicContext = await browser.newContext();

@@ -48,7 +48,7 @@ export async function registerAccount(
 export async function loginViaUi(page: Page, email: string, password: string) {
   await page.goto("/login");
   await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(password);
+  await page.getByLabel("Senha").fill(password);
   await page.getByRole("button", { name: "Entrar" }).click();
   await expect(page).toHaveURL(/\/dashboard/);
   await expect(page.getByText("Status do site")).toBeVisible();
@@ -57,7 +57,7 @@ export async function loginViaUi(page: Page, email: string, password: string) {
 export async function loginAdminViaUi(page: Page) {
   await page.goto("/admin/login");
   await page.getByLabel("Email").fill(platformAdminEmail);
-  await page.getByLabel("Password").fill(platformAdminPassword);
+  await page.getByLabel("Senha").fill(platformAdminPassword);
   await page.getByRole("button", { name: "Entrar" }).click();
   await expect(page).toHaveURL(/\/admin/);
   await expect(page.getByText("Administração da plataforma")).toBeVisible();
