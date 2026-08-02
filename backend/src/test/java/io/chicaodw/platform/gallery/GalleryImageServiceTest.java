@@ -1,7 +1,9 @@
 package io.chicaodw.platform.gallery;
 
 import io.chicaodw.platform.common.exception.BusinessRuleException;
+import io.chicaodw.platform.common.storage.ImageNormalizationService;
 import io.chicaodw.platform.common.storage.ImageUploadPolicy;
+import io.chicaodw.platform.common.storage.NormalizedImage;
 import io.chicaodw.platform.common.storage.StorageService;
 import io.chicaodw.platform.gallery.application.GalleryImageService;
 import org.junit.jupiter.api.Test;
@@ -26,6 +28,7 @@ class GalleryImageServiceTest {
 
     @Mock StorageService storageService;
     @Spy ImageUploadPolicy imageUploadPolicy = new ImageUploadPolicy();
+    @Mock ImageNormalizationService imageNormalizationService;
     @InjectMocks GalleryImageService galleryImageService;
 
     private final UUID companyId = UUID.randomUUID();
@@ -71,34 +74,38 @@ class GalleryImageServiceTest {
     @Test
     void storeImage_validJpeg_delegatesToStorageWithCorrectFolder() {
         var file = new MockMultipartFile("file", "before.jpg", "image/jpeg", jpegBytes());
+        var normalized = new NormalizedImage(new byte[]{9, 9}, "jpg");
         String expectedPath = "/uploads/company/" + companyId + "/gallery/uuid.jpg";
-        when(storageService.store(any(), any())).thenReturn(expectedPath);
+        when(imageNormalizationService.normalize(file)).thenReturn(normalized);
+        when(storageService.store(any(), any(), any())).thenReturn(expectedPath);
 
         String result = galleryImageService.storeImage(companyId, file);
 
         assertThat(result).isEqualTo(expectedPath);
-        verify(storageService).store(eq("company/" + companyId + "/gallery"), eq(file));
+        verify(storageService).store(eq("company/" + companyId + "/gallery"), eq(normalized.bytes()), eq(normalized.extension()));
     }
 
     @Test
     void storeImage_validPng_delegatesToStorage() {
         var file = new MockMultipartFile("file", "after.png", "image/png", pngBytes());
-        when(storageService.store(any(), any())).thenReturn("/uploads/company/" + companyId + "/gallery/uuid.png");
+        var normalized = new NormalizedImage(new byte[]{9, 9}, "png");
+        when(imageNormalizationService.normalize(file)).thenReturn(normalized);
+        when(storageService.store(any(), any(), any())).thenReturn("/uploads/company/" + companyId + "/gallery/uuid.png");
 
         galleryImageService.storeImage(companyId, file);
 
-        verify(storageService).store("company/" + companyId + "/gallery", file);
+        verify(storageService).store("company/" + companyId + "/gallery", normalized.bytes(), normalized.extension());
     }
 
     // ── deleteImage ───────────────────────────────────────────────────────────
 
     @Test
-    void deleteImage_delegatesToStorage() {
+    void deleteImage_delegatesToStorageDeleteQuietly() {
         String path = "/uploads/company/" + companyId + "/gallery/image.jpg";
 
         galleryImageService.deleteImage(path);
 
-        verify(storageService).delete(path);
+        verify(storageService).deleteQuietly(path);
     }
 
     @Test

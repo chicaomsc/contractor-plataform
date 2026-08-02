@@ -78,12 +78,20 @@ export const forgotPasswordResponseSchema = z.object({
   debugResetLink: z.string().optional(),
 });
 
+// Single source of truth for password length limits on the frontend — mirrors
+// PasswordPolicy.MIN_LENGTH/MAX_LENGTH on the backend (the actual source of truth;
+// this is only a UX pre-check, never trusted on its own). Sprint 11B.6D, SEC-AUTH-09.
+export const PASSWORD_MIN_LENGTH = 8;
+export const PASSWORD_MAX_LENGTH = 128;
+
+export const passwordFieldSchema = z
+  .string()
+  .min(PASSWORD_MIN_LENGTH, `Use pelo menos ${PASSWORD_MIN_LENGTH} caracteres.`)
+  .max(PASSWORD_MAX_LENGTH, `Use no máximo ${PASSWORD_MAX_LENGTH} caracteres.`);
+
 export const resetPasswordFormSchema = z
   .object({
-    password: z
-      .string()
-      .min(8, "Use pelo menos 8 caracteres.")
-      .max(128, "Use no máximo 128 caracteres."),
+    password: passwordFieldSchema,
     passwordConfirmation: z.string().min(1, "Confirme a senha."),
   })
   .refine((value) => value.password === value.passwordConfirmation, {

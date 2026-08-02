@@ -58,9 +58,16 @@ public class GalleryService {
 
     public void deleteItem(UUID companyId, UUID id) {
         var item = findByIdAndCompany(id, companyId);
-        if (item.getBeforeImageUrl() != null) galleryImageService.deleteImage(item.getBeforeImageUrl());
-        if (item.getAfterImageUrl()  != null) galleryImageService.deleteImage(item.getAfterImageUrl());
+        String beforeUrl = item.getBeforeImageUrl();
+        String afterUrl  = item.getAfterImageUrl();
+
         galleryRepository.delete(item);
+
+        // Files are cleaned up only after the DB row is gone — deleteImage is
+        // best-effort (never throws), so a physical delete failure here can't roll
+        // back the deletion that already succeeded (DT-011B.5, Sprint 11B.6C item 3).
+        if (beforeUrl != null) galleryImageService.deleteImage(beforeUrl);
+        if (afterUrl  != null) galleryImageService.deleteImage(afterUrl);
     }
 
     public GalleryResponse feature(UUID companyId, UUID id, boolean featured) {
@@ -79,34 +86,44 @@ public class GalleryService {
 
     public GalleryResponse uploadBeforeImage(UUID companyId, UUID id, MultipartFile file) {
         var item = findByIdAndCompany(id, companyId);
-        if (item.getBeforeImageUrl() != null) galleryImageService.deleteImage(item.getBeforeImageUrl());
+        String previousUrl = item.getBeforeImageUrl();
+
         item.setBeforeImageUrl(galleryImageService.storeImage(companyId, file));
-        return galleryMapper.toResponse(galleryRepository.save(item));
+        var response = galleryMapper.toResponse(galleryRepository.save(item));
+
+        if (previousUrl != null) galleryImageService.deleteImage(previousUrl);
+        return response;
     }
 
     public GalleryResponse uploadAfterImage(UUID companyId, UUID id, MultipartFile file) {
         var item = findByIdAndCompany(id, companyId);
-        if (item.getAfterImageUrl() != null) galleryImageService.deleteImage(item.getAfterImageUrl());
+        String previousUrl = item.getAfterImageUrl();
+
         item.setAfterImageUrl(galleryImageService.storeImage(companyId, file));
-        return galleryMapper.toResponse(galleryRepository.save(item));
+        var response = galleryMapper.toResponse(galleryRepository.save(item));
+
+        if (previousUrl != null) galleryImageService.deleteImage(previousUrl);
+        return response;
     }
 
     public GalleryResponse deleteBeforeImage(UUID companyId, UUID id) {
         var item = findByIdAndCompany(id, companyId);
-        if (item.getBeforeImageUrl() != null) {
-            galleryImageService.deleteImage(item.getBeforeImageUrl());
+        String previousUrl = item.getBeforeImageUrl();
+        if (previousUrl != null) {
             item.setBeforeImageUrl(null);
             galleryRepository.save(item);
+            galleryImageService.deleteImage(previousUrl);
         }
         return galleryMapper.toResponse(item);
     }
 
     public GalleryResponse deleteAfterImage(UUID companyId, UUID id) {
         var item = findByIdAndCompany(id, companyId);
-        if (item.getAfterImageUrl() != null) {
-            galleryImageService.deleteImage(item.getAfterImageUrl());
+        String previousUrl = item.getAfterImageUrl();
+        if (previousUrl != null) {
             item.setAfterImageUrl(null);
             galleryRepository.save(item);
+            galleryImageService.deleteImage(previousUrl);
         }
         return galleryMapper.toResponse(item);
     }

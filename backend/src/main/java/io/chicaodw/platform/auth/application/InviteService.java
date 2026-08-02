@@ -73,12 +73,21 @@ public class InviteService {
         }
     }
 
+    /**
+     * Consumes the invite atomically before doing anything else — same ordering
+     * rationale as {@code PasswordResetTokenService.resetPassword}: the whole method
+     * is transactional, so if a later check (owner not PENDING) throws, the atomic
+     * consumption rolls back too, and "tudo ou nada" still holds (SEC-AUTH-06,
+     * Sprint 11B.6D).
+     */
     public AuthResponse acceptInvite(String rawToken, String newPassword) {
         String hash = TokenHasher.sha256Hex(rawToken);
         OwnerInvite invite = ownerInviteRepository.findByTokenHash(hash)
                 .orElseThrow(() -> new ResourceNotFoundException("Invite", "token"));
 
-        if (!invite.isUsable()) {
+        Instant now = Instant.now();
+        int updated = ownerInviteRepository.markUsedIfStillValid(invite.getId(), now);
+        if (updated == 0) {
             throw new BusinessRuleException("Invite token is expired, revoked or already used");
         }
 
@@ -91,9 +100,6 @@ public class InviteService {
         owner.setPasswordHash(passwordEncoder.encode(newPassword));
         owner.setStatus(UserStatus.ACTIVE);
         userRepository.save(owner);
-
-        invite.setUsedAt(Instant.now());
-        ownerInviteRepository.save(invite);
 
         // Defensive: normally at most one valid invite exists per owner, but never
         // leave a second still-valid invite usable after one has been accepted.

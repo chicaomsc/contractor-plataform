@@ -15,6 +15,7 @@ import io.chicaodw.platform.auth.infrastructure.persistence.UserRepository;
 import io.chicaodw.platform.auth.infrastructure.security.JwtProperties;
 import io.chicaodw.platform.auth.infrastructure.security.PlatformUserDetails;
 import io.chicaodw.platform.common.exception.BusinessRuleException;
+import io.chicaodw.platform.common.exception.ConflictException;
 import io.chicaodw.platform.common.exception.ResourceNotFoundException;
 import io.chicaodw.platform.common.security.TokenHasher;
 import io.chicaodw.platform.company.application.CompanySlugGenerator;
@@ -56,9 +57,18 @@ public class AuthService {
 
     // ── Register ─────────────────────────────────────────────────────────────
 
+    /**
+     * SEC-AUTH-05/DT-011B.2 §13: a duplicate email still returns a distinct signal
+     * (409, not a generic response) — accepted as-is for this B2B self-serve flow
+     * (the registrant already knows their own company's email; there is no email
+     * provider yet to instead confirm registration out-of-band, see DT-011A.10 §16/§22).
+     * The one change from before is that the response no longer echoes the submitted
+     * email back in the error message — the client already has it, so repeating it
+     * server-side only adds it to logs/error-tracking for no benefit.
+     */
     public AuthResponse register(RegisterRequest request) {
         if (userRepository.existsByEmail(request.email())) {
-            throw new BusinessRuleException("Email already in use: " + request.email());
+            throw new ConflictException("An account with this email already exists");
         }
 
         Company company = new Company();
@@ -134,13 +144,22 @@ public class AuthService {
 
     // ── Refresh ───────────────────────────────────────────────────────────────
 
+    /**
+     * Rotation strategy: option B (rotate on every use, revoke the one just consumed)
+     * — already the design before this sprint; the fix here is closing the race
+     * between two concurrent calls with the same token (SEC-AUTH-14, Sprint 11B.6D)
+     * via an atomic conditional UPDATE, same pattern as {@code
+     * PasswordResetTokenService}/{@code InviteService.acceptInvite}. At most one
+     * concurrent caller ever observes {@code markRevokedIfStillValid} return 1.
+     */
     public AuthResponse refresh(String tokenValue) {
         RefreshToken existing = refreshTokenRepository.findByTokenHash(TokenHasher.sha256Hex(tokenValue))
-                .filter(t -> !t.isRevoked() && t.getExpiresAt().isAfter(Instant.now()))
                 .orElseThrow(() -> new BusinessRuleException("Refresh token is invalid or expired"));
 
-        existing.setRevoked(true);
-        refreshTokenRepository.save(existing);
+        int updated = refreshTokenRepository.markRevokedIfStillValid(existing.getId(), Instant.now());
+        if (updated == 0) {
+            throw new BusinessRuleException("Refresh token is invalid or expired");
+        }
 
         User user = userRepository.findById(existing.getUserId())
                 .orElseThrow(() -> new ResourceNotFoundException("User", existing.getUserId()));

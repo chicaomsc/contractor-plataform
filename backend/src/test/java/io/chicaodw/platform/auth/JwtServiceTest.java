@@ -1,5 +1,14 @@
 package io.chicaodw.platform.auth;
 
+import java.util.Date;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
+
 import io.chicaodw.platform.auth.application.JwtService;
 import io.chicaodw.platform.auth.domain.User;
 import io.chicaodw.platform.auth.domain.UserRole;
@@ -8,14 +17,9 @@ import io.chicaodw.platform.auth.infrastructure.security.JwtProperties;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.springframework.test.util.ReflectionTestUtils;
-
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
+import io.jsonwebtoken.security.SignatureException;
 
 class JwtServiceTest {
 
@@ -84,7 +88,10 @@ class JwtServiceTest {
     void shouldRejectExpiredToken() {
         JwtProperties shortLived = new JwtProperties();
         shortLived.setSecret("test-secret-key-for-junit-at-least-32-chars!!");
-        shortLived.setAccessTokenTtl(-1); // already expired
+        // Well beyond the configured clock-skew tolerance (default 30s) — a token
+        // that "just" expired within the skew window is deliberately still accepted
+        // (see shouldAcceptTokenWithinConfiguredClockSkew), so this must expire by more.
+        shortLived.setAccessTokenTtl(-3600);
         JwtService expiredService = new JwtService(shortLived);
 
         String token = expiredService.generateAccessToken(user);
@@ -100,6 +107,109 @@ class JwtServiceTest {
 
         assertThatThrownBy(() -> jwtService.parseClaims(tampered))
                 .isInstanceOf(JwtException.class);
+    }
+
+    // ── issuer / audience / algorithm hardening (Sprint 11B.6D) ────────────────
+
+    @Test
+    void generatedToken_carriesConfiguredIssuerAndAudience() {
+        String token  = jwtService.generateAccessToken(user);
+        Claims claims = jwtService.parseClaims(token);
+
+        assertThat(claims.getIssuer()).isEqualTo("contractor-platform");
+        assertThat(claims.getAudience()).containsExactly("contractor-platform-api");
+    }
+
+    @Test
+    void shouldRejectTokenWithUnexpectedIssuer() {
+        JwtProperties otherIssuer = new JwtProperties();
+        otherIssuer.setSecret("test-secret-key-for-junit-at-least-32-chars!!");
+        otherIssuer.setIssuer("some-other-deployment");
+        JwtService otherIssuerService = new JwtService(otherIssuer);
+
+        String token = otherIssuerService.generateAccessToken(user);
+
+        assertThatThrownBy(() -> jwtService.parseClaims(token))
+                .isInstanceOf(JwtException.class);
+    }
+
+    @Test
+    void shouldRejectTokenWithUnexpectedAudience() {
+        JwtProperties otherAudience = new JwtProperties();
+        otherAudience.setSecret("test-secret-key-for-junit-at-least-32-chars!!");
+        otherAudience.setAudience("some-other-api");
+        JwtService otherAudienceService = new JwtService(otherAudience);
+
+        String token = otherAudienceService.generateAccessToken(user);
+
+        assertThatThrownBy(() -> jwtService.parseClaims(token))
+                .isInstanceOf(JwtException.class);
+    }
+
+    @Test
+    void shouldRejectTokenSignedWithADifferentSecret_algorithmConfusionGuard() {
+        // Built by hand with jjwt directly (not via JwtService) — a token forged with
+        // a different key entirely, simulating the classic "attacker knows the
+        // algorithm shape but not the secret" scenario. verifyWith(SecretKey) also
+        // means an RS/ES/PS-signed or unsigned ("none") token is never accepted here
+        // regardless of secret, since parseSignedClaims requires a JWS matching a
+        // symmetric key's algorithm family.
+        var wrongKey = Keys.hmacShaKeyFor("a-completely-different-secret-key-32b!!".getBytes());
+        long now = System.currentTimeMillis();
+        String forged = Jwts.builder()
+                .subject(user.getId().toString())
+                .issuer("contractor-platform")
+                .audience().add("contractor-platform-api").and()
+                .claim("role", "SUPER_ADMIN")
+                .issuedAt(new Date(now))
+                .expiration(new Date(now + 900_000L))
+                .signWith(wrongKey, Jwts.SIG.HS256)
+                .compact();
+
+        assertThatThrownBy(() -> jwtService.parseClaims(forged))
+                .isInstanceOf(SignatureException.class);
+    }
+
+    @Test
+    void shouldRejectTokenSignedWithHs384() {
+        var hs384Key = Jwts.SIG.HS384.key().build();
+
+        long now = System.currentTimeMillis();
+
+        String token = Jwts.builder()
+                .subject(user.getId().toString())
+                .issuer("contractor-platform")
+                .audience().add("contractor-platform-api").and()
+                .claim("role", user.getRole().name())
+                .claim("authVersion", user.getAuthVersion())
+                .issuedAt(new Date(now))
+                .expiration(new Date(now + 900_000L))
+                .signWith(hs384Key, Jwts.SIG.HS384)
+                .compact();
+
+        assertThatThrownBy(() -> jwtService.parseClaims(token))
+                .isInstanceOf(JwtException.class);
+    }
+
+    @Test
+    void shouldAcceptTokenWithinConfiguredClockSkew() {
+        JwtProperties futureIssued = new JwtProperties();
+        futureIssued.setSecret("test-secret-key-for-junit-at-least-32-chars!!");
+        futureIssued.setClockSkewSeconds(30);
+        JwtService futureIssuedService = new JwtService(futureIssued);
+
+        long now = System.currentTimeMillis();
+        String token = Jwts.builder()
+                .subject(user.getId().toString())
+                .issuer("contractor-platform")
+                .audience().add("contractor-platform-api").and()
+                .issuedAt(new Date(now))
+                // "expires" 10s ago — inside the 30s configured skew, so still accepted.
+                .expiration(new Date(now - 10_000L))
+                .signWith(Keys.hmacShaKeyFor("test-secret-key-for-junit-at-least-32-chars!!".getBytes()), Jwts.SIG.HS256)
+                .compact();
+
+        assertThat(futureIssuedService.parseClaims(token)).isNotNull();
     }
 
     // ── SUPER_ADMIN (no company) — DT-011A.7 §5/§13 ────────────────────────────

@@ -92,9 +92,17 @@ public class SecurityConfig {
         return source;
     }
 
+    // 12 (vs. BCryptPasswordEncoder's own default of 10) — SEC-AUTH-10/DT-011B.5 §9.
+    // Existing hashes keep validating: BCrypt encodes its own cost factor in the hash
+    // string, so a strength change only affects newly-created hashes, never existing
+    // ones — see docs/operations/runbook.md for the rehash-on-login strategy this
+    // enables without a bulk migration.
+    @Value("${app.security.bcrypt-strength:12}")
+    private int bcryptStrength;
+
     @Bean
     public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
+        return new BCryptPasswordEncoder(bcryptStrength);
     }
 
     @Bean

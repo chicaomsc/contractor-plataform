@@ -18,6 +18,7 @@ import io.chicaodw.platform.auth.infrastructure.security.PlatformUserDetails;
 import io.chicaodw.platform.auth.api.dto.UserResponse;
 import io.chicaodw.platform.auth.api.dto.CompanyResponse;
 import io.chicaodw.platform.common.exception.BusinessRuleException;
+import io.chicaodw.platform.common.exception.ConflictException;
 import io.chicaodw.platform.common.security.TokenHasher;
 import io.chicaodw.platform.company.domain.Branding;
 import io.chicaodw.platform.company.domain.Company;
@@ -48,6 +49,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -129,14 +132,16 @@ class AuthServiceTest {
     }
 
     @Test
-    void register_duplicateEmail_throwsBusinessRuleException() {
+    void register_duplicateEmail_throwsConflictWithoutEchoingTheEmail() {
         when(userRepository.existsByEmail("alice@example.com")).thenReturn(true);
 
         RegisterRequest req = new RegisterRequest("Alice", "alice@example.com", "password1", "Acme", "PT");
 
+        // SEC-AUTH-05/Sprint 11B.6D: 409 (a real conflict, not a generic 422 business
+        // rule), and the message no longer echoes the submitted email back.
         assertThatThrownBy(() -> authService.register(req))
-                .isInstanceOf(BusinessRuleException.class)
-                .hasMessageContaining("alice@example.com");
+                .isInstanceOf(ConflictException.class)
+                .hasMessageNotContaining("alice@example.com");
     }
 
     // ── Login ─────────────────────────────────────────────────────────────────
@@ -225,6 +230,7 @@ class AuthServiceTest {
         stored.setExpiresAt(Instant.now().plusSeconds(3600));
 
         when(refreshTokenRepository.findByTokenHash(TokenHasher.sha256Hex("valid-token"))).thenReturn(Optional.of(stored));
+        when(refreshTokenRepository.markRevokedIfStillValid(eq(stored.getId()), any())).thenReturn(1);
         when(refreshTokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(companyRepository.findById(companyId)).thenReturn(Optional.of(company));
@@ -237,18 +243,32 @@ class AuthServiceTest {
         AuthResponse response = authService.refresh("valid-token");
 
         assertThat(response.accessToken()).isEqualTo("new-access-token");
-        assertThat(stored.isRevoked()).isTrue();
+        verify(refreshTokenRepository).markRevokedIfStillValid(eq(stored.getId()), any());
     }
 
     @Test
-    void refresh_expiredToken_throwsBusinessRuleException() {
+    void refresh_expiredOrAlreadyRevokedToken_throwsBusinessRuleException() {
         RefreshToken expired = new RefreshToken();
+        ReflectionTestUtils.setField(expired, "id", UUID.randomUUID());
         expired.setTokenHash(TokenHasher.sha256Hex("expired-token"));
         expired.setExpiresAt(Instant.now().minusSeconds(1));
 
         when(refreshTokenRepository.findByTokenHash(TokenHasher.sha256Hex("expired-token"))).thenReturn(Optional.of(expired));
+        // The atomic UPDATE's own WHERE clause (revoked = false AND expires_at > now)
+        // is what actually enforces this in production — a mock can only simulate its
+        // result, not its SQL, so this stub is what makes "expired" observable here.
+        when(refreshTokenRepository.markRevokedIfStillValid(eq(expired.getId()), any())).thenReturn(0);
 
         assertThatThrownBy(() -> authService.refresh("expired-token"))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("expired");
+    }
+
+    @Test
+    void refresh_unknownToken_throwsBusinessRuleException() {
+        when(refreshTokenRepository.findByTokenHash(TokenHasher.sha256Hex("unknown-token"))).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> authService.refresh("unknown-token"))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("expired");
     }
@@ -263,7 +283,7 @@ class AuthServiceTest {
 
         company.setStatus(CompanyStatus.INACTIVE);
         when(refreshTokenRepository.findByTokenHash(TokenHasher.sha256Hex("valid-token"))).thenReturn(Optional.of(stored));
-        when(refreshTokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(refreshTokenRepository.markRevokedIfStillValid(eq(stored.getId()), any())).thenReturn(1);
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(companyRepository.findById(companyId)).thenReturn(Optional.of(company));
 
@@ -281,7 +301,7 @@ class AuthServiceTest {
 
         user.setStatus(UserStatus.INACTIVE);
         when(refreshTokenRepository.findByTokenHash(TokenHasher.sha256Hex("valid-token"))).thenReturn(Optional.of(stored));
-        when(refreshTokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(refreshTokenRepository.markRevokedIfStillValid(eq(stored.getId()), any())).thenReturn(1);
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
         assertThatThrownBy(() -> authService.refresh("valid-token"))

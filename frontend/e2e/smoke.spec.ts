@@ -90,7 +90,7 @@ test("SUPER_ADMIN provisiona company e OWNER aceita convite", async ({
 
   await expect(page.getByText("Company criada")).toBeVisible();
   const inviteLink = await page.getByLabel("Link de convite").inputValue();
-  expect(inviteLink).toContain("/invite?token=");
+  expect(inviteLink).toContain("/invite#token=");
 
   await page.getByRole("link", { name: /Abrir detalhe/ }).click();
   await expect(page.getByRole("heading", { name: companyName })).toBeVisible();

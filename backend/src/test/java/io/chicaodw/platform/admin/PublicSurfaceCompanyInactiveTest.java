@@ -31,10 +31,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 class PublicSurfaceCompanyInactiveTest extends AbstractAdminIntegrationTest {
 
-    private static final byte[] PNG_BYTES = {
-            (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00
-    };
-
     @Autowired io.chicaodw.platform.company.infrastructure.persistence.CompanyRepository companyRepository;
 
     @Test
@@ -103,7 +99,7 @@ class PublicSurfaceCompanyInactiveTest extends AbstractAdminIntegrationTest {
         var owner = registerOwner();
         UUID companyId = companyRepository.findBySlug(owner.companySlug()).orElseThrow().getId();
 
-        var file = new MockMultipartFile("file", "logo.png", "image/png", PNG_BYTES);
+        var file = new MockMultipartFile("file", "logo.png", "image/png", pngBytes());
         String logoBody = mockMvc.perform(multipart("/company/logo").file(file)
                         .header("Authorization", "Bearer " + owner.accessToken()))
                 .andExpect(status().isOk())
@@ -212,5 +208,12 @@ class PublicSurfaceCompanyInactiveTest extends AbstractAdminIntegrationTest {
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         return objectMapper.readTree(body).get("token").asText();
+    }
+
+    private static byte[] pngBytes() throws java.io.IOException {
+        var image = new java.awt.image.BufferedImage(4, 4, java.awt.image.BufferedImage.TYPE_INT_RGB);
+        var out = new java.io.ByteArrayOutputStream();
+        javax.imageio.ImageIO.write(image, "png", out);
+        return out.toByteArray();
     }
 }

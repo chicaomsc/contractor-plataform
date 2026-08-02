@@ -43,8 +43,27 @@ app:
     secret: ${JWT_SECRET:dev-only-secret-at-least-32-chars-change-in-prod!}
     access-token-ttl: 900       # 15 minutes (seconds)
     refresh-token-ttl: 2592000  # 30 days (seconds)
+    # Required and checked on every parse (Sprint 11B.6D) — a token minted for a
+    # different deployment/environment is rejected even if it has a valid signature.
+    issuer: ${JWT_ISSUER:contractor-platform}
+    audience: ${JWT_AUDIENCE:contractor-platform-api}
+    clock-skew-seconds: ${JWT_CLOCK_SKEW_SECONDS:30}
+  security:
+    # BCryptPasswordEncoder's own default is 10 — SEC-AUTH-10/DT-011B.5 §9 raises it
+    # to 12. Existing hashes keep validating (BCrypt encodes its own cost factor in
+    # the hash string); only newly-created hashes use the new strength. See
+    # docs/operations/runbook.md for the rehash-on-login strategy this enables.
+    bcrypt-strength: ${BCRYPT_STRENGTH:12}
   storage:
     base-path: ${STORAGE_PATH:./storage}
+  image-normalization:
+    # Enforced before ImageIO decodes the full pixel buffer — rejects decompression-bomb-
+    # style images (tiny file, huge declared dimensions) reading only the header first.
+    # See ImageNormalizationService (Sprint 11B.6C, SEC-STORAGE-02).
+    max-width-px: ${IMAGE_MAX_WIDTH_PX:6000}
+    max-height-px: ${IMAGE_MAX_HEIGHT_PX:6000}
+    max-pixels: ${IMAGE_MAX_PIXELS:30000000}
+    jpeg-quality: ${IMAGE_JPEG_QUALITY:0.85}
   platform:
     # Base domain used to extract a tenant slug from a Host value ("{slug}.{base-domain}")
     # at GET /public/tenant — see DT-011A.7 §16. "localhost" is correct for local/E2E

@@ -107,6 +107,31 @@
             <version>1.4.2</version>
         </dependency>
 
+        <!-- ── Image normalization (Sprint 11B.6C) ──────────────── -->
+        <!-- TwelveMonkeys: adds a JPEG reader tolerant of malformed/CMYK JPEGs and a WebP
+             reader (JDK's built-in ImageIO has neither) — no native libs, pure Java, ASL 2.0.
+             We only ever READ WebP (never write it back out — see DT-011B.4/ImageNormalizationService
+             javadoc for why WebP input is normalized to PNG output). -->
+        <dependency>
+            <groupId>com.twelvemonkeys.imageio</groupId>
+            <artifactId>imageio-jpeg</artifactId>
+            <version>3.14.0</version>
+        </dependency>
+        <dependency>
+            <groupId>com.twelvemonkeys.imageio</groupId>
+            <artifactId>imageio-webp</artifactId>
+            <version>3.14.0</version>
+        </dependency>
+        <!-- metadata-extractor: reads EXIF/XMP/IPTC metadata (used only to read the
+             orientation tag before we discard all metadata by re-encoding from a fresh
+             BufferedImage) — pure Java, Apache 2.0, the de-facto standard for this in the
+             JVM ecosystem. -->
+        <dependency>
+            <groupId>com.drewnoakes</groupId>
+            <artifactId>metadata-extractor</artifactId>
+            <version>2.21.0</version>
+        </dependency>
+
         <!-- ── Code generation ──────────────────────────────────── -->
         <dependency>
             <groupId>org.projectlombok</groupId>

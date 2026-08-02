@@ -3,6 +3,7 @@
 import { zodResolver } from "@/features/dashboard/utils/zod-resolver";
 import { Button } from "@/components/ui/Button";
 import { ApiError } from "@/lib/api/errors";
+import { readTokenFromHash } from "@/lib/auth/token-fragment";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -15,13 +16,6 @@ import {
 
 const GENERIC_RESET_ERROR =
   "O link de recuperação é inválido ou não está mais disponível.";
-
-function readTokenFromHash(hash: string) {
-  const fragment = hash.startsWith("#") ? hash.slice(1) : hash;
-  const params = new URLSearchParams(fragment);
-  const token = params.get("token")?.trim();
-  return token && token.length > 0 ? token : null;
-}
 
 function getResetErrorMessage(error: unknown) {
   if (error instanceof ApiError && error.status === 422) {
