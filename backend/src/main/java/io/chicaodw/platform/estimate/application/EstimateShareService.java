@@ -5,6 +5,7 @@ import io.chicaodw.platform.common.security.SecureTokenGenerator;
 import io.chicaodw.platform.common.security.TokenHasher;
 import io.chicaodw.platform.company.domain.Branding;
 import io.chicaodw.platform.company.domain.Company;
+import io.chicaodw.platform.company.domain.CompanyStatus;
 import io.chicaodw.platform.company.domain.Settings;
 import io.chicaodw.platform.company.infrastructure.persistence.BrandingRepository;
 import io.chicaodw.platform.company.infrastructure.persistence.CompanyRepository;
@@ -155,12 +156,25 @@ public class EstimateShareService {
      * Looks up and validates the token but does not mutate the entity — call sites record the
      * access themselves via {@link #recordAccess} once they've decided the request will
      * actually succeed.
+     *
+     * A deactivated company's shares must be exactly as unusable as an unknown/expired/
+     * revoked token — same uniform 404, never revealing which case applies (DT-011B.5
+     * §9 HARD-05, SEC-TENANT-02). A scalar status lookup (not {@code companyService
+     * .findActiveBySlug}/{@code Company} entity) is deliberate here: this class already
+     * masks every other invalid-token reason behind the identical
+     * {@code ResourceNotFoundException("EstimateShare", "token")}, and letting a
+     * differently-shaped "Company not found" message leak through would reintroduce
+     * exactly the kind of signal this class exists to avoid.
      */
     private EstimateShare resolveValidShareReadOnly(String rawToken) {
         String hash = TokenHasher.sha256Hex(rawToken);
         var share = estimateShareRepository.findByTokenHash(hash)
                 .orElseThrow(() -> new ResourceNotFoundException("EstimateShare", "token"));
         if (!share.isUsable()) {
+            throw new ResourceNotFoundException("EstimateShare", "token");
+        }
+        CompanyStatus companyStatus = companyRepository.findStatusById(share.getCompanyId()).orElse(null);
+        if (companyStatus != CompanyStatus.ACTIVE) {
             throw new ResourceNotFoundException("EstimateShare", "token");
         }
         return share;

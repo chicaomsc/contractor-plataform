@@ -2,6 +2,7 @@ package io.chicaodw.platform.admin;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.chicaodw.platform.AbstractIntegrationTest;
+import io.chicaodw.platform.admin.api.dto.UpdateCompanyStatusRequest;
 import io.chicaodw.platform.auth.api.dto.AuthResponse;
 import io.chicaodw.platform.auth.api.dto.LoginRequest;
 import io.chicaodw.platform.auth.api.dto.RegisterRequest;
@@ -15,6 +16,9 @@ import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.util.UUID;
+
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -77,5 +81,13 @@ abstract class AbstractAdminIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         return objectMapper.readValue(body, AuthResponse.class).accessToken();
+    }
+
+    void setStatus(String adminToken, UUID companyId, String status) throws Exception {
+        mockMvc.perform(patch("/admin/companies/" + companyId + "/status")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new UpdateCompanyStatusRequest(status))))
+                .andExpect(status().isOk());
     }
 }

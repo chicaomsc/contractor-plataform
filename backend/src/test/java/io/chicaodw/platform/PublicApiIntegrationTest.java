@@ -3,6 +3,7 @@ package io.chicaodw.platform;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.chicaodw.platform.auth.api.dto.AuthResponse;
 import io.chicaodw.platform.auth.api.dto.RegisterRequest;
+import io.chicaodw.platform.company.infrastructure.persistence.CompanyRepository;
 import io.chicaodw.platform.gallery.api.dto.CreateGalleryRequest;
 import io.chicaodw.platform.servicecatalog.api.dto.CreateServiceRequest;
 import org.junit.jupiter.api.BeforeEach;
@@ -14,6 +15,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.UUID;
 
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -29,8 +31,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 class PublicApiIntegrationTest extends AbstractIntegrationTest {
 
-    @Autowired MockMvc      mockMvc;
-    @Autowired ObjectMapper objectMapper;
+    @Autowired MockMvc            mockMvc;
+    @Autowired ObjectMapper       objectMapper;
+    @Autowired CompanyRepository  companyRepository;
 
     private String accessToken;
     private String companySlug;
@@ -207,15 +210,22 @@ class PublicApiIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void uploadedAssets_noAuth_arePubliclyReadable() throws Exception {
-        Path storageFile = Path.of("storage/public-api-test.txt");
+    void uploadedAssets_forActiveCompany_arePubliclyReadable() throws Exception {
+        UUID companyId = companyRepository.findBySlug(companySlug).orElseThrow().getId();
+        Path storageFile = Path.of("storage/company/" + companyId + "/logo/public-api-test.png");
         Files.createDirectories(storageFile.getParent());
-        Files.writeString(storageFile, "public asset");
+        Files.write(storageFile, new byte[]{1, 2, 3});
 
-        mockMvc.perform(get("/uploads/public-api-test.txt"))
+        mockMvc.perform(get("/uploads/company/" + companyId + "/logo/public-api-test.png"))
                 .andExpect(status().isOk());
 
         Files.deleteIfExists(storageFile);
+    }
+
+    @Test
+    void uploadedAssets_forUnknownCompany_return404() throws Exception {
+        mockMvc.perform(get("/uploads/company/" + UUID.randomUUID() + "/logo/whatever.png"))
+                .andExpect(status().isNotFound());
     }
 
     @Test

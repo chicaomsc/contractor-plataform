@@ -46,6 +46,12 @@ class CompanyControllerTest extends AbstractControllerTest {
                 .andExpect(jsonPath("$.name").value("Obras Lda"));
     }
 
+    @Test
+    void getProfile_superAdmin_returns403NotServerError() throws Exception {
+        mockMvc.perform(get("/company/me").with(authentication(superAdminAuth())))
+                .andExpect(status().isForbidden());
+    }
+
     // ── PUT /company/me ───────────────────────────────────────────────────────
 
     @Test

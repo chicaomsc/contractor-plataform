@@ -22,6 +22,7 @@ public class BrandingController {
     private final BrandingService brandingService;
 
     @GetMapping("/me")
+    @PreAuthorize("hasRole('OWNER')")
     public BrandingResponse getBranding(@AuthenticationPrincipal JwtPrincipal principal) {
         return brandingService.getBranding(principal.companyId());
     }

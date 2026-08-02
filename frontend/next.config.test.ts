@@ -28,3 +28,35 @@ describe("next.config rewrites", () => {
     ]);
   });
 });
+
+describe("next.config images.remotePatterns (SEC-STORAGE-01)", () => {
+  it("never allows a wildcard hostname, for either protocol", async () => {
+    process.env.NEXT_PUBLIC_API_BASE_URL = "http://localhost:8080";
+    vi.resetModules();
+
+    const { default: nextConfig } = await import("./next.config");
+    const patterns = nextConfig.images?.remotePatterns ?? [];
+
+    expect(patterns.length).toBeGreaterThan(0);
+    for (const pattern of patterns) {
+      expect("hostname" in pattern ? pattern.hostname : undefined).not.toBe("**");
+    }
+  });
+
+  it("scopes the remote pattern to the configured API origin and /uploads/** only", async () => {
+    process.env.NEXT_PUBLIC_API_BASE_URL = "https://api.example.com";
+    vi.resetModules();
+
+    const { default: nextConfig } = await import("./next.config");
+    const patterns = nextConfig.images?.remotePatterns ?? [];
+
+    expect(patterns).toEqual([
+      {
+        protocol: "https",
+        hostname: "api.example.com",
+        port: "",
+        pathname: "/uploads/**",
+      },
+    ]);
+  });
+});

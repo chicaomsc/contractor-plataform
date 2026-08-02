@@ -22,6 +22,7 @@ public class SettingsController {
     private final SettingsService settingsService;
 
     @GetMapping("/me")
+    @PreAuthorize("hasRole('OWNER')")
     public SettingsResponse getSettings(@AuthenticationPrincipal JwtPrincipal principal) {
         return settingsService.getSettings(principal.companyId());
     }

@@ -83,4 +83,12 @@ public abstract class AbstractControllerTest extends AbstractIntegrationTest {
                 principal, null,
                 List.of(new SimpleGrantedAuthority("ROLE_VIEWER")));
     }
+
+    /** companyId is deliberately null, exactly like a real SUPER_ADMIN principal (DT-011B.6B, SEC-TENANT-05). */
+    protected static Authentication superAdminAuth() {
+        var principal = new JwtPrincipal(USER_ID, null, "super-admin@test.com", UserRole.SUPER_ADMIN, 0L);
+        return new UsernamePasswordAuthenticationToken(
+                principal, null,
+                List.of(new SimpleGrantedAuthority("ROLE_SUPER_ADMIN")));
+    }
 }

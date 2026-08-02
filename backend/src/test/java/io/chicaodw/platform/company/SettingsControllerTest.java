@@ -43,6 +43,12 @@ class SettingsControllerTest extends AbstractControllerTest {
                 .andExpect(jsonPath("$.defaultCurrency").value("EUR"));
     }
 
+    @Test
+    void getSettings_superAdmin_returns403NotServerError() throws Exception {
+        mockMvc.perform(get("/settings/me").with(authentication(superAdminAuth())))
+                .andExpect(status().isForbidden());
+    }
+
     // ── PUT /settings/me ──────────────────────────────────────────────────────
 
     @Test

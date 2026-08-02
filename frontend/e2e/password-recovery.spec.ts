@@ -62,7 +62,7 @@ test("OWNER solicita reset, define nova senha e login antigo falha", async ({
 
   await page.goto("/login");
   await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(password);
+  await page.getByLabel("Senha").fill(password);
   await page.getByRole("button", { name: "Entrar" }).click();
   await expect(page.getByText("Sessão expirada")).toBeVisible();
 
@@ -86,7 +86,7 @@ test("SUPER_ADMIN usa o mesmo fluxo e retorna para admin login", async ({
 
   await page.goto("/admin/login");
   await page.getByLabel("Email").fill(platformAdminEmail);
-  await page.getByLabel("Password").fill(temporaryPassword);
+  await page.getByLabel("Senha").fill(temporaryPassword);
   await page.getByRole("button", { name: "Entrar" }).click();
   await expect(page).toHaveURL(/\/admin/);
 
@@ -120,7 +120,7 @@ test("SUPER_ADMIN gera link manual para OWNER ACTIVE no detalhe da Company", asy
 
   await page.goto("/login");
   await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(password);
+  await page.getByLabel("Senha").fill(password);
   await page.getByRole("button", { name: "Entrar" }).click();
   await expect(page.getByText("Sessão expirada")).toBeVisible();
 

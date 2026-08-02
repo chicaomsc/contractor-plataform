@@ -52,15 +52,25 @@ public class CompanyService {
                 .orElseThrow(() -> new ResourceNotFoundException("Company", slug));
     }
 
+    /**
+     * Resolves a company by slug for a PUBLIC (unauthenticated) caller — an inactive
+     * company must be exactly as invisible as an unknown slug, never revealing that a
+     * deactivated tenant exists (DT-011A.7 §13). Shared by every public "by slug"
+     * endpoint (landing, gallery, services) so this rule lives in exactly one place —
+     * see DT-011B.5 §9 HARD-05 / SEC-TENANT-01.
+     */
     @Transactional(readOnly = true)
-    public PublicSiteResponse getPublicSite(String slug) {
-        var company = findBySlug(slug);
-        // An inactive company's public site must not resolve at all — treat it
-        // identically to an unknown slug (404), never revealing that a deactivated
-        // tenant exists (DT-011A.7 §13).
+    public Company findActiveBySlug(String slug) {
+        Company company = findBySlug(slug);
         if (company.getStatus() != CompanyStatus.ACTIVE) {
             throw new ResourceNotFoundException("Company", slug);
         }
+        return company;
+    }
+
+    @Transactional(readOnly = true)
+    public PublicSiteResponse getPublicSite(String slug) {
+        var company = findActiveBySlug(slug);
         var branding = brandingRepository.findByCompanyId(company.getId()).orElse(null);
         var address = company.getAddress();
 
