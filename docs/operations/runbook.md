@@ -461,6 +461,28 @@ ainda"). Nenhuma tabela/coluna especulativa foi criada.
 - `SEC-AUTH-09` (parcial) — sem checagem de senha vazada.
 - `SEC-AUTH-11` (parcial) — sem rotação de chave com `kid`.
 
+### 21.4 Scans automáticos de segurança (Sprint 11B.7)
+
+Política completa, severidade e cadência: `docs/security/security-baseline.md`.
+Resumo operacional:
+
+- **Backend (CVE em dependências):** `./mvnw -Psecurity-scan verify -DskipTests -DnvdApiKey=<chave>`
+  — requer uma chave gratuita do NVD (<https://nvd.nist.gov/developers/request-an-api-key>),
+  sem ela o comando falha rápido (`Invalid API Key`, confirmado nesta sprint — não é
+  um modo degradado, é uma falha). Em CI, configurar o secret `NVD_API_KEY`.
+- **Frontend (CVE em dependências):** `npm run security:audit` (`frontend/`).
+- **Dependências desatualizadas:** `./mvnw versions:display-dependency-updates` /
+  `./mvnw versions:display-plugin-updates` (backend); `npm run deps:outdated`
+  (frontend).
+- **CodeQL** (Java + TypeScript/JavaScript) e **gitleaks** (segredos commitados)
+  rodam só em `.github/workflows/security.yml` (agendado semanalmente, manual via
+  `workflow_dispatch`, e em todo push para `main`) — nenhum dos dois roda
+  localmente como parte do fluxo normal de desenvolvimento.
+- **Dependabot** (`.github/dependabot.yml`) abre PRs semanais para Maven/npm/GitHub
+  Actions, até 5 simultâneos por ecossistema — tratar como qualquer PR normal.
+- Nenhum destes scanners bloqueia `./mvnw test`, `npm run build`, ou os workflows
+  `backend-ci.yml`/`frontend-ci.yml` existentes — são inteiramente aditivos.
+
 ## 22. Banco de Dados
 
 ```bash

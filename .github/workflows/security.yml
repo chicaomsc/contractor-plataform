@@ -1,0 +1,160 @@
+name: Security Scans
+
+# Sprint 11B.7 — dedicated, non-blocking security automation. Deliberately separate
+# from backend-ci.yml/frontend-ci.yml: these scans are slower (NVD data, CodeQL
+# analysis) and report-oriented, not merge gates. See
+# docs/security/security-baseline.md for what each job checks, how often, and the
+# remediation policy.
+
+on:
+  schedule:
+    # Mondays 06:00 UTC — ahead of the work week, so findings are visible before
+    # anyone starts new work on top of them.
+    - cron: '0 6 * * 1'
+  workflow_dispatch: {}
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-check:
+    name: Backend — OWASP Dependency-Check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Run OWASP Dependency-Check
+        working-directory: backend
+        # dependency-check-maven 13.x hard-requires an NVD API key to fetch CVE data —
+        # there is no working anonymous fallback anymore (confirmed locally: it fails
+        # fast with "Invalid API Key" whether the property is empty or omitted
+        # entirely). The NVD_API_KEY repository secret MUST be set (free registration
+        # at https://nvd.nist.gov/developers/request-an-api-key) for this job to
+        # produce a real report — see docs/security/security-baseline.md. Report-only
+        # regardless: failBuildOnCVSS is set above the maximum possible CVSS score in
+        # pom.xml, so a successful run never fails the workflow over what it finds.
+        run: ./mvnw --no-transfer-progress -Psecurity-scan verify -DskipTests -DnvdApiKey="${{ secrets.NVD_API_KEY }}"
+        continue-on-error: true
+
+      - name: Upload Dependency-Check report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-check-report
+          path: backend/target/dependency-check-report/
+          if-no-files-found: warn
+
+  npm-audit:
+    name: Frontend — npm audit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run npm audit (JSON report)
+        run: npm audit --json > npm-audit-report.json || true
+
+      - name: Run npm audit (human-readable summary in the log)
+        run: npm run security:audit || true
+
+      - name: Upload npm audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit-report
+          path: frontend/npm-audit-report.json
+          if-no-files-found: warn
+
+  codeql:
+    name: CodeQL — ${{ matrix.language }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: java-kotlin
+            build-mode: autobuild
+          - language: javascript-typescript
+            build-mode: none
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 25
+        if: matrix.language == 'java-kotlin'
+        uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+
+      - name: Autobuild
+        if: matrix.build-mode == 'autobuild'
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: '/language:${{ matrix.language }}'
+
+  secret-scan:
+    name: Secret scanning (gitleaks)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+        continue-on-error: true
+
+      - name: Upload gitleaks report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitleaks-report
+          path: results.sarif
+          if-no-files-found: ignore

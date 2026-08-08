@@ -223,7 +223,62 @@
                 </configuration>
             </plugin>
 
+            <!-- Sprint 11B.7 — dependency freshness check. Never bound to a lifecycle
+                 phase (no <executions>), so it only ever runs when a goal is invoked
+                 explicitly: `./mvnw versions:display-dependency-updates` /
+                 `./mvnw versions:display-plugin-updates` — see
+                 docs/security/security-baseline.md. -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>versions-maven-plugin</artifactId>
+            </plugin>
+
         </plugins>
     </build>
+
+    <profiles>
+        <!-- Sprint 11B.7 — OWASP Dependency-Check, opt-in only. Deliberately not part
+             of the default build: it downloads/refreshes the NVD CVE database on
+             every run (slow, and it's a network dependency the normal `./mvnw test`
+             path must never have) and is meant to be run on a schedule/CI job or
+             on demand, not on every local `test`/`package`. Run it explicitly with:
+             ./mvnw -Psecurity-scan verify -DskipTests -DnvdApiKey=<your-key>
+             REQUIRES an NVD API key (free registration at
+             https://nvd.nist.gov/developers/request-an-api-key) — dependency-check
+             13.x fails fast ("Invalid API Key") without one; there is no working
+             anonymous fallback in this version. See
+             docs/security/security-baseline.md for report locations/severity policy. -->
+        <profile>
+            <id>security-scan</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.owasp</groupId>
+                        <artifactId>dependency-check-maven</artifactId>
+                        <version>13.0.0</version>
+                        <configuration>
+                            <formats>
+                                <format>HTML</format>
+                                <format>XML</format>
+                                <format>JSON</format>
+                            </formats>
+                            <outputDirectory>${project.build.directory}/dependency-check-report</outputDirectory>
+                            <!-- Report-only by default (Sprint 11B.7: "não falhar o build
+                                 local por padrão") — CI can override via -DfailBuildOnCVSS
+                                 once the team has a triage process in place. -->
+                            <failBuildOnCVSS>11</failBuildOnCVSS>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <goals>
+                                    <goal>check</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 
 </project>

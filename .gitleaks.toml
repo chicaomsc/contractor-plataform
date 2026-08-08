@@ -1,0 +1,41 @@
+title = "Contractor Platform — gitleaks config"
+
+# Sprint 11B.7 — used by .github/workflows/security.yml (secret-scan job) and by
+# `gitleaks detect` run locally. Extends gitleaks' own default ruleset (AWS keys,
+# GitHub tokens, generic private keys, high-entropy generic API keys, etc.) with a
+# few rules specific to this project's own env-var naming
+# (infra/env/production.env.example) — see docs/security/security-baseline.md.
+[extend]
+useDefault = true
+
+# ── Project-specific rules ──────────────────────────────────────────────────
+
+[[rules]]
+id = "contractor-platform-jwt-secret"
+description = "JWT_SECRET assigned a real-looking value (not the known dev/example placeholder)"
+regex = '''(?i)JWT_SECRET\s*[:=]\s*["']?(?!CHANGE_ME_WITH_A_STRONG_SECRET_MIN_32_CHARS|dev-only-secret-at-least-32-chars-change-in-prod!)[A-Za-z0-9+/=_.\-]{20,}["']?'''
+tags = ["jwt", "secret"]
+
+[[rules]]
+id = "contractor-platform-db-connection-string-with-credentials"
+description = "Database connection string with embedded username/password"
+regex = '''(?i)(postgres(?:ql)?|jdbc:postgresql)://[A-Za-z0-9_.\-]+:[^@\s"']{4,}@[A-Za-z0-9_.\-]+'''
+tags = ["database", "credentials"]
+
+[[rules]]
+id = "contractor-platform-postgres-password-assignment"
+description = "POSTGRES_PASSWORD/DB_PASSWORD assigned a real-looking value (not the known example placeholder)"
+regex = '''(?i)(POSTGRES_PASSWORD|DB_PASSWORD)\s*[:=]\s*["']?(?!CHANGE_ME_WITH_A_STRONG_SECRET)[A-Za-z0-9+/=_.\-]{8,}["']?'''
+tags = ["database", "secret"]
+
+# ── Allowlist ────────────────────────────────────────────────────────────────
+# The two committed *.example files intentionally document the exact placeholder
+# text an operator must replace — matching that literal placeholder is not a leak.
+# A real secret pasted into either file (i.e. anything that does NOT match these
+# exact placeholder strings) is still caught by the rules above.
+[allowlist]
+regexes = [
+  '''CHANGE_ME_WITH_A_STRONG_SECRET_MIN_32_CHARS''',
+  '''CHANGE_ME_WITH_A_STRONG_SECRET''',
+  '''dev-only-secret-at-least-32-chars-change-in-prod!''',
+]
