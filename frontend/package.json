@@ -12,7 +12,9 @@
     "test:e2e": "playwright test",
     "test:e2e:smoke": "playwright test e2e/smoke.spec.ts",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "security:audit": "npm audit",
+    "deps:outdated": "npm outdated"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.83.0",
