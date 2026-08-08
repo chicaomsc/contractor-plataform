@@ -764,6 +764,59 @@ runbook completo.
 - **systemd de backup é só template versionado** — `contractor-platform-backup.
   {service,timer}` não foram instalados/habilitados em nenhum ambiente real.
 
+## Sprint 12.2 — validação local de build/run/persistência
+
+`backend/Dockerfile` e `frontend/Dockerfile` já implementavam todos os requisitos
+de produção (multi-stage, usuário não-root, sem secrets embutidos, healthcheck
+próprio) desde as Sprints 11A.1/11A.2 — revisados nesta sprint, nenhuma mudança
+necessária. O que esta sprint fez pela primeira vez foi **executar** o ciclo
+completo localmente, não só revisar os arquivos:
+
+```bash
+# Build das duas imagens (mesma tag/comando usado nesta sprint)
+docker build -t contractor-backend:test backend
+docker build -t contractor-frontend:test frontend \
+  --build-arg NEXT_PUBLIC_API_BASE_URL=http://localhost \
+  --build-arg NEXT_PUBLIC_SITE_URL=http://localhost \
+  --build-arg NEXT_PUBLIC_PLATFORM_BASE_DOMAIN=localhost
+
+# Inspeção (usuário não-root, portas, entrypoint, ausência de secrets)
+docker image ls --format "{{.Repository}}:{{.Tag}}\t{{.Size}}" | grep ":test"
+docker inspect contractor-backend:test --format 'User: {{.Config.User}}'
+docker inspect contractor-frontend:test --format 'User: {{.Config.User}}'
+
+# Validação do compose real (a partir de infra/compose/)
+docker compose -f docker-compose.prod.yml --env-file ../env/production.env config
+docker compose -f docker-compose.prod.yml --env-file ../env/production.env up -d --build
+docker compose -f docker-compose.prod.yml --env-file ../env/production.env ps
+
+# Não-root dentro do container em execução (não só na imagem)
+docker exec contractor-platform-backend-1 id
+docker exec contractor-platform-frontend-1 id
+```
+
+**Resultado:** as 4 imagens/serviços sobem `healthy` (postgres → backend →
+frontend → caddy, respeitando `depends_on`/`condition: service_healthy`); só
+`caddy` publica porta no host (`0.0.0.0:80`); `docker port
+contractor-platform-postgres-1` não retorna nada — Postgres genuinamente sem
+porta publicada, confirmado (não só ausência de `ports:` no YAML, mas a
+ausência real checada em runtime). `id`/`whoami` dentro dos containers em
+execução confirmam `uid=1000` não-root para os dois processos de aplicação.
+
+**Persistência validada de ponta a ponta:** registro de empresa + upload de logo
+via a stack completa (Caddy → backend → Postgres/volume), `docker compose down`
+(sem `-v`) + `up -d` (recriação total dos containers, rede recriada), login com
+o mesmo usuário e download do mesmo logo depois do restart — ambos bem-sucedidos.
+Os 4 volumes nomeados (`postgres_data`, `backend_storage`, `caddy_data`,
+`caddy_config`) sobrevivem intactos a `down` sem `-v`, como esperado.
+
+**Variáveis de ambiente fechadas nesta sprint** (existiam no código desde
+11B.6D/11B.6A mas nunca tinham sido adicionadas a
+`infra/env/production.env.example`): `JWT_ISSUER`, `JWT_AUDIENCE`,
+`BCRYPT_STRENGTH`, `PLATFORM_FRONTEND_BASE_URL`, e uma nota sobre as variáveis
+de rate limiting (`AUTH_RATE_LIMIT_*`) — todas com default seguro em
+`application.yml`, comentadas por padrão no `.example`.
+
 ## Próximas etapas (fora desta sprint)
 
 - **Sprint 11B:** provisionamento real da VPS Hetzner, Terraform (se adotado),
@@ -771,8 +824,15 @@ runbook completo.
   dos valores provisórios de CPU/memória (incluindo o `caddy`) contra o hardware
   real, provisionamento da Hetzner Storage Box real, instalação dos templates
   systemd de backup, e execução real do disaster recovery total.
-- **Sprint 11C:** domínio real, DNS/Cloudflare, TLS automático via ACME (só trocar
-  `CADDY_HOST`), HSTS — bloqueador para go-live, ver `docs/roadmap.md`.
+- **Sprint 11C:** domínio real, DNS/Cloudflare, TLS automático via ACME — **correção
+  (DT-012.1, revisão pós-Sprint-12.1):** o produto é multi-tenant por subdomínio
+  dinâmico, o que exige certificado **wildcard**; o desafio ACME **HTTP-01 não
+  emite wildcard**, só **DNS-01** (via API do Cloudflare) — não é "só trocar
+  `CADDY_HOST`", exige uma imagem Caddy customizada com o módulo
+  `caddy-dns/cloudflare` (`xcaddy`) e um `CLOUDFLARE_API_TOKEN` com permissão
+  mínima (`Zone:DNS:Edit`, uma zona), nunca commitado. Ver
+  `docs/design/DT-012.1-production-architecture.md §9`. HSTS segue como
+  bloqueador para go-live, ver `docs/roadmap.md`.
 - **Sprint 11D:** validação final, handover operacional e go-live — ver
   `docs/roadmap.md` e [Checklist de Go-Live](../docs/operations/runbook.md#25-checklist-de-go-live).
 - **Multi-tenant real no frontend:** já não depende de tenant baked-in; evolução

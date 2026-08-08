@@ -511,6 +511,13 @@ Nada além disso — isto não é um manual de PostgreSQL.
 | 8 | Volume ausente (ex. `down -v` acidental) | `docker volume ls` | Restaurar do backup mais recente ([infra/backup/README.md](../../infra/backup/README.md)) — `down -v` não é reversível pelo Compose em si |
 | 9 | Backup falhando | `journalctl -u contractor-platform-backup.service` (quando instalado) ou saída direta do script | Exit codes conhecidos: repositório indisponível, senha Restic errada, Postgres indisponível — todos com mensagem clara, sem segredo no log |
 | 10 | Porta ocupada localmente (`CADDY_HTTP_PORT`) | `docker compose up` recusa subir / `curl` dá "connection refused" | Trocar `CADDY_HTTP_PORT` em `production.env` |
+| 11 | `docker compose up` falha com "variable is required" | Ler qual variável a mensagem cita | `PLATFORM_BASE_DOMAIN`/`PLATFORM_FRONTEND_BASE_URL`/`NEXT_PUBLIC_API_BASE_URL` etc. são obrigatórias mesmo em validação local — ver `infra/env/production.env.example` (Sprint 12.2 adicionou `JWT_ISSUER`/`JWT_AUDIENCE`/`BCRYPT_STRENGTH`/`PLATFORM_FRONTEND_BASE_URL`/rate-limit, que existiam no código desde 11B.6A/D mas nunca tinham sido documentados no `.example`) |
+| 12 | Build local não reflete mudança de código | `docker compose ps` mostra o container rodando, mas com comportamento antigo | `docker compose up` reaproveita uma imagem já existente com a mesma tag (`APP_VERSION`) se uma já existir localmente — usar `up -d --build` para forçar rebuild a partir do Dockerfile/contexto atual, como validado na Sprint 12.2 |
+
+**Comandos de build/execução local (validados na Sprint 12.2)** — ver
+`infra/README.md` "Sprint 12.2 — validação local de build/run/persistência" para
+o roteiro completo (build, inspeção de imagem, `compose config`, `up -d --build`,
+verificação de não-root, teste de persistência via `down`/`up` sem `-v`).
 
 ## 24. Segurança Operacional
 
