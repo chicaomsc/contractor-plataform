@@ -20,6 +20,17 @@ public class RateLimitProperties {
     private Rule resetPassword = new Rule(10, 60);
     private Rule inviteAccept = new Rule(10, 60);
     private Rule adminPasswordReset = new Rule(10, 60);
+    // Sprint 12.4.2 (RR-06) — self-serve account/company creation, no auth required to
+    // call it: the most valuable endpoint to throttle tightly. 5/hour per remote address
+    // is well above one legitimate signup, low enough to blunt scripted spam.
+    private Rule register = new Rule(5, 3600);
+    // Sprint 12.4.2 (RR-07) — requires an already-valid refresh token, so the abuse
+    // surface is smaller than register's, but it was the only POST /auth/** endpoint
+    // with zero coverage. 20/hour comfortably covers legitimate traffic (access tokens
+    // expire every 15 minutes, app.jwt.access-token-ttl — a single active session needs
+    // at most 4/hour; 20 leaves headroom for multiple tabs/devices) while still bounding
+    // sustained abuse of a leaked/guessed token.
+    private Rule refresh = new Rule(20, 3600);
 
     @Getter
     @Setter

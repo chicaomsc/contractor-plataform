@@ -10,6 +10,16 @@ on:
     branches: [ main ]
     paths:
       - 'backend/**'
+  # Sprint 12.4.2 (RR-08) — lets publish-images.yml call this as a reusable workflow
+  # and gate publishing on it, instead of duplicating the test suite. `ref` lets the
+  # caller test the same commit it's about to publish (defaults to the triggering ref
+  # when called directly via push/pull_request, where `inputs.ref` is unset).
+  workflow_call:
+    inputs:
+      ref:
+        description: 'Git ref to check out and test.'
+        required: false
+        type: string
 
 jobs:
   test:
@@ -19,6 +29,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
 
       - name: Set up Java 25
         uses: actions/setup-java@v4

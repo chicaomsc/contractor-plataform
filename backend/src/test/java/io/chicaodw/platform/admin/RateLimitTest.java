@@ -3,6 +3,8 @@ package io.chicaodw.platform.admin;
 import io.chicaodw.platform.auth.api.dto.AcceptInviteRequest;
 import io.chicaodw.platform.auth.api.dto.ForgotPasswordRequest;
 import io.chicaodw.platform.auth.api.dto.LoginRequest;
+import io.chicaodw.platform.auth.api.dto.RefreshTokenRequest;
+import io.chicaodw.platform.auth.api.dto.RegisterRequest;
 import io.chicaodw.platform.auth.api.dto.ResetPasswordRequest;
 import io.chicaodw.platform.company.infrastructure.persistence.CompanyRepository;
 import org.junit.jupiter.api.BeforeAll;
@@ -32,8 +34,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest(properties = {
         "app.rate-limit.enabled=true",
+        "app.rate-limit.register.capacity=3",
+        "app.rate-limit.register.window-seconds=60",
         "app.rate-limit.login.capacity=3",
         "app.rate-limit.login.window-seconds=60",
+        "app.rate-limit.refresh.capacity=3",
+        "app.rate-limit.refresh.window-seconds=60",
         "app.rate-limit.forgot-password.capacity=3",
         "app.rate-limit.forgot-password.window-seconds=60",
         "app.rate-limit.reset-password.capacity=3",
@@ -64,6 +70,30 @@ class RateLimitTest extends AbstractAdminIntegrationTest {
         var owner = registerOwner();
         companyId = companyRepository.findBySlug(owner.companySlug()).orElseThrow().getId();
         ownerId = userRepository.findByEmail(owner.email()).orElseThrow().getId();
+    }
+
+    @Test
+    void register_rateLimited_returns429AfterCapacityExceeded() throws Exception {
+        ResultActions last = null;
+        for (int i = 0; i < ATTEMPTS; i++) {
+            last = mockMvc.perform(post("/auth/register")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(
+                            new RegisterRequest("Rate Limit Owner", "rate-limit-register@example.com",
+                                    "ValidPassword1", "Rate Limit Co", "PT"))));
+        }
+        assertTooManyRequests(last);
+    }
+
+    @Test
+    void refresh_rateLimited_returns429AfterCapacityExceeded() throws Exception {
+        ResultActions last = null;
+        for (int i = 0; i < ATTEMPTS; i++) {
+            last = mockMvc.perform(post("/auth/refresh")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(new RefreshTokenRequest("bogus-refresh-token"))));
+        }
+        assertTooManyRequests(last);
     }
 
     @Test

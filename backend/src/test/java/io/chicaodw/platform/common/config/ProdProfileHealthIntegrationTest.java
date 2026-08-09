@@ -33,6 +33,11 @@ class ProdProfileHealthIntegrationTest extends AbstractIntegrationTest {
     static void prodProperties(DynamicPropertyRegistry registry) {
         registry.add("app.jwt.secret", () -> "test-only-strong-secret-for-prod-profile-tests-1234");
         registry.add("app.cors.allowed-origins", () -> "https://example.test");
+        // Sprint 12.4.2 (RR-04/RR-05): ProductionReadinessValidator now also checks
+        // these two — the application.yml defaults (localhost-based) would otherwise
+        // fail context startup here, same as any real "prod" boot left unconfigured.
+        registry.add("app.platform.base-domain", () -> "app.example.test");
+        registry.add("app.platform.frontend-base-url", () -> "https://app.example.test");
     }
 
     @Test

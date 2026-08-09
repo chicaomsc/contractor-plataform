@@ -1,12 +1,14 @@
 name: Publish images to GHCR
 
-# Builds and publishes the backend and frontend production images to GHCR,
-# tagged immutably by commit SHA (see docs/design/DT-011A.4-ghcr-image-pipeline.md).
+# Builds and publishes the backend, frontend, and caddy production images to GHCR,
+# tagged immutably by commit SHA (see docs/design/DT-011A.4-ghcr-image-pipeline.md,
+# docs/design/DT-012.4.1-production-readiness-review.md RR-01/RR-02/RR-08).
 #
-# Deliberately separate from backend-ci.yml/frontend-ci.yml: those answer "is the
-# code correct?" (every PR, every push); this answers "should this commit become a
-# published, deployable artifact?" (only main, or an explicit manual run). Never
-# triggered by pull_request — a PR never publishes an image.
+# Runs backend-ci.yml/frontend-ci.yml as reusable workflows first (ci-backend/
+# ci-frontend jobs below) and gates every build-and-push job on both passing — a
+# commit whose tests fail is never published, without duplicating the test suite
+# itself (Sprint 12.4.2, RR-08). Still never triggered by pull_request — a PR never
+# publishes an image, only main or an explicit manual run can.
 
 on:
   push:
@@ -15,7 +17,10 @@ on:
     paths:
       - 'backend/**'
       - 'frontend/**'
+      - 'infra/caddy/**'
       - '.github/workflows/publish-images.yml'
+      - '.github/workflows/backend-ci.yml'
+      - '.github/workflows/frontend-ci.yml'
   workflow_dispatch:
     inputs:
       ref:
@@ -36,10 +41,28 @@ permissions:
 env:
   BACKEND_IMAGE: ghcr.io/chicaomsc/contractor-platform-backend
   FRONTEND_IMAGE: ghcr.io/chicaomsc/contractor-platform-frontend
+  CADDY_IMAGE: ghcr.io/chicaomsc/contractor-platform-caddy
 
 jobs:
+  # RR-08: same commit this workflow is about to publish, tested for real — not a
+  # second, different test run. `uses:` a local reusable workflow always executes
+  # with the caller's own `permissions:`/secrets context, no extra configuration
+  # needed for these two to run.
+  ci-backend:
+    name: Backend CI (gate)
+    uses: ./.github/workflows/backend-ci.yml
+    with:
+      ref: ${{ github.event.inputs.ref || github.sha }}
+
+  ci-frontend:
+    name: Frontend CI (gate)
+    uses: ./.github/workflows/frontend-ci.yml
+    with:
+      ref: ${{ github.event.inputs.ref || github.sha }}
+
   backend:
     name: Build & push backend
+    needs: [ci-backend, ci-frontend]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -101,6 +124,7 @@ jobs:
 
   frontend:
     name: Build & push frontend
+    needs: [ci-backend, ci-frontend]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -120,6 +144,15 @@ jobs:
       # NEXT_PUBLIC_* are inlined into the client bundle at build time (Next.js
       # constraint, not a choice made here — see infra/README.md). Tenant identity
       # is resolved at runtime, so only public origins remain build arguments.
+      #
+      # Sprint 12.4.2 (RR-02): non-empty is not the same as correct — this used to
+      # only check the three Variables were set at all, which a leftover localhost/
+      # placeholder value would still satisfy. Now also rejects the exact values
+      # infra/env/production.env.example ships (CHANGE_ME.example.com) and any
+      # localhost/127.0.0.1 host, so a domain that was never actually configured
+      # fails the workflow instead of silently baking into the published image —
+      # changing the real domain later still requires this workflow to run again
+      # (rebuild + republish, never a container restart — see infra/README.md).
       - name: Validate required GitHub Actions Variables
         run: |
           missing=()
@@ -128,6 +161,37 @@ jobs:
           [ -z "${{ vars.NEXT_PUBLIC_PLATFORM_BASE_DOMAIN }}" ] && missing+=(NEXT_PUBLIC_PLATFORM_BASE_DOMAIN)
           if [ ${#missing[@]} -gt 0 ]; then
             echo "::error::Missing required GitHub Actions Variables: ${missing[*]}. Configure them under Settings > Secrets and variables > Actions > Variables before running this workflow. See infra/README.md (\"GitHub Actions Variables\")."
+            exit 1
+          fi
+
+          # Extracts just the host (strips scheme://, then anything from the first
+          # ':' or '/' onward) so matches are against the host alone, never a bare
+          # substring of the whole URL — "example.com" must reject only that exact
+          # host or a subdomain of it, never "myexample.com"/"example-store.com".
+          bad=()
+          for pair in \
+            "NEXT_PUBLIC_API_BASE_URL=${{ vars.NEXT_PUBLIC_API_BASE_URL }}" \
+            "NEXT_PUBLIC_SITE_URL=${{ vars.NEXT_PUBLIC_SITE_URL }}" \
+            "NEXT_PUBLIC_PLATFORM_BASE_DOMAIN=${{ vars.NEXT_PUBLIC_PLATFORM_BASE_DOMAIN }}"
+          do
+            name="${pair%%=*}"
+            value="${pair#*=}"
+            host="$(echo "$value" | sed -E 's#^[A-Za-z][A-Za-z0-9+.-]*://##' | sed -E 's#[:/].*##')"
+            reason=""
+            case "$value" in
+              *CHANGE_ME*) reason="unedited CHANGE_ME placeholder" ;;
+            esac
+            case "$host" in
+              localhost|127.0.0.1) reason="localhost/loopback host" ;;
+              example.com|*.example.com|example.org|*.example.org|example.net|*.example.net)
+                reason="RFC 2606 reserved example.com/.org/.net host from production.env.example" ;;
+            esac
+            if [ -n "$reason" ]; then
+              bad+=("$name=\"$value\" ($reason)")
+            fi
+          done
+          if [ ${#bad[@]} -gt 0 ]; then
+            echo "::error::These GitHub Actions Variables still look like unedited placeholders: ${bad[*]}. Set them to the real production domain before running this workflow — changing them later requires re-running it (rebuild + republish, never just a redeploy)."
             exit 1
           fi
 
@@ -172,3 +236,67 @@ jobs:
           sbom: true
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
+
+  # Sprint 12.4.2 (RR-01) — the custom Caddy image (infra/caddy/Dockerfile, xcaddy +
+  # caddy-dns/cloudflare, DT-012.1 §9/ADR-005) was never published here, even though
+  # docker-compose.prod.yml has always pulled it from this exact GHCR path
+  # (${CADDY_IMAGE}) — a fresh VPS's first `docker compose pull` would fail. Not
+  # gated on ci-backend/ci-frontend: this image has no application code/tests of its
+  # own, only its own build has to succeed (docker/build-push-action already fails
+  # the job if the Dockerfile doesn't build) — "só deve ser publicado se o build for
+  # válido" is exactly what that already guarantees, without waiting on unrelated
+  # backend/frontend test runs.
+  caddy:
+    name: Build & push caddy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.sha }}
+
+      # See the "Resolve commit SHA" step in the backend job for why this doesn't
+      # use docker/metadata-action's `context: git` — it fails on the detached,
+      # grafted HEAD left by actions/checkout's default shallow clone of a SHA.
+      - name: Resolve commit SHA
+        id: sha
+        run: |
+          echo "full=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata (tags + OCI labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.CADDY_IMAGE }}
+          # See the backend job's metadata step — flavor.latest defaults to "auto"
+          # and would otherwise silently add a `:latest` tag on a main-branch build.
+          flavor: latest=false
+          tags: |
+            type=raw,value=${{ steps.sha.outputs.full }}
+            type=raw,value=${{ steps.sha.outputs.short }}
+            type=raw,value=main,enable=${{ github.event_name == 'push' || github.event.inputs.ref == '' || github.event.inputs.ref == 'main' }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: infra/caddy
+          file: infra/caddy/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: true
+          sbom: true
+          cache-from: type=gha,scope=caddy
+          cache-to: type=gha,mode=max,scope=caddy

@@ -751,11 +751,35 @@ permissions:
 ```
 
 Autenticação no GHCR via `GITHUB_TOKEN` (automático, por execução, via
-`docker/login-action`) — **nenhum PAT é criado ou necessário** para publicar, já que o
-token tem permissão de escrita sobre pacotes do próprio repositório/owner. Um PAT só
-se tornaria necessário no lado do **pull** (VPS, Sprint 11B) se o pacote GHCR fosse
-privado — não é o caso: a estratégia alvo é **GHCR público** (mesma visibilidade do
-repositório), então `docker pull` funciona sem autenticação nenhuma.
+`docker/login-action`) — **nenhum PAT é criado ou necessário para publicar**, já que o
+token tem permissão de escrita sobre pacotes do próprio repositório/owner.
+
+**Correção (Sprint 12.4.2, RR-03):** esta seção afirmava anteriormente que o pacote
+GHCR seria público — isso foi **revisto**. A decisão final, fechada em
+`docs/design/DT-012.4-vps-provisioning.md §10/§18`, é **pacote GHCR privado**. Isso
+significa que o lado do **pull** (a VPS) precisa, sim, de autenticação — o
+`GITHUB_TOKEN` usado acima só cobre o *publish* (dentro do workflow), nunca o
+`docker pull`/`docker compose pull` feito de fora do GitHub Actions.
+
+**Login no VPS (uma vez por host, mais em toda rotação de token):**
+1. Gerar um **PAT fine-grained** (preferível ao clássico) em
+   GitHub → Settings → Developer settings → Personal access tokens → Fine-grained
+   tokens, escopado **somente** a `read:packages` no repositório deste pacote —
+   nenhuma outra permissão.
+2. Na VPS, como o usuário `deploy` (nunca `root`):
+   `echo "<PAT>" | docker login ghcr.io -u <usuário-github> --password-stdin` — usar
+   `--password-stdin`, nunca `--password <PAT>` diretamente na linha de comando
+   (evita o token ficar no histórico do shell/em `ps`).
+3. A credencial fica persistida em `~/.docker/config.json` do usuário `deploy` — não
+   é um arquivo desta árvore de secrets (`infra/env/`), é o mecanismo próprio do
+   Docker; ver `docs/design/DT-012.4-vps-provisioning.md §11` sobre por que ele
+   recebe o mesmo cuidado de manuseio que os demais segredos mesmo assim.
+4. **Nunca** salvar o PAT em nenhum arquivo versionado ou em `infra/env/
+   production.env` — ele não é uma variável de ambiente lida pela aplicação nem pelo
+   Compose, só existe como credencial do `docker login`.
+5. Rotação: se o token expirar/for revogado, basta gerar um novo e repetir o passo 2
+   — `docker login` sobrescreve a credencial anterior, nenhum outro segredo do
+   sistema é afetado.
 
 ### Plataforma
 
@@ -782,7 +806,7 @@ mensurável.
 |---|---|---|
 | Job `frontend` falha em "Validate required GitHub Actions Variables" | Uma das três `NEXT_PUBLIC_*` Variables não está configurada no repositório | Settings → Secrets and variables → Actions → Variables; adicionar a(s) que faltarem |
 | `docker/login-action` falha com 401/403 | `permissions: packages: write` ausente do workflow, ou executando de um fork (forks não herdam `GITHUB_TOKEN` com escrita) | Conferir o bloco `permissions:` no topo do workflow; publicar a partir de um push/dispatch no repositório-base, não de um fork |
-| Imagem publicada mas `docker pull` de outra máquina pede autenticação | Pacote GHCR ainda está com visibilidade privada (default do `GITHUB_TOKEN` em alguns casos) | No GHCR, abrir o pacote → Package settings → Change visibility → Public |
+| `docker pull`/`docker compose pull` na VPS pede autenticação | Esperado — o pacote GHCR é **privado** por decisão (Sprint 12.4.2, RR-03) | `docker login ghcr.io` com um PAT `read:packages` (ver "Autenticação e permissões" acima) — não mudar a visibilidade do pacote para público |
 | `workflow_dispatch` não aparece na aba Actions | Workflow ainda não foi commitado/pushado para o branch padrão | `workflow_dispatch` só fica disponível depois que o arquivo existe em `main` |
 | Quero saber qual SHA está publicado como `:main` agora | — | Ver a aba **Packages** do repositório no GitHub, ou `docker manifest inspect ghcr.io/chicaomsc/contractor-platform-backend:main` |
 
@@ -857,18 +881,23 @@ runbook completo.
   ainda não confirmada; serão revisados na Sprint 11B quando a VPS Hetzner real for
   escolhida — inclui os limites do próprio `caddy`, adicionados nesta sprint com a
   mesma premissa provisória.
-- **Publicação e visibilidade pública do GHCR confirmadas** — `docker pull --platform
-  linux/amd64` das duas imagens (`ghcr.io/chicaomsc/contractor-platform-{backend,frontend}:main`)
-  foi executado com sucesso, sem autenticação, confirmando `linux/amd64` e
-  visibilidade pública real (não apenas validação sintática do workflow).
+- **Publicação e visibilidade pública do GHCR confirmadas (histórico, Sprint 11A.4)**
+  — `docker pull --platform linux/amd64` das duas imagens
+  (`ghcr.io/chicaomsc/contractor-platform-{backend,frontend}:main`) foi executado com
+  sucesso, sem autenticação, confirmando `linux/amd64` e visibilidade pública real
+  naquele momento. **Revisto na Sprint 12.4.2 (RR-03): a decisão final é pacote GHCR
+  privado** — ver "Autenticação e permissões" acima para o mecanismo de
+  `docker login` que substitui o pull anônimo.
 - **GitHub Actions Variables (`NEXT_PUBLIC_*`) precisam ser configuradas manualmente**
   no repositório antes do primeiro push — o workflow falha explicitamente se
-  ausentes, não assume um valor.
+  ausentes ou se ainda parecerem um placeholder/localhost não editado (Sprint 12.4.2,
+  RR-02).
 - **Imagem frontend genérica para tenants** — a landing resolve tenant por Host em
   runtime via backend (ver "GHCR Image Pipeline" acima).
-- **Sem autenticação de `docker pull` na VPS** — como o pacote GHCR é público, isso não
-  é necessário hoje; se a visibilidade mudar para privada no futuro, um token de
-  leitura precisará ser configurado na VPS (Sprint 11B).
+- **Autenticação de `docker pull` na VPS agora obrigatória** (Sprint 12.4.2, RR-03) —
+  o pacote GHCR é privado; um PAT `read:packages` precisa ser configurado na VPS via
+  `docker login` antes do primeiro `docker compose pull` — ver "Autenticação e
+  permissões" acima e `docs/design/DT-012.4-vps-provisioning.md §10/§11`.
 - **Sem migração do JWT/refresh token para cookie `HttpOnly`** — mecanismo de
   autenticação inalterado nesta sprint (ver seção acima).
 - **Sem hardening adicional do container Caddy** além de `read_only`/`tmpfs` — sem
@@ -940,11 +969,12 @@ de rate limiting (`AUTH_RATE_LIMIT_*`) — todas com default seguro em
 
 ## Próximas etapas (fora desta sprint)
 
-- **Sprint 11B:** provisionamento real da VPS Hetzner, Terraform (se adotado),
-  autenticação de `docker pull` na VPS (se a visibilidade do GHCR mudar), revisão
-  dos valores provisórios de CPU/memória (incluindo o `caddy`) contra o hardware
-  real, provisionamento da Hetzner Storage Box real, instalação dos templates
-  systemd de backup, e execução real do disaster recovery total.
+- **Sprint 11B / 12.4:** provisionamento real da VPS Hetzner (`DT-012.4`), Terraform
+  (se adotado), `docker login` real na VPS com PAT `read:packages` (GHCR privado,
+  decisão já fechada — Sprint 12.4.2, RR-03, ver "Autenticação e permissões" acima),
+  revisão dos valores provisórios de CPU/memória (incluindo o `caddy`) contra o
+  hardware real, provisionamento da Hetzner Storage Box real, instalação dos
+  templates systemd de backup, e execução real do disaster recovery total.
 - **Sprint 11C / 12.3:** domínio real, DNS/Cloudflare, TLS automático via ACME —
   **atualização (Sprint 12.3):** a parte que dependia só de código/config já está
   pronta e validada localmente — imagem Caddy customizada com `caddy-dns/

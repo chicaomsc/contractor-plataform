@@ -66,7 +66,12 @@ EXPOSE 8080
 # SPRING_PROFILES_ACTIVE=prod (set in docker-compose.prod.yml) to exist at all; the
 # probe sub-paths are only registered when management.endpoint.health.probes.enabled
 # is set, which lives in application-prod.yml.
-HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=3 \
+#
+# docker-compose.prod.yml's own healthcheck: block overrides these values whenever
+# the image runs through Compose (true in every real deployment) — kept in sync here
+# (90s/5 retries = 240s total, Sprint 12.4.2 RR-10) only so a standalone `docker run`
+# of this image gets the same tolerance, not a stricter one.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=5 \
     CMD wget -q -O /dev/null http://127.0.0.1:8080/actuator/health/readiness || exit 1
 
 # Exec form: java runs as PID 1 and receives SIGTERM directly from `docker stop`/
