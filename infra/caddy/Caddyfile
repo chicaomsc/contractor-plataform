@@ -1,11 +1,49 @@
-# Contractor Platform — Caddy reverse proxy (Sprint 11A.3).
-# Design: docs/design/DT-011A.3-caddy-reverse-proxy.md
+# Contractor Platform — Caddy reverse proxy (Sprint 11A.3, revised Sprint 12.3).
+# Design: docs/design/DT-011A.3-caddy-reverse-proxy.md,
+#         docs/design/DT-012.1-production-architecture.md §7/§8/§9 (ADR-005).
 #
-# {$CADDY_HOST} makes this the same file for local validation and future production:
-#   - CADDY_HOST=:80            → plain HTTP, Caddy never attempts automatic HTTPS/ACME
-#   - CADDY_HOST=dominio.tld    → Caddy automatically provisions/renews a real TLS
-#                                 certificate (ACME) — no other change to this file.
-# No real domain is configured here — see infra/env/production.env.example.
+# {$CADDY_HOST} makes this the same file for local validation and production:
+#   - CADDY_HOST=:80                          → plain HTTP, all interfaces. Caddy
+#                                                never has a hostname to request a
+#                                                certificate FOR, so the `tls`
+#                                                block below is never actually
+#                                                invoked — CLOUDFLARE_API_TOKEN is
+#                                                not required for local validation.
+#   - CADDY_HOST=example.com, *.example.com   → production: apex + wildcard
+#                                                (multi-tenant subdomains,
+#                                                {tenant}.{PLATFORM_BASE_DOMAIN}).
+#                                                Caddy requests ONE wildcard cert
+#                                                (plus the apex) via ACME DNS-01
+#                                                against Cloudflare — HTTP-01
+#                                                cannot issue wildcard certs at
+#                                                all (DT-012.1 §9/ADR-005).
+#
+# This file never contains a real domain or the Cloudflare token — both come
+# from infra/env/production.env (gitignored). See
+# infra/env/production.env.example for the full variable reference.
+#
+# Requires the custom image built by infra/caddy/Dockerfile (xcaddy +
+# github.com/caddy-dns/cloudflare) — the official caddy:2-alpine image does not
+# have the DNS provider module the `tls` block below needs.
+{
+	# Cloudflare's published edge IP ranges (https://www.cloudflare.com/ips/) —
+	# trusted ONLY for reading X-Forwarded-For, so Caddy (and, by extension, any
+	# access log / rate-limit logic that ever reads that header) doesn't accept a
+	# spoofed value from an arbitrary client. Harmless when Cloudflare Proxy isn't
+	# actually in front of this host yet (e.g. local validation, or a future
+	# DNS-only deploy) — connections simply never originate from these ranges in
+	# that case, so nothing changes in practice; this only starts mattering once
+	# Cloudflare Proxy (orange-cloud) is enabled (DT-012.1 §7/§8, Sprint 12.3+).
+	servers {
+		trusted_proxies static \
+ 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 \
+ 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 \
+ 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 \
+ 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 \
+ 2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 \
+ 2405:8100::/32 2a06:98c0::/29 2c0f:f248::/32
+	}
+}
 
 {$CADDY_HOST} {
 	encode zstd gzip
@@ -13,6 +51,39 @@
 	log {
 		output stdout
 		format json
+	}
+
+	# ACME certificate management for whatever hostname(s) {$CADDY_HOST} resolves
+	# to. DNS-01 via Cloudflare is the only challenge type that can prove control
+	# of a wildcard host (*.example.com) — see DT-012.1 §9/ADR-005 for why HTTP-01
+	# was rejected. {env.CLOUDFLARE_API_TOKEN} is a Caddy RUNTIME placeholder
+	# (resolved lazily, only when Caddy actually needs to create/remove the
+	# `_acme-challenge` TXT record for a real hostname) — NOT a Caddyfile
+	# environment substitution, so it does not need to be set at all for
+	# CADDY_HOST=:80 (no hostname ⇒ nothing is ever issued ⇒ the token is never
+	# read). The token itself must be a Cloudflare API Token scoped to exactly
+	# `Zone:DNS:Edit` on the platform's zone — never the legacy Global API Key.
+	tls {
+		dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+	}
+
+	# HSTS: only ever sent on a response actually served over TLS — this matcher
+	# never matches on local validation (CADDY_HOST=:80, HTTP only), so nothing
+	# needs to change between environments to keep HSTS off outside real HTTPS
+	# (DT-012.1 §9). `preload` is deliberately not set — that's a one-way,
+	# hard-to-reverse commitment not made by this sprint.
+	@https_only {
+		protocol https
+	}
+	header @https_only Strict-Transport-Security "max-age=31536000; includeSubDomains"
+
+	# /actuator/* must never be reachable through the public edge, regardless of
+	# what the backend's own `management.endpoints.web.exposure.include` is set
+	# to today — defense in depth, not a change to the backend's actual exposure
+	# (already narrowed to health/info; see application.yml). Answered directly
+	# by Caddy, never proxied anywhere.
+	handle /actuator/* {
+		respond "404 Not Found" 404
 	}
 
 	# /api/* → backend, with the /api prefix stripped before proxying. The Spring
@@ -37,6 +108,14 @@
 	# Caddy; see DT §7 "Nota sobre /api/health do frontend vs. /api/* do backend").
 	# Unknown routes fall through to Next.js's own not-found page (existing, not
 	# a Caddy-level 404).
+	#
+	# reverse_proxy forwards the original Host header unchanged by default (Caddy
+	# does not rewrite it unless explicitly told to) — this is required, not
+	# incidental: TenantResolutionService (backend) and PublicTenantController
+	# resolve the tenant slug from the real `Host` header only, never from
+	# X-Forwarded-Host (which the backend never reads at all — see
+	# runbook.md §21.1/SEC-TENANT-04). Once CADDY_HOST is a real wildcard domain,
+	# this Host header becomes the actual trust boundary for tenant resolution.
 	handle {
 		reverse_proxy frontend:3000
 	}
