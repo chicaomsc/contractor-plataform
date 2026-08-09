@@ -109,7 +109,7 @@ jobs:
             type=raw,value=main,enable=${{ github.event_name == 'push' || github.event.inputs.ref == '' || github.event.inputs.ref == 'main' }}
 
       - name: Build and push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: backend
           file: backend/Dockerfile
@@ -219,7 +219,7 @@ jobs:
             type=raw,value=main,enable=${{ github.event_name == 'push' || github.event.inputs.ref == '' || github.event.inputs.ref == 'main' }}
 
       - name: Build and push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: frontend
           file: frontend/Dockerfile
@@ -288,7 +288,7 @@ jobs:
             type=raw,value=main,enable=${{ github.event_name == 'push' || github.event.inputs.ref == '' || github.event.inputs.ref == 'main' }}
 
       - name: Build and push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: infra/caddy
           file: infra/caddy/Dockerfile
