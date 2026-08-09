@@ -133,8 +133,15 @@ services:
         NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-}
         NEXT_PUBLIC_PLATFORM_BASE_DOMAIN: ${PLATFORM_BASE_DOMAIN:?PLATFORM_BASE_DOMAIN is required}
     restart: unless-stopped
-    env_file:
-      - ../env/production.env
+    # No env_file (Sprint 12.3 security review, finding #1): the frontend does not
+    # read any application secret at runtime — confirmed by `grep -Rni process.env
+    # frontend/src frontend/next.config.ts`, which shows only NEXT_PUBLIC_API_BASE_URL,
+    # NEXT_PUBLIC_SITE_URL, NEXT_PUBLIC_PLATFORM_BASE_DOMAIN (all three already baked
+    # into the image at build time via frontend/Dockerfile ARG→ENV, not re-read from
+    # the environment at container start) and API_PROXY_TARGET (dev-only, unused in
+    # this compose file). A blanket `env_file: ../env/production.env` here used to
+    # hand the frontend container JWT_SECRET/POSTGRES_PASSWORD/etc. for zero
+    # functional benefit — least-privilege violation, removed.
     environment:
       # Already hardcoded in frontend/Dockerfile's runtime stage — redeclared here
       # too so `docker compose config`/`docker inspect` show it explicitly without
@@ -164,15 +171,30 @@ services:
     logging: *default-logging
 
   caddy:
-    # Official image, explicit tag (Alpine variant, matching the convention already
-    # used for postgres:17-alpine) — verified before use (Sprint 11A.3 design): has
-    # wget/curl, runs as root (needed to bind ports 80/443 without extra
-    # capabilities), and its own example Caddyfile already documents the ":80"
-    # (no-ACME) pattern used below. See DT-011A.3 §5.4.
-    image: caddy:2-alpine
+    # Custom image (Sprint 12.3, DT-012.1 §9/ADR-005) — built via xcaddy with the
+    # caddy-dns/cloudflare module (infra/caddy/Dockerfile), replacing the plain
+    # caddy:2-alpine image used through Sprint 12.2. Required for the ACME DNS-01
+    # challenge the wildcard cert (*.{PLATFORM_BASE_DOMAIN}) needs — HTTP-01
+    # (what the official image alone can do) cannot issue wildcard certificates.
+    # Still runs as root (needed to bind ports 80/443 without extra capabilities;
+    # unchanged from the pre-12.3 image, no new hardening decision here).
+    image: ${CADDY_IMAGE:-ghcr.io/chicaomsc/contractor-platform-caddy}:${APP_VERSION:-local}
+    build:
+      context: ../caddy
+      dockerfile: Dockerfile
     restart: unless-stopped
+    # No env_file (Sprint 12.3 security review, finding #2): infra/caddy/Caddyfile
+    # only ever references {$CADDY_HOST} and {env.CLOUDFLARE_API_TOKEN} — a blanket
+    # `env_file: ../env/production.env` here used to hand the ONE internet-facing
+    # container in this stack JWT_SECRET/POSTGRES_PASSWORD/every other application
+    # secret it has zero use for. Cherry-picked below instead; both values still
+    # come from production.env via compose's own ${VAR} substitution (--env-file),
+    # not by loading the file into the container.
     environment:
       CADDY_HOST: ${CADDY_HOST:-:80}
+      # Unset/absent is fine for local validation (CADDY_HOST=:80 never triggers
+      # ACME, so this is never actually read) — see infra/caddy/Caddyfile.
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
     volumes:
       - ../caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
@@ -187,7 +209,12 @@ services:
       - /tmp
     ports:
       - "${CADDY_HTTP_PORT:-80}:80"
-      # - "${CADDY_HTTPS_PORT:-443}:443"   # enable once CADDY_HOST is a real domain (Sprint 11C+)
+      # 443 is always published, even for local validation (CADDY_HOST=:80) — it
+      # simply has nothing listening on it in that mode (no TLS server block is
+      # created when the site address has no hostname), so publishing it early is
+      # harmless. Real HTTPS traffic only exists once CADDY_HOST is a real domain
+      # (Sprint 12.3+, DT-012.1 §9).
+      - "${CADDY_HTTPS_PORT:-443}:443"
     networks:
       - internal
     # Startup ordering only (Caddy shouldn't start routing before it has somewhere

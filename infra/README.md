@@ -20,10 +20,13 @@ Restic — ver "Backup / Restore" abaixo e o runbook especializado em
 [infra/backup/README.md](backup/README.md). Documentação operacional (11A.6, este
 documento reduzido): procedimentos do dia a dia consolidados no
 [Runbook de Produção](../docs/operations/runbook.md); `docs/roadmap.md` corrigido para
-refletir esta arquitetura. **Não** cobre HTTPS real, HSTS, Cloudflare, domínio real,
-provisionamento de VPS, Terraform, deploy remoto por SSH, Storage Box real, systemd
-instalado de verdade, monitoramento externo ou cookies `HttpOnly` para o JWT — esses
-itens são de etapas posteriores (ver "Próximas etapas" no final deste documento).
+refletir esta arquitetura. Domínio/Cloudflare/TLS wildcard (11A.7): imagem Caddy
+customizada (`xcaddy` + `caddy-dns/cloudflare`), Caddyfile com DNS-01 e HSTS
+condicional, validado localmente sem token real — ver "Sprint 12.3" abaixo. **Não**
+cobre HTTPS/Cloudflare/domínio **reais** (nada provisionado ainda), provisionamento
+de VPS, Terraform, deploy remoto por SSH, Storage Box real, systemd instalado de
+verdade, monitoramento externo ou cookies `HttpOnly` para o JWT — esses itens são de
+etapas posteriores (ver "Próximas etapas" no final deste documento).
 
 ---
 
@@ -131,9 +134,14 @@ docker compose --env-file ../env/production.env -f docker-compose.prod.yml up -d
 ```
 
 `--env-file` é necessário nos dois lugares: fornece as variáveis que o próprio
-`docker compose` interpola (nomes de imagem, versão, credenciais do Postgres) **e**,
-via `env_file:` de cada serviço no YAML, as variáveis injetadas dentro dos
-containers (`JWT_SECRET`, `APP_CORS_ALLOWED_ORIGINS`, etc.).
+`docker compose` interpola no YAML (nomes de imagem, versão, credenciais do
+Postgres, `CADDY_HOST`, `CLOUDFLARE_API_TOKEN`) **e**, via `env_file:` do
+serviço `backend` especificamente, as variáveis injetadas dentro **daquele**
+container (`JWT_SECRET`, `APP_CORS_ALLOWED_ORIGINS`, etc.). **`frontend` e
+`caddy` não têm `env_file`** (Sprint 12.3, correção de menor privilégio — ver
+seção "Sprint 12.3" abaixo): cada um recebe só as poucas variáveis específicas
+que de fato usa, via `environment:` explícito, mesmo que `--env-file` continue
+"vendo" o arquivo inteiro para fins de interpolação do `${VAR}` no YAML.
 
 ### Rodando em paralelo com outro projeto local (porta 80 já ocupada)
 
@@ -438,15 +446,115 @@ Roteamento em si já coberto acima ("Roteamento (Sprint 11A.3)").
 
 `{$CADDY_HOST}` no topo do Caddyfile é o único ponto variável:
 
-- `CADDY_HOST=:80` (valor usado nesta sprint, `production.env.example`) — Caddy serve
+- `CADDY_HOST=:80` (valor usado localmente, `production.env.example`) — Caddy serve
   HTTP puro em todas as interfaces e **nunca tenta ACME/HTTPS automático**. Não é
-  configurado nenhum domínio real.
-- `CADDY_HOST=app.exemplo.com` (futuro, Sprint 11C+) — Caddy passa a provisionar e
-  renovar automaticamente um certificado TLS real via ACME para esse domínio. Nenhuma
-  outra linha do Caddyfile muda.
+  configurado nenhum domínio real; o bloco `tls { dns cloudflare ... }` (Sprint 12.3,
+  ver seção abaixo) fica presente na config mas nunca é de fato acionado.
+- `CADDY_HOST=example.com, *.example.com` (futuro, quando o domínio real existir) —
+  Caddy passa a provisionar e renovar automaticamente um certificado **wildcard** via
+  ACME **DNS-01** contra o Cloudflare. Nenhuma outra linha do Caddyfile muda.
 
-Nem Cloudflare, nem DNS, nem um domínio real são configurados nesta sprint — a porta
-80 crua é suficiente para validar todo o roteamento, compressão e persistência.
+Nem Cloudflare real, nem DNS real, nem um domínio real são configurados por esta
+sprint — a porta 80 crua continua suficiente para validar todo o roteamento,
+compressão e persistência.
+
+## Sprint 12.3 — imagem Caddy customizada e validação local (DNS-01/Cloudflare)
+
+Decisão de design: `docs/design/DT-012.1-production-architecture.md §9/§16/ADR-005`.
+Roteiro operacional completo (DNS/Cloudflare, SSL mode): `docs/operations/runbook.md
+§21.5`. Resumo do que esta sprint efetivamente criou/mudou.
+
+**Por quê:** o produto é multi-tenant por subdomínio (`{tenant}.
+{PLATFORM_BASE_DOMAIN}`) — precisa de um certificado **wildcard**, e o desafio ACME
+**HTTP-01 não consegue emitir wildcard** (limitação do protocolo, não de
+configuração). Só **DNS-01** consegue, e isso exige o módulo
+`caddy-dns/cloudflare`, que não existe na imagem oficial `caddy:2-alpine`.
+
+**`infra/caddy/Dockerfile` (novo):** multi-stage via `xcaddy` —
+`caddy:2.11.4-builder-alpine` (builder) → `xcaddy build --with
+github.com/caddy-dns/cloudflare@v0.2.1` → `caddy:2.11.4-alpine` (runtime, só o
+binário copiado). Nenhum secret é parte da imagem — `CLOUDFLARE_API_TOKEN` só
+existe no container em execução (`env_file`), nunca em build ARG.
+
+```bash
+# Build e inspeção (validado nesta sprint)
+docker build -t contractor-caddy:test infra/caddy
+docker image ls contractor-caddy:test --format '{{.Repository}}:{{.Tag}}\t{{.Size}}'
+docker run --rm contractor-caddy:test caddy list-modules | grep cloudflare
+docker run --rm contractor-caddy:test caddy version
+
+# Validação de sintaxe — local (:80, sem token) e produção simulada (wildcard, token)
+docker run --rm -e CADDY_HOST=":80" \
+  -v "$(pwd)/infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro" \
+  contractor-caddy:test caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+
+docker run --rm -e CADDY_HOST="example.com, *.example.com" \
+  -e CLOUDFLARE_API_TOKEN="<qualquer_string_de_formato_plausível>" \
+  -v "$(pwd)/infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro" \
+  contractor-caddy:test caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+```
+
+**Nota de versão (divergência descoberta, não uma escolha original):**
+`CADDY_VERSION=2.8.4` (a tag mais óbvia de pinar) falha o build do `xcaddy` com
+esse plugin — `undefined: zapslog.HandlerOptions`, um conflito real de versão
+transitiva do `go.uber.org/zap` puxado pelo `caddy-dns/cloudflare@v0.2.1`.
+Resolvido pinando `CADDY_VERSION=2.11.4` (estável mais recente no Docker Hub no
+momento do build), que compila sem conflito. Ver comentário no Dockerfile.
+
+**Caddyfile atualizado:**
+- `{$CADDY_HOST}` agora aceita apex + wildcard no mesmo valor.
+- Bloco `tls { dns cloudflare {env.CLOUDFLARE_API_TOKEN} }` — `{env.X}` é um
+  placeholder de **runtime** do Caddy (avaliado sob demanda), não uma substituição
+  de Caddyfile — por isso não precisa existir para validar/rodar localmente.
+- HSTS via matcher `@https_only { protocol https }` — só é enviado em respostas
+  servidas de fato por HTTPS, nunca em HTTP puro, sem precisar de dois arquivos.
+- `/actuator/*` responde `404` diretamente do Caddy (nunca proxiado).
+- `trusted_proxies static <ranges Cloudflare>` nas opções globais — inofensivo
+  enquanto o Cloudflare Proxy não estiver de fato na frente.
+
+**`docker-compose.prod.yml`:** serviço `caddy` passa a usar `build: context:
+../caddy` (imagem customizada, `CADDY_IMAGE`/`APP_VERSION`) em vez de
+`caddy:2-alpine`; porta `443` publicada incondicionalmente (inofensiva localmente
+— nada escuta nela sem `CADDY_HOST` real). `CLOUDFLARE_API_TOKEN` chega ao
+container via `environment: CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}`
+(não via `env_file` — ver "Correção de menor privilégio" abaixo). Nenhuma
+outra mudança de topologia.
+
+**Correção de menor privilégio (pós-entrega inicial da Sprint 12.3):** a
+primeira versão desta sprint deu a `frontend` e `caddy` um `env_file:
+../env/production.env` **completo** — visível via `docker inspect`/`docker
+exec ... env`, isso incluía `JWT_SECRET`/`POSTGRES_PASSWORD`/todo o resto do
+arquivo em dois containers que não usam nada disso (frontend só lê
+`NEXT_PUBLIC_*`, já embutidos em build-time; Caddy só lê `CADDY_HOST`/
+`CLOUDFLARE_API_TOKEN`). Mais grave no caso do `caddy`, por ser o único
+container exposto à internet. Corrigido: `env_file` removido dos dois
+serviços, substituído por `environment:` explícito só com o necessário —
+`frontend` fica só com `NODE_ENV`/`NODE_OPTIONS` (já existentes); `caddy` fica
+só com `CADDY_HOST`/`CLOUDFLARE_API_TOKEN`. Confirmado via `docker exec
+frontend env` / `docker exec caddy env` que nenhum secret de aplicação
+aparece mais em nenhum dos dois — `backend`/`postgres` não foram alterados.
+
+**Validado end-to-end localmente, sem `CLOUDFLARE_API_TOKEN` definido:**
+
+```bash
+docker compose --env-file ../env/production.env -f docker-compose.prod.yml config
+docker compose --env-file ../env/production.env -f docker-compose.prod.yml up -d --build
+docker compose --env-file ../env/production.env -f docker-compose.prod.yml ps
+```
+
+Resultado: as 4 imagens/serviços sobem `healthy`; `caddy` publica `80` e `443`
+no host, os outros três continuam sem porta publicada. Testado através do
+próprio Caddy (não direto no backend/frontend): `GET /` → `200`; `GET
+/api/public/tenant` → `200` (roteado ao backend, prefixo removido); `GET
+/uploads/...` → `404` (roteado ao backend, prefixo mantido); `GET
+/actuator/health` → `404` respondido pelo próprio Caddy, corpo `"404 Not
+Found"` (nunca chega ao backend); header `Strict-Transport-Security` ausente
+em `http://localhost/` (esperado, HTTP puro); logs do Caddy não mostram
+nenhuma atividade de ACME/Cloudflare (só o housekeeping padrão de
+`tls.cache.maintenance`, que roda mesmo sem nenhum certificado a gerenciar).
+Container `caddy` confirmado `read_only` (escrita fora de `/data`/`/config`/
+`/tmp` falha) e ainda `root` (decisão pré-existente, não alterada nesta
+sprint — precisa de privilégio para portas <1024).
 
 ### Compressão
 
@@ -456,7 +564,7 @@ compressão HTTP que Spring (`server.compression.enabled`) e Next.js já aplicam
 conta própria — nenhum dos dois foi removido ou alterado nesta sprint; nenhum tuning
 adicional foi feito.
 
-### Headers de segurança — Caddy não duplica nada
+### Headers de segurança — Caddy não duplica nada (exceto HSTS, Sprint 12.3)
 
 `Content-Security-Policy`, `X-Content-Type-Options`, `X-Frame-Options`/
 `frame-ancestors`, `Referrer-Policy` e `Permissions-Policy` continuam sendo
@@ -465,6 +573,14 @@ desses headers. Isso significa que os headers precisam ser validados **através*
 Caddy (não só direto no `frontend:3000`/`backend:8080`, que não são mais alcançáveis
 de fora) para confirmar que o proxy os repassa sem alterar — ver "Comandos de
 validação" abaixo.
+
+**Exceção deliberada — `Strict-Transport-Security` (HSTS):** só faz sentido na
+borda (é sobre a conexão TLS em si, não sobre a resposta de uma aplicação
+específica), então é o Caddy — não o Next.js nem o Spring — quem o define
+(Sprint 12.3): `header @https_only Strict-Transport-Security "max-age=31536000;
+includeSubDomains"`, com `@https_only { protocol https }` — só enviado em
+respostas de fato servidas por HTTPS, nunca em HTTP puro (ver seção "HSTS" mais
+abaixo).
 
 ### Persistência do Caddy
 
@@ -476,9 +592,11 @@ persistentes" acima.
 
 `read_only: true` na raiz do sistema de arquivos do container; `/tmp` recebe um
 `tmpfs` próprio (onde o Caddy grava temporários/escreve atomicamente); `/data` e
-`/config` continuam graváveis como volumes nomeados. Nenhuma imagem customizada foi
-criada só para rodar non-root, e nenhum `cap_add` foi adicionado — a imagem oficial
-`caddy:2-alpine` roda como veio, sem hardening adicional fora deste escopo.
+`/config` continuam graváveis como volumes nomeados — inalterado pela imagem
+customizada da Sprint 12.3 (`infra/caddy/Dockerfile`), que só troca o binário
+`caddy` embutido, não o resto da imagem base `caddy:2.11.4-alpine`. Continua
+rodando como `root` (não non-root) — decisão pré-existente, não revisitada nesta
+sprint: precisa de privilégio para bind nas portas 80/443 sem `cap_add` extra.
 
 ### Healthcheck do Caddy
 
@@ -493,14 +611,17 @@ qualquer um dos dois nunca marca o `caddy` como `unhealthy`. `depends_on` com
 `condition: service_healthy` nos dois upstreams existe só para ordem de startup (ver
 diagrama de arquitetura acima), não para o healthcheck em si.
 
-### HSTS, TLS real e JWT `HttpOnly` — ainda fora do escopo
+### HSTS, TLS real e JWT `HttpOnly`
 
-- **`Strict-Transport-Security`:** ainda ausente, deliberadamente — não configurado no
-  Caddyfile nesta sprint (`CADDY_HOST=:80`, sem TLS real). Anunciar HSTS sobre HTTP
-  puro não tem efeito garantido e pode ser arriscado se o domínio mudar antes do TLS
-  existir. Fica para quando um domínio real + TLS via Cloudflare estiverem validados
-  ponta a ponta (Sprint 11C+).
-- **Cloudflare, DNS, domínio real:** não configurados nesta sprint — ver seção acima.
+- **`Strict-Transport-Security`:** configurado no Caddyfile desde a Sprint 12.3
+  (ver "Headers de segurança" acima), mas condicionado a `protocol https` — em
+  `CADDY_HOST=:80` (local, sem TLS real) o matcher nunca casa, então o header
+  segue ausente na prática, exatamente como antes. Só passa a ser efetivamente
+  enviado quando houver TLS real (domínio + Cloudflare reais, ainda não
+  provisionados — ver "Sprint 12.3" acima e `docs/operations/runbook.md §21.5`).
+- **Cloudflare, DNS, domínio real:** config/imagem já prontas (Sprint 12.3) —
+  provisionamento real (zona, VPS, DNS) continua fora do escopo, ver "Próximas
+  etapas" abaixo.
 - **Migração do refresh token para cookie `HttpOnly`:** mencionada como melhoria futura
   em `docs/security/authentication-review.md`, permanece fora do escopo — o mecanismo
   atual (access token JWT via header, refresh token opaco) não foi alterado.
@@ -824,15 +945,17 @@ de rate limiting (`AUTH_RATE_LIMIT_*`) — todas com default seguro em
   dos valores provisórios de CPU/memória (incluindo o `caddy`) contra o hardware
   real, provisionamento da Hetzner Storage Box real, instalação dos templates
   systemd de backup, e execução real do disaster recovery total.
-- **Sprint 11C:** domínio real, DNS/Cloudflare, TLS automático via ACME — **correção
-  (DT-012.1, revisão pós-Sprint-12.1):** o produto é multi-tenant por subdomínio
-  dinâmico, o que exige certificado **wildcard**; o desafio ACME **HTTP-01 não
-  emite wildcard**, só **DNS-01** (via API do Cloudflare) — não é "só trocar
-  `CADDY_HOST`", exige uma imagem Caddy customizada com o módulo
-  `caddy-dns/cloudflare` (`xcaddy`) e um `CLOUDFLARE_API_TOKEN` com permissão
-  mínima (`Zone:DNS:Edit`, uma zona), nunca commitado. Ver
-  `docs/design/DT-012.1-production-architecture.md §9`. HSTS segue como
-  bloqueador para go-live, ver `docs/roadmap.md`.
+- **Sprint 11C / 12.3:** domínio real, DNS/Cloudflare, TLS automático via ACME —
+  **atualização (Sprint 12.3):** a parte que dependia só de código/config já está
+  pronta e validada localmente — imagem Caddy customizada com `caddy-dns/
+  cloudflare` (`xcaddy`), Caddyfile com `tls dns cloudflare`, wildcard,
+  `trusted_proxies`, HSTS condicional — ver "Sprint 12.3" acima e
+  `docs/operations/runbook.md §21.5`. **O que ainda falta é só infraestrutura
+  real, não mais desenho ou implementação:** domínio adquirido, VPS provisionada,
+  zona criada no Cloudflare, `CLOUDFLARE_API_TOKEN` real gerado (permissão mínima
+  `Zone:DNS:Edit`, uma zona, nunca commitado), `CADDY_HOST` apontado para o
+  domínio real. Ver `docs/design/DT-012.1-production-architecture.md §9`. HSTS já
+  implementado (condicional a HTTPS real) — falta só confirmar contra TLS real.
 - **Sprint 11D:** validação final, handover operacional e go-live — ver
   `docs/roadmap.md` e [Checklist de Go-Live](../docs/operations/runbook.md#25-checklist-de-go-live).
 - **Multi-tenant real no frontend:** já não depende de tenant baked-in; evolução
