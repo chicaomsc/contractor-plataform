@@ -28,7 +28,14 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: `docker compose -f ../docker/docker-compose.yml up -d postgres && cd ../backend && PLATFORM_ADMIN_BOOTSTRAP_EMAIL=${platformAdminEmail} PLATFORM_ADMIN_BOOTSTRAP_PASSWORD=${platformAdminPassword} ./mvnw spring-boot:run -Dspring-boot.run.profiles=local -Dspring-boot.run.arguments="--server.port=${backendPort} --app.cors.allowed-origins=${frontendUrl} --app.platform.base-domain=localhost --app.platform.default-tenant-slug=jr-pinturas --app.platform.frontend-base-url=${frontendUrl} --app.password-reset.request-cooldown=0"`,
+      // app.rate-limit.register/refresh: the smoke suite calls POST /auth/register
+      // several times per run (once per project × once per test that needs a fresh
+      // account) — well within what a real signup abuse guard should allow per real
+      // caller, but easily more than the production default (5/hour, Sprint 12.4.2
+      // RR-06) across a single suite run. Raised here only, same pattern already
+      // used for app.password-reset.request-cooldown=0 below — the production
+      // default in application.yml is untouched.
+      command: `docker compose -f ../docker/docker-compose.yml up -d postgres && cd ../backend && PLATFORM_ADMIN_BOOTSTRAP_EMAIL=${platformAdminEmail} PLATFORM_ADMIN_BOOTSTRAP_PASSWORD=${platformAdminPassword} ./mvnw spring-boot:run -Dspring-boot.run.profiles=local -Dspring-boot.run.arguments="--server.port=${backendPort} --app.cors.allowed-origins=${frontendUrl} --app.platform.base-domain=localhost --app.platform.default-tenant-slug=jr-pinturas --app.platform.frontend-base-url=${frontendUrl} --app.password-reset.request-cooldown=0 --app.rate-limit.register.capacity=100 --app.rate-limit.refresh.capacity=100"`,
       url: `${backendUrl}/actuator/health`,
       reuseExistingServer: true,
       timeout: 120_000,

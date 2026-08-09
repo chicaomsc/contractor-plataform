@@ -2,6 +2,7 @@ package io.chicaodw.platform.common.config;
 
 import io.chicaodw.platform.auth.infrastructure.security.JwtProperties;
 import io.chicaodw.platform.common.storage.StorageProperties;
+import io.chicaodw.platform.company.infrastructure.config.TenantProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
@@ -16,6 +17,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -41,9 +43,27 @@ public class ProductionReadinessValidator implements ApplicationRunner {
             "CHANGE_ME_WITH_A_STRONG_SECRET_MIN_32_CHARS"
     );
 
+    // Sprint 12.4.2 (RR-04/RR-05) — a single, distinctive marker every unedited
+    // placeholder in infra/env/production.env.example contains verbatim (JWT_SECRET's
+    // own placeholder above included). Deliberately NOT a loose word like "change" —
+    // that would reject legitimate values that merely contain a common substring
+    // (e.g. a company called "Exchange Services"), which is exactly what was asked not
+    // to do. "CHANGE_ME" as a literal, upper-snake-case token essentially never occurs
+    // by coincidence in a real configuration value.
+    private static final String PLACEHOLDER_MARKER = "CHANGE_ME";
+
+    // RFC 2606 reserves example.com/.org/.net specifically for documentation — exactly
+    // what infra/env/production.env.example's own placeholders use. Matched by exact
+    // host or dot-suffix (never a bare substring), so "example.com" is rejected but
+    // "myexample.com"/"example-store.com" are not.
+    private static final Set<String> RESERVED_EXAMPLE_HOSTS = Set.of("example.com", "example.org", "example.net");
+
+    private static final String DEV_DB_PASSWORD_DEFAULT = "platform";
+
     private final Environment environment;
     private final JwtProperties jwtProperties;
     private final StorageProperties storageProperties;
+    private final TenantProperties tenantProperties;
 
     @Override
     public void run(ApplicationArguments args) {
@@ -54,9 +74,69 @@ public class ProductionReadinessValidator implements ApplicationRunner {
         validateJwtSecret();
         validateJwtIssuerAudience();
         validateCorsOrigins();
+        validatePlatformBaseDomain();
+        validatePlatformFrontendBaseUrl();
+        validateDatabasePassword();
         validateStoragePath();
 
         log.info("Production readiness checks passed (profile '{}').", PROD_PROFILE);
+    }
+
+    // ── Shared placeholder/localhost detection ──────────────────────────────────
+
+    private void rejectIfPlaceholder(String value, String varName) {
+        if (value.contains(PLACEHOLDER_MARKER)) {
+            throw new IllegalStateException(
+                    varName + " is still set to a placeholder value (contains \"" + PLACEHOLDER_MARKER
+                            + "\"). Replace it with a real value before running with profile '" + PROD_PROFILE + "'.");
+        }
+    }
+
+    private boolean isReservedExampleHost(String host) {
+        String lower = host.toLowerCase(Locale.ROOT);
+        return RESERVED_EXAMPLE_HOSTS.stream().anyMatch(reserved -> lower.equals(reserved) || lower.endsWith("." + reserved));
+    }
+
+    private boolean isLocalhostHost(String host) {
+        return host.equalsIgnoreCase("localhost") || host.equals("127.0.0.1");
+    }
+
+    /** Parses {@code value} as an absolute http(s) URL and rejects it if the scheme is
+     * wrong, the host is missing, localhost/loopback, or an RFC 2606 reserved example
+     * host — the same three checks {@link #validateOrigin} already applies to each CORS
+     * origin, factored out so {@link #validatePlatformFrontendBaseUrl} can reuse them
+     * without duplicating the URI-parsing logic. */
+    private void validateAbsoluteHttpUrl(String value, String varName) {
+        rejectIfPlaceholder(value, varName);
+
+        URI uri;
+        try {
+            uri = new URI(value);
+        } catch (URISyntaxException e) {
+            throw new IllegalStateException(varName + " (\"" + value + "\") is not a valid URL.");
+        }
+
+        String scheme = uri.getScheme();
+        if (scheme == null || !(scheme.equalsIgnoreCase("http") || scheme.equalsIgnoreCase("https"))) {
+            throw new IllegalStateException(varName + " (\"" + value + "\") must use the http or https scheme.");
+        }
+
+        String host = uri.getHost();
+        if (host == null || host.isBlank()) {
+            throw new IllegalStateException(varName + " (\"" + value + "\") is not a valid absolute URL.");
+        }
+
+        if (isLocalhostHost(host)) {
+            throw new IllegalStateException(
+                    varName + " (\"" + value + "\") is a localhost origin, not allowed when profile '"
+                            + PROD_PROFILE + "' is active.");
+        }
+
+        if (isReservedExampleHost(host)) {
+            throw new IllegalStateException(
+                    varName + " (\"" + value + "\") is still set to the documentation-only example.com/.org/.net "
+                            + "domain from infra/env/production.env.example. Replace it with the real value.");
+        }
     }
 
     private boolean isProdProfileActive() {
@@ -126,31 +206,61 @@ public class ProductionReadinessValidator implements ApplicationRunner {
                     "APP_CORS_ALLOWED_ORIGINS must not contain a wildcard ('*') in production.");
         }
 
-        URI uri;
-        try {
-            uri = new URI(origin);
-        } catch (URISyntaxException e) {
+        validateAbsoluteHttpUrl(origin, "APP_CORS_ALLOWED_ORIGINS entry");
+    }
+
+    // ── Multi-tenant platform config (Sprint 12.4.2, RR-04/RR-05) ──────────────
+
+    private void validatePlatformBaseDomain() {
+        String domain = tenantProperties.getBaseDomain();
+        if (domain == null || domain.isBlank()) {
             throw new IllegalStateException(
-                    "APP_CORS_ALLOWED_ORIGINS entry \"" + origin + "\" is not a valid URL.");
+                    "PLATFORM_BASE_DOMAIN is missing. Required when profile '" + PROD_PROFILE + "' is active.");
         }
 
-        String scheme = uri.getScheme();
-        if (scheme == null || !(scheme.equalsIgnoreCase("http") || scheme.equalsIgnoreCase("https"))) {
+        rejectIfPlaceholder(domain, "PLATFORM_BASE_DOMAIN");
+
+        if (isLocalhostHost(domain)) {
             throw new IllegalStateException(
-                    "APP_CORS_ALLOWED_ORIGINS entry \"" + origin + "\" must use the http or https scheme.");
+                    "PLATFORM_BASE_DOMAIN (\"" + domain + "\") is a localhost value, not allowed when profile '"
+                            + PROD_PROFILE + "' is active — tenant subdomain resolution needs a real domain.");
         }
 
-        String host = uri.getHost();
-        if (host == null || host.isBlank()) {
+        if (isReservedExampleHost(domain)) {
             throw new IllegalStateException(
-                    "APP_CORS_ALLOWED_ORIGINS entry \"" + origin + "\" is not a valid absolute URL.");
+                    "PLATFORM_BASE_DOMAIN (\"" + domain + "\") is still set to the documentation-only "
+                            + "example.com/.org/.net domain from infra/env/production.env.example. Replace it with "
+                            + "the real value.");
+        }
+    }
+
+    private void validatePlatformFrontendBaseUrl() {
+        String url = tenantProperties.getFrontendBaseUrl();
+        if (url == null || url.isBlank()) {
+            throw new IllegalStateException(
+                    "PLATFORM_FRONTEND_BASE_URL is missing. Required when profile '" + PROD_PROFILE
+                            + "' is active — password-reset links are built from it (DT-011A.10).");
         }
 
-        if (host.equalsIgnoreCase("localhost") || host.equals("127.0.0.1")) {
+        validateAbsoluteHttpUrl(url, "PLATFORM_FRONTEND_BASE_URL");
+    }
+
+    // ── Database ─────────────────────────────────────────────────────────────
+
+    private void validateDatabasePassword() {
+        String password = environment.getProperty("spring.datasource.password");
+        if (password == null || password.isBlank()) {
             throw new IllegalStateException(
-                    "APP_CORS_ALLOWED_ORIGINS entry \"" + origin + "\" is a localhost origin, not allowed when "
-                            + "profile '" + PROD_PROFILE + "' is active.");
+                    "DB_PASSWORD is missing. Required when profile '" + PROD_PROFILE + "' is active.");
         }
+
+        if (password.equals(DEV_DB_PASSWORD_DEFAULT)) {
+            throw new IllegalStateException(
+                    "DB_PASSWORD is still set to the local development default. Generate a real password before "
+                            + "running with profile '" + PROD_PROFILE + "'.");
+        }
+
+        rejectIfPlaceholder(password, "DB_PASSWORD");
     }
 
     // ── Storage ──────────────────────────────────────────────────────────────

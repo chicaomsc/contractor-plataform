@@ -110,12 +110,21 @@ services:
     # application-prod.yml, so the JVM's own graceful-shutdown window always has a
     # chance to finish before Docker sends SIGKILL. See DT-011A.2 §6.1.4/§6.3.4.
     stop_grace_period: 40s
+    # Sprint 12.4.2 (RR-10): 45s start_period + 3×30s retries (135s total) was sized
+    # against local/dev-machine cold starts, never against a shared-vCPU VPS (CPX32,
+    # DT-012.4 §4) where JVM cold start + the first-ever Flyway run (14 migrations,
+    # empty DB) can plausibly run slower under cgroup cpus:"1.0" + possible CPU steal
+    # from noisy neighbors. 90s + 5×30s = 240s (4 min) total before Docker marks this
+    # container unhealthy — a deliberate, bounded ceiling (not infinite): a backend
+    # that hasn't passed a single readiness check in 4 minutes is a real failure to
+    # surface, not something to keep waiting on indefinitely. If it ever proves too
+    # tight in practice, `docker compose up -d` is idempotent and safe to re-run.
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/actuator/health/readiness"]
       interval: 30s
       timeout: 5s
-      retries: 3
-      start_period: 45s
+      retries: 5
+      start_period: 90s
     mem_limit: 1400m
     mem_reservation: 900m
     # PROVISIONAL (Sprint 11A.2) — see the postgres service comment above; same

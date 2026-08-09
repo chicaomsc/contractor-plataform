@@ -90,9 +90,19 @@ app:
     # SEC-AUTH-03). Keyed by remote address + path; disabled entirely in the shared test
     # context (AbstractIntegrationTest) to avoid unrelated tests tripping the limiter.
     enabled: ${AUTH_RATE_LIMIT_ENABLED:true}
+    # Sprint 12.4.2 (RR-06) — self-serve signup, no auth required to call it.
+    register:
+      capacity: ${AUTH_RATE_LIMIT_REGISTER_CAPACITY:5}
+      window-seconds: ${AUTH_RATE_LIMIT_REGISTER_WINDOW_SECONDS:3600}
     login:
       capacity: ${AUTH_RATE_LIMIT_LOGIN_CAPACITY:10}
       window-seconds: ${AUTH_RATE_LIMIT_LOGIN_WINDOW_SECONDS:60}
+    # Sprint 12.4.2 (RR-07) — access tokens expire every 15 min (app.jwt.access-token-ttl
+    # above), so one active session needs at most 4/hour; 20 leaves headroom for
+    # multiple tabs/devices while still bounding sustained abuse of a leaked token.
+    refresh:
+      capacity: ${AUTH_RATE_LIMIT_REFRESH_CAPACITY:20}
+      window-seconds: ${AUTH_RATE_LIMIT_REFRESH_WINDOW_SECONDS:3600}
     forgot-password:
       capacity: ${AUTH_RATE_LIMIT_FORGOT_PASSWORD_CAPACITY:5}
       window-seconds: ${AUTH_RATE_LIMIT_FORGOT_PASSWORD_WINDOW_SECONDS:60}

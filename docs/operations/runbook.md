@@ -90,6 +90,7 @@ Detalhes completos de secrets de backup: [infra/backup/README.md § Secrets](../
 ```
 ghcr.io/chicaomsc/contractor-platform-backend
 ghcr.io/chicaomsc/contractor-platform-frontend
+ghcr.io/chicaomsc/contractor-platform-caddy
 ```
 
 | Tag | Uso |
@@ -100,6 +101,13 @@ ghcr.io/chicaomsc/contractor-platform-frontend
 
 **Não existe `:latest`** (`flavor: latest=false` explícito em `publish-images.yml`).
 Plataforma: **`linux/amd64`** apenas. `APP_VERSION` **deve sempre ser o full SHA**.
+
+**GHCR é privado** (Sprint 12.4.2, RR-03) — `docker compose pull` na VPS exige
+`docker login ghcr.io` prévio com um PAT `read:packages` (procedimento completo:
+`infra/README.md` "Autenticação e permissões"). As três imagens (backend, frontend,
+caddy) só são publicadas depois de `backend-ci.yml`/`frontend-ci.yml` passarem —
+`publish-images.yml` os chama como workflows reutilizáveis e nunca publica se
+qualquer um falhar (RR-08).
 
 ## 7. Startup
 
@@ -457,6 +465,16 @@ extensão já identificados no código (emissão de token centralizada, `AuthRes
 não precisa mudar de formato, `UserStatus` já modela "não totalmente autenticado
 ainda"). Nenhuma tabela/coluna especulativa foi criada.
 
+**Rate limiting — cobertura ampliada (Sprint 12.4.2, RR-06/RR-07):** além dos cinco
+endpoints já limitados (`login`, `forgot-password`, `reset-password`, `invite-accept`,
+`admin-password-reset`), `POST /auth/register` (5/hora por IP — o mais restritivo, é
+o único endpoint público que cria dado novo sem autenticação) e `POST /auth/refresh`
+(20/hora por IP — folgado o bastante para uma sessão ativa trocar o access token a
+cada ~15 min, `app.jwt.access-token-ttl`, em múltiplas abas/dispositivos) agora têm
+regra própria em `AuthRateLimitFilter`/`RateLimitProperties`. Configurável via
+`AUTH_RATE_LIMIT_REGISTER_CAPACITY`/`_WINDOW_SECONDS` e
+`AUTH_RATE_LIMIT_REFRESH_CAPACITY`/`_WINDOW_SECONDS`, mesmo padrão dos demais.
+
 **Riscos aceitos restantes desta área (não fechados por decisão explícita):**
 - `SEC-AUTH-04` — canal de tempo em `POST /auth/password/forgot` ainda permite
   enumeração por timing, apesar da resposta uniforme. Não corrigido nesta sprint.
@@ -629,7 +647,8 @@ Não é uma nova revisão de segurança — para achados de segurança de aplica
 [x] Roteamento do Caddy (/, /api/*, /uploads/*)
 [x] Portas internas confirmadas (só Caddy publica)
 [x] GHCR build/push funcionando (11A.4 + estabilização)
-[x] Pull público do GHCR confirmado (docker pull sem autenticação, backend e frontend)
+[x] Pull público do GHCR confirmado — histórico (11A.4); SUPERSEDED pela decisão de
+    GHCR privado (Sprint 12.4.2, RR-03) — ver "Já validado na Sprint 12.4.2" abaixo
 [x] linux/amd64 confirmado nas duas imagens
 [x] Backup local executado com dados reais (11A.5)
 [x] Restore de PostgreSQL validado
@@ -661,17 +680,39 @@ Não é uma nova revisão de segurança — para achados de segurança de aplica
 [x] Roteiro manual de DNS/Cloudflare documentado (§21.5) — não executado (sem domínio real)
 ```
 
+### Já validado na Sprint 12.4.2 (Pre-Deploy Blocker Remediation)
+
+```
+[x] Imagem Caddy customizada agora publicada no GHCR (job novo em publish-images.yml, RR-01)
+[x] docker-compose.prod.yml confirmado referenciando exatamente o mesmo nome/tag da imagem publicada
+[x] Validação de GitHub Actions Variables (NEXT_PUBLIC_*) reforçada — rejeita CHANGE_ME/
+    example.com/.org/.net/localhost/127.0.0.1, não só "vazio" (RR-02)
+[x] Documentação de visibilidade do GHCR corrigida para privado — infra/README.md/runbook (RR-03)
+[x] ProductionReadinessValidator agora cobre PLATFORM_BASE_DOMAIN/PLATFORM_FRONTEND_BASE_URL/
+    DB_PASSWORD contra placeholders (CHANGE_ME, example.com/.org/.net, localhost) (RR-04/RR-05)
+[x] Rate limit adicionado a POST /auth/register e POST /auth/refresh (RR-06/RR-07)
+[x] publish-images.yml agora depende de backend-ci.yml/frontend-ci.yml passarem (workflow_call, RR-08)
+[x] Healthcheck do backend ampliado para 240s totais (90s start_period + 5×30s), documentado (RR-10)
+```
+
 ### Pendente — Sprint 12.4+ / Go-Live
 
 ```
 [ ] Domínio real adquirido
 [ ] VPS Hetzner real provisionada
+[ ] docker login ghcr.io real na VPS com PAT read:packages (RR-03 — mecanismo pronto,
+    execução depende da VPS existir)
 [ ] DNS configurado no Cloudflare (roteiro §21.5) contra o domínio/VPS reais
 [ ] CLOUDFLARE_API_TOKEN real (Zone:DNS:Edit, uma zona) gerado e guardado como secret
 [ ] CADDY_HOST=apex,*.dominio real setado em production.env real
 [ ] TLS válido emitido via DNS-01 contra a zona real — BLOCKER FOR GO-LIVE
 [ ] Cloudflare SSL/TLS mode = Full (strict) confirmado no painel (nunca Flexible)
 [ ] HSTS confirmado ativo sobre HTTPS real
+[ ] NEXT_PUBLIC_* (GitHub Actions Variables) atualizadas para o domínio real e
+    publish-images.yml re-executado antes do primeiro docker compose pull (RR-02)
+[ ] IPv6 — decisão ainda em aberto (DT-012.4.1 RR-09), não resolvida nesta sprint
+[ ] Backup/restore validados contra Storage Box real (DT-011A.5/DT-012.1, RR-11) — não implementado nesta sprint
+[ ] NVD_API_KEY configurada em CI (RR-12) — não implementado nesta sprint
 ```
 
 Nenhum item das seções "Pendente" deve ser marcado como concluído antes de ser executado de fato contra o ambiente real.

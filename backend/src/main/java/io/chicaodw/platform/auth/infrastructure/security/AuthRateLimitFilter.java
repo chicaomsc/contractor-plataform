@@ -17,9 +17,11 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 
 /**
- * Rate limits only the five authentication endpoints named in DT-011B.5 §9 HARD-01
+ * Rate limits only the authentication endpoints named in DT-011B.5 §9 HARD-01
  * (SEC-AUTH-03) — never a global limiter (see {@link #resolveRule}, an explicit
- * allowlist of exactly those five routes). Runs before {@link JwtAuthenticationFilter}
+ * allowlist). Originally five routes; {@code /auth/register} and {@code /auth/refresh}
+ * added in Sprint 12.4.2 (RR-06/RR-07 — both had zero rate-limit coverage). Runs before
+ * {@link JwtAuthenticationFilter}
  * so a request can be rejected before any JWT parsing/DB work — the key is the caller's
  * remote address plus the request path, so the admin-password-reset endpoint (which
  * does require authentication) is still throttled the same way regardless of whether
@@ -61,7 +63,9 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
 
         String path = request.getRequestURI();
         return switch (path) {
+            case "/auth/register" -> properties.getRegister();
             case "/auth/login" -> properties.getLogin();
+            case "/auth/refresh" -> properties.getRefresh();
             case "/auth/password/forgot" -> properties.getForgotPassword();
             case "/auth/password/reset" -> properties.getResetPassword();
             case "/auth/invites/accept" -> properties.getInviteAccept();
