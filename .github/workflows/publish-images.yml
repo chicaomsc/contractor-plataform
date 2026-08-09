@@ -95,7 +95,7 @@ jobs:
 
       - name: Docker metadata (tags + OCI labels)
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.BACKEND_IMAGE }}
           # flavor.latest defaults to "auto", which would silently add a `:latest`
@@ -207,7 +207,7 @@ jobs:
 
       - name: Docker metadata (tags + OCI labels)
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.FRONTEND_IMAGE }}
           # See the backend job's metadata step — flavor.latest defaults to "auto"
@@ -276,7 +276,7 @@ jobs:
 
       - name: Docker metadata (tags + OCI labels)
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.CADDY_IMAGE }}
           # See the backend job's metadata step — flavor.latest defaults to "auto"
