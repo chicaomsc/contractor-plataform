@@ -21,7 +21,7 @@ FROM caddy:${CADDY_VERSION}-builder-alpine AS builder
 # Pinned to an explicit tag (not a branch/latest) for reproducibility — bump
 # deliberately, not silently, when a Cloudflare module update is needed.
 RUN xcaddy build \
-    --with github.com/caddy-dns/cloudflare@v0.2.1
+    --with github.com/caddy-dns/cloudflare@v0.2.4
 
 FROM caddy:${CADDY_VERSION}-alpine AS runtime
 
