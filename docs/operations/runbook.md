@@ -102,6 +102,13 @@ ghcr.io/chicaomsc/contractor-platform-caddy
 **Não existe `:latest`** (`flavor: latest=false` explícito em `publish-images.yml`).
 Plataforma: **`linux/amd64`** apenas. `APP_VERSION` **deve sempre ser o full SHA**.
 
+**Compatibilidade com o Platform Ops:** `docker-compose.prod.yml` também aceita,
+opcionalmente e com prioridade sobre `APP_VERSION`, `BACKEND_VERSION`/
+`FRONTEND_VERSION`/`CADDY_VERSION` por componente (mesma regra: full SHA de 40
+caracteres). Isso **não muda nada** no fluxo manual documentado neste runbook — se
+essas variáveis não forem definidas, o comportamento é idêntico ao de sempre via
+`APP_VERSION`. Ver `infra/README.md` § `BACKEND_VERSION`/`FRONTEND_VERSION`/`CADDY_VERSION`.
+
 **GHCR é privado** (Sprint 12.4.2, RR-03) — `docker compose pull` na VPS exige
 `docker login ghcr.io` prévio com um PAT `read:packages` (procedimento completo:
 `infra/README.md` "Autenticação e permissões"). As três imagens (backend, frontend,

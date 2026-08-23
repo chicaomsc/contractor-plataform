@@ -7,6 +7,15 @@
 # (chicaomsc) now that .github/workflows/publish-images.yml actually publishes
 # there — see docs/design/DT-011A.4-ghcr-image-pipeline.md.
 #
+# Platform Ops compatibility (this sprint): each service's tag now resolves as
+# ${BACKEND_VERSION:-${APP_VERSION:-local}} (same pattern for frontend/caddy) —
+# an independent, optional override per component, with APP_VERSION preserved
+# as the LEGACY/fallback used by the manual deploy flow in
+# docs/operations/runbook.md. Neither variable set → "local" (unchanged). Only
+# APP_VERSION set → unchanged behavior. BACKEND_VERSION/FRONTEND_VERSION/
+# CADDY_VERSION set → they win, independently per component. No functional
+# change to the application; see infra/README.md for the full explanation.
+#
 # Only `caddy` publishes a port to the host. `frontend`/`backend`/`postgres` are
 # reachable only on the `internal` Docker network — Caddy reaches them by service
 # name (frontend:3000, backend:8080), the same way any other container on this
@@ -69,7 +78,7 @@ services:
     logging: *default-logging
 
   backend:
-    image: ${BACKEND_IMAGE:-ghcr.io/chicaomsc/contractor-platform-backend}:${APP_VERSION:-local}
+    image: ${BACKEND_IMAGE:-ghcr.io/chicaomsc/contractor-platform-backend}:${BACKEND_VERSION:-${APP_VERSION:-local}}
     build:
       context: ../../backend
       dockerfile: Dockerfile
@@ -133,7 +142,7 @@ services:
     logging: *default-logging
 
   frontend:
-    image: ${FRONTEND_IMAGE:-ghcr.io/chicaomsc/contractor-platform-frontend}:${APP_VERSION:-local}
+    image: ${FRONTEND_IMAGE:-ghcr.io/chicaomsc/contractor-platform-frontend}:${FRONTEND_VERSION:-${APP_VERSION:-local}}
     build:
       context: ../../frontend
       dockerfile: Dockerfile
@@ -187,7 +196,7 @@ services:
     # (what the official image alone can do) cannot issue wildcard certificates.
     # Still runs as root (needed to bind ports 80/443 without extra capabilities;
     # unchanged from the pre-12.3 image, no new hardening decision here).
-    image: ${CADDY_IMAGE:-ghcr.io/chicaomsc/contractor-platform-caddy}:${APP_VERSION:-local}
+    image: ${CADDY_IMAGE:-ghcr.io/chicaomsc/contractor-platform-caddy}:${CADDY_VERSION:-${APP_VERSION:-local}}
     build:
       context: ../caddy
       dockerfile: Dockerfile
