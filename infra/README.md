@@ -685,13 +685,14 @@ Cada build publica 3 tags para o mesmo digest (um único build, sem custo extra)
 **`:latest` não é publicada** — a tag simplesmente não existe, em vez de existir e só
 avisar para não usá-la para deploy.
 
-### `APP_VERSION`
+### `APP_VERSION` (deploy manual — continua funcionando sem alteração)
 
 `APP_VERSION` deve ser sempre o **full commit SHA** (40 caracteres) publicado por
 `publish-images.yml` — é o mesmo valor de `git rev-parse HEAD` do commit que gerou a
 imagem. Isso já funciona com o `docker-compose.prod.yml` atual sem nenhuma mudança
-estrutural: `image:` de `backend`/`frontend` já é
-`${BACKEND_IMAGE:-...}:${APP_VERSION:-local}` — 100% parametrizado.
+estrutural: `image:` de `backend`/`frontend`/`caddy` já é
+`${BACKEND_IMAGE:-...}:${APP_VERSION:-local}` (equivalente para os outros dois) —
+100% parametrizado.
 
 Passo a passo de deploy e rollback (comandos, `--build` nunca deve ser usado nesse
 fluxo, checklist pós-deploy): [docs/operations/runbook.md § Deploy](../docs/operations/runbook.md#11-deploy)
@@ -699,6 +700,30 @@ e [§ Rollback de Aplicação](../docs/operations/runbook.md#13-rollback-de-apli
 Funciona sem mudança estrutural no Compose porque toda imagem publicada é imutável
 e referenciável por SHA indefinidamente. **Rollback de container não é rollback de
 banco de dados** — ver limitação do Flyway logo abaixo.
+
+### `BACKEND_VERSION` / `FRONTEND_VERSION` / `CADDY_VERSION` (contrato do Platform Ops)
+
+A partir desta sprint, cada `image:` aceita opcionalmente uma variável **por
+componente**, com prioridade sobre `APP_VERSION`:
+
+```
+backend:  ${BACKEND_IMAGE:-...}:${BACKEND_VERSION:-${APP_VERSION:-local}}
+frontend: ${FRONTEND_IMAGE:-...}:${FRONTEND_VERSION:-${APP_VERSION:-local}}
+caddy:    ${CADDY_IMAGE:-...}:${CADDY_VERSION:-${APP_VERSION:-local}}
+```
+
+Mesmas regras de valor que `APP_VERSION` (full commit SHA de 40 caracteres, nunca
+`:latest`/`:main`). A diferença é que cada componente pode ser fixado
+independentemente — é o contrato que o `platform-ops` (o repositório que passa a
+controlar o deploy via GitOps) já usa desde sua Sprint 1. Um operador humano rodando
+o comando manual documentado acima **não precisa mudar nada** — se nenhuma das três
+variáveis novas for definida, o comportamento é idêntico ao de sempre, via
+`APP_VERSION`.
+
+`APP_VERSION` passa a ser **legacy/fallback**: continua funcionando, continua sendo o
+caminho documentado para o deploy manual, mas deixa de ser a única forma de fixar a
+versão. Não há previsão de remoção — só será removido depois que o primeiro deploy
+GitOps oficial (via `platform-ops`) estiver validado em produção.
 
 ### Limitação do Flyway (importante)
 
