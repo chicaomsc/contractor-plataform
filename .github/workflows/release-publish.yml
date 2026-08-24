@@ -1,0 +1,428 @@
+name: Release — Publish Images
+
+# Artifact publication (Sprint 2C — ver docs/design/DT-013-release-pipeline.md).
+# Responsabilidade ÚNICA deste workflow: a partir de uma release já criada
+# por release-please.yml, buildar e publicar as três imagens com tag SemVer
+# imutável, capturar os digests reais do GHCR, e gerar o release-manifest.yml
+# (schema platform-ops/v1). NUNCA decide versão, NUNCA cria tag/release —
+# isso é exclusivo de release-please.yml.
+#
+# Gatilhos (dois, deliberados):
+#   - release: published — o gatilho semanticamente correto ("uma release
+#     oficial foi publicada"). Dispara sozinho se a release for criada por
+#     qualquer coisa que NÃO seja o GITHUB_TOKEN padrão (ex.: um humano
+#     publicando manualmente, ou release-please.yml no futuro com um PAT).
+#   - workflow_dispatch (input `tag`) — fallback explícito, usado por
+#     release-please.yml hoje: GITHUB_TOKEN não dispara `release: published`
+#     quando a própria GITHUB_TOKEN criou a release (proteção anti-recursão
+#     do GitHub) — ver comentário em release-please.yml. workflow_dispatch é
+#     a exceção documentada a essa restrição.
+#
+# Nunca dispara em push normal para main — isso continua sendo
+# publish-images.yml (SHA/short-SHA/main, inalterado nesta sprint), o
+# caminho técnico/dev independente da release SemVer.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag da release a publicar (ex.: v1.2.0). Usado pelo dispatch de release-please.yml ou para reexecução manual.'
+        required: true
+
+concurrency:
+  group: release-publish-${{ github.event.release.tag_name || github.event.inputs.tag }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  BACKEND_IMAGE: ghcr.io/chicaomsc/contractor-platform-backend
+  FRONTEND_IMAGE: ghcr.io/chicaomsc/contractor-platform-frontend
+  CADDY_IMAGE: ghcr.io/chicaomsc/contractor-platform-caddy
+
+jobs:
+  resolve:
+    name: Resolve tag, version and commit
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.info.outputs.tag }}
+      version: ${{ steps.info.outputs.version }}
+      sha: ${{ steps.info.outputs.sha }}
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || github.event.inputs.tag }}
+
+      - name: Resolve
+        id: info
+        run: |
+          set -euo pipefail
+          TAG="${{ github.event.release.tag_name || github.event.inputs.tag }}"
+          VERSION="${TAG#v}"
+          # SemVer estrito (MAJOR.MINOR.PATCH) — release-please só gera tags
+          # nesse formato, mas validamos aqui também: nunca confiar cegamente
+          # numa string vinda de input externo (workflow_dispatch é humano-
+          # acionável).
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Tag '${TAG}' não resolve para SemVer válido (esperado vMAJOR.MINOR.PATCH)."
+            exit 1
+          fi
+          SHA="$(git rev-parse HEAD)"
+          if [[ ! "$SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::SHA resolvido não tem o formato esperado (40 hex): ${SHA}"
+            exit 1
+          fi
+          {
+            echo "tag=${TAG}"
+            echo "version=${VERSION}"
+            echo "sha=${SHA}"
+          } >> "$GITHUB_OUTPUT"
+          echo "Release ${TAG} -> versão ${VERSION}, commit ${SHA}"
+
+  ci-backend:
+    name: Backend CI (gate)
+    needs: resolve
+    uses: ./.github/workflows/backend-ci.yml
+    with:
+      ref: ${{ needs.resolve.outputs.sha }}
+
+  ci-frontend:
+    name: Frontend CI (gate)
+    needs: resolve
+    uses: ./.github/workflows/frontend-ci.yml
+    with:
+      ref: ${{ needs.resolve.outputs.sha }}
+
+  # Item 8 da Sprint 2C: uma release é imutável. Falha ANTES de gastar tempo
+  # de build se qualquer uma das três tags já existir no GHCR — nunca
+  # sobrescreve 1.0.0/1.0.1/etc. Roda antes dos builds (fail fast), não só
+  # antes do push.
+  check-immutability:
+    name: Verify tags don't already exist (immutability)
+    needs: resolve
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fail if any image:tag already exists
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.resolve.outputs.version }}"
+          for IMAGE in "${{ env.BACKEND_IMAGE }}" "${{ env.FRONTEND_IMAGE }}" "${{ env.CADDY_IMAGE }}"; do
+            if docker manifest inspect "${IMAGE}:${VERSION}" >/dev/null 2>&1; then
+              echo "::error::${IMAGE}:${VERSION} já existe no GHCR. Uma release publicada é imutável e nunca é sobrescrita. Se for necessário corrigir algo, publique a próxima versão (ex.: um PATCH) em vez de reusar ${VERSION}."
+              exit 1
+            fi
+            echo "OK: ${IMAGE}:${VERSION} ainda não existe — livre para publicar."
+          done
+
+  # --- Fase de build (SEM push) — valida que os TRÊS Dockerfiles buildam
+  # antes de qualquer push ser tentado (item 17: minimiza a janela de risco
+  # de publicação parcial — a causa mais comum de falha, erro de build/
+  # compilação, nunca chega a publicar nada nesse desenho). O cache
+  # (type=gha) é reaproveitado no job "publish" abaixo: o rebuild lá é cache
+  # hit, não repete o trabalho de verdade.
+
+  build-backend:
+    name: Build backend (validate, no push)
+    needs: [resolve, check-immutability, ci-backend, ci-frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          file: backend/Dockerfile
+          platforms: linux/amd64
+          push: false
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+  build-frontend:
+    name: Build frontend (validate, no push)
+    needs: [resolve, check-immutability, ci-backend, ci-frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+
+      # Mesma validação de Variables já existente em publish-images.yml —
+      # reaproveitada aqui, não reinventada (item 13 da Sprint 2C).
+      - name: Validate required GitHub Actions Variables
+        run: |
+          missing=()
+          [ -z "${{ vars.NEXT_PUBLIC_API_BASE_URL }}" ] && missing+=(NEXT_PUBLIC_API_BASE_URL)
+          [ -z "${{ vars.NEXT_PUBLIC_SITE_URL }}" ] && missing+=(NEXT_PUBLIC_SITE_URL)
+          [ -z "${{ vars.NEXT_PUBLIC_PLATFORM_BASE_DOMAIN }}" ] && missing+=(NEXT_PUBLIC_PLATFORM_BASE_DOMAIN)
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Missing required GitHub Actions Variables: ${missing[*]}. See infra/README.md (\"GitHub Actions Variables\")."
+            exit 1
+          fi
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: frontend
+          file: frontend/Dockerfile
+          platforms: linux/amd64
+          push: false
+          build-args: |
+            NEXT_PUBLIC_API_BASE_URL=${{ vars.NEXT_PUBLIC_API_BASE_URL }}
+            NEXT_PUBLIC_SITE_URL=${{ vars.NEXT_PUBLIC_SITE_URL }}
+            NEXT_PUBLIC_PLATFORM_BASE_DOMAIN=${{ vars.NEXT_PUBLIC_PLATFORM_BASE_DOMAIN }}
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+
+  build-caddy:
+    name: Build caddy (validate, no push)
+    # Deliberadamente sem ci-backend/ci-frontend — mesmo raciocínio já
+    # documentado em publish-images.yml: caddy não tem código de
+    # aplicação/testes próprios, só o próprio build precisa passar.
+    needs: [resolve, check-immutability]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: infra/caddy
+          file: infra/caddy/Dockerfile
+          platforms: linux/amd64
+          push: false
+          cache-from: type=gha,scope=caddy
+          cache-to: type=gha,mode=max,scope=caddy
+
+  # --- Fase de publicação — só roda se os TRÊS builds acima já tiverem
+  # validado com sucesso (needs). Reaproveita o cache type=gha (cache hit,
+  # não reconstrói de verdade) e então publica de fato.
+  publish:
+    name: Publish images + release manifest
+    needs: [resolve, build-backend, build-frontend, build-caddy]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    outputs:
+      backend-digest: ${{ steps.build-backend.outputs.digest }}
+      frontend-digest: ${{ steps.build-frontend.outputs.digest }}
+      caddy-digest: ${{ steps.build-caddy.outputs.digest }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # --- backend ---
+      - name: Docker metadata — backend
+        id: meta-backend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.BACKEND_IMAGE }}
+          flavor: latest=false
+          tags: |
+            type=raw,value=${{ needs.resolve.outputs.version }}
+            type=raw,value=sha-${{ needs.resolve.outputs.sha }}
+
+      - name: Build and push — backend
+        id: build-backend
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          file: backend/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta-backend.outputs.tags }}
+          labels: ${{ steps.meta-backend.outputs.labels }}
+          provenance: true
+          sbom: true
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+      # --- frontend ---
+      - name: Docker metadata — frontend
+        id: meta-frontend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.FRONTEND_IMAGE }}
+          flavor: latest=false
+          tags: |
+            type=raw,value=${{ needs.resolve.outputs.version }}
+            type=raw,value=sha-${{ needs.resolve.outputs.sha }}
+
+      - name: Build and push — frontend
+        id: build-frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: frontend
+          file: frontend/Dockerfile
+          platforms: linux/amd64
+          push: true
+          build-args: |
+            NEXT_PUBLIC_API_BASE_URL=${{ vars.NEXT_PUBLIC_API_BASE_URL }}
+            NEXT_PUBLIC_SITE_URL=${{ vars.NEXT_PUBLIC_SITE_URL }}
+            NEXT_PUBLIC_PLATFORM_BASE_DOMAIN=${{ vars.NEXT_PUBLIC_PLATFORM_BASE_DOMAIN }}
+          tags: ${{ steps.meta-frontend.outputs.tags }}
+          labels: ${{ steps.meta-frontend.outputs.labels }}
+          provenance: true
+          sbom: true
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+
+      # --- caddy ---
+      - name: Docker metadata — caddy
+        id: meta-caddy
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.CADDY_IMAGE }}
+          flavor: latest=false
+          tags: |
+            type=raw,value=${{ needs.resolve.outputs.version }}
+            type=raw,value=sha-${{ needs.resolve.outputs.sha }}
+
+      - name: Build and push — caddy
+        id: build-caddy
+        uses: docker/build-push-action@v6
+        with:
+          context: infra/caddy
+          file: infra/caddy/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta-caddy.outputs.tags }}
+          labels: ${{ steps.meta-caddy.outputs.labels }}
+          provenance: true
+          sbom: true
+          cache-from: type=gha,scope=caddy
+          cache-to: type=gha,mode=max,scope=caddy
+
+      # Item 17 — se chegamos até aqui e uma das três falhou, as anteriores
+      # já foram publicadas e não há como desfazer isso com segurança (ver
+      # DT-013 §Failure Strategy). Este passo só roda em falha e deixa isso
+      # explícito no log/summary, sem tentar apagar/reutilizar nada
+      # automaticamente.
+      - name: Partial publish warning (only runs on failure)
+        if: failure()
+        run: |
+          echo "::warning::Publicação da release ${{ needs.resolve.outputs.tag }} FALHOU no meio do processo. Verifique manualmente no GHCR quais das três imagens (backend/frontend/caddy) foram de fato publicadas com a tag ${{ needs.resolve.outputs.version }}. NUNCA reutilize esta mesma versão — corrija a causa raiz e publique a PRÓXIMA versão (ex.: um PATCH)."
+          echo "### ⚠️ Publicação parcial — ${{ needs.resolve.outputs.tag }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Verifique manualmente quais imagens foram publicadas no GHCR antes de decidir os próximos passos. Esta versão (${{ needs.resolve.outputs.version }}) nunca deve ser reutilizada — publique a próxima." >> "$GITHUB_STEP_SUMMARY"
+
+      # --- Release Manifest (schema platform-ops/v1 — ver docs/design/DT-013) ---
+      #
+      # environment: "production" está fixo aqui porque hoje só existe um
+      # ambiente Vantry no platform-ops. Se/quando existirem outros
+      # ambientes, este valor deixa de fazer sentido como constante — ver
+      # nota em DT-013 §10. O manifest gerado aqui NÃO é enviado ao
+      # platform-ops nesta sprint (isso é Sprint 2C.1) — apenas gerado e
+      # anexado a esta execução/release.
+      - name: Generate release-manifest.yml
+        run: |
+          set -euo pipefail
+          CREATED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          cat > release-manifest.yml <<EOF
+          apiVersion: platform-ops/v1
+          kind: Release
+
+          metadata:
+            application: vantry
+            environment: production
+
+          release:
+            version: "${{ needs.resolve.outputs.version }}"
+            sourceCommit: "${{ needs.resolve.outputs.sha }}"
+            createdAt: "${CREATED_AT}"
+
+          components:
+            backend:
+              image: ${{ env.BACKEND_IMAGE }}
+              tag: "${{ needs.resolve.outputs.version }}"
+              digest: "${{ steps.build-backend.outputs.digest }}"
+            frontend:
+              image: ${{ env.FRONTEND_IMAGE }}
+              tag: "${{ needs.resolve.outputs.version }}"
+              digest: "${{ steps.build-frontend.outputs.digest }}"
+            caddy:
+              image: ${{ env.CADDY_IMAGE }}
+              tag: "${{ needs.resolve.outputs.version }}"
+              digest: "${{ steps.build-caddy.outputs.digest }}"
+          EOF
+          cat release-manifest.yml
+
+      # Estratégia dupla e deliberada (item 10/11 da Sprint 2C — ver DT-013):
+      # artifact do Actions (inspecionável a partir da própria execução do
+      # workflow, útil para debugging, expira com a política padrão de
+      # retenção) E asset anexado à GitHub Release (localização durável,
+      # descoberta natural por quem olha a release — "Vantry 1.2.0" — sem
+      # precisar achar a execução do workflow que a gerou).
+      - name: Upload release-manifest.yml as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-manifest-${{ needs.resolve.outputs.version }}
+          path: release-manifest.yml
+          if-no-files-found: error
+
+      - name: Attach release-manifest.yml to the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release upload "${{ needs.resolve.outputs.tag }}" release-manifest.yml --clobber
+
+      - name: Summary
+        run: |
+          {
+            echo "### Release ${{ needs.resolve.outputs.tag }} publicada"
+            echo ""
+            echo "| Componente | Tag | Digest |"
+            echo "|---|---|---|"
+            echo "| backend | \`${{ needs.resolve.outputs.version }}\` | \`${{ steps.build-backend.outputs.digest }}\` |"
+            echo "| frontend | \`${{ needs.resolve.outputs.version }}\` | \`${{ steps.build-frontend.outputs.digest }}\` |"
+            echo "| caddy | \`${{ needs.resolve.outputs.version }}\` | \`${{ steps.build-caddy.outputs.digest }}\` |"
+            echo ""
+            echo "Source commit: \`${{ needs.resolve.outputs.sha }}\`"
+            echo ""
+            echo "\`release-manifest.yml\` anexado à [GitHub Release](${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ needs.resolve.outputs.tag }}) e disponível como artifact desta execução."
+            echo ""
+            echo "**Nesta sprint, nenhum PR é aberto no platform-ops** — isso fica para a Sprint 2C.1."
+          } >> "$GITHUB_STEP_SUMMARY"
