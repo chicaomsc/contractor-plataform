@@ -1,0 +1,102 @@
+name: release
+
+# Release management (Sprint 2C.1 — ver docs/design/DT-013-release-pipeline.md).
+# Responsabilidade ÚNICA deste workflow: a partir de Conventional Commits desde
+# a última release, calcular a próxima versão SemVer, gerar o changelog, criar
+# a tag Git e a GitHub Release — sem nenhuma Release PR intermediária. NUNCA
+# builda, testa ou publica nenhuma imagem — isso é responsabilidade exclusiva
+# de release-publish.yml (mesma separação da Sprint 2C, ver DT-013 §5).
+#
+# Ferramenta: semantic-release (substitui Release Please nesta sprint — ver
+# DT-013 §"Por que semantic-release, não Release Please"). Sem manifest file:
+# o próprio histórico de tags do Git é a fonte de verdade de "qual foi a
+# última release" — tagFormat "vantry-v${version}" garante que só tags desse
+# formato são consideradas (as tags históricas v0.1.0–v1.0.3, não relacionadas
+# a este pipeline, são ignoradas por não corresponderem ao formato).
+#
+# Gatilho: só push em main. NUNCA em push de feature branch, NUNCA em PR aberta
+# — semantic-release, por desenho, só analisa o branch configurado em
+# .releaserc.json ("branches": ["main"]) e só o commit HEAD atual desse branch.
+
+on:
+  push:
+    branches:
+      - main
+
+# Serializa execuções: dois pushes muito próximos em main nunca calculam/
+# publicam duas releases ao mesmo tempo a partir de estados de tag
+# potencialmente inconsistentes entre si.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Compute version, tag, changelog and GitHub Release
+    runs-on: ubuntu-latest
+    # contents:write — criar tag + GitHub Release. issues:write/pull-requests:write
+    # não são necessários (successComment/failComment desabilitados em
+    # .releaserc.json — este pipeline não comenta em issues/PRs). actions:write
+    # só para o passo de dispatch abaixo, mesma justificativa da Sprint 2C.
+    permissions:
+      contents: write
+      actions: write
+    outputs:
+      released: ${{ steps.semrel.outputs.new_release_published }}
+      version: ${{ steps.semrel.outputs.new_release_version }}
+      tag: ${{ steps.semrel.outputs.new_release_git_tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # semantic-release precisa do histórico completo de tags/commits
+
+      - name: Run semantic-release
+        id: semrel
+        uses: cycjimmy/semantic-release-action@v4
+        with:
+          extra_plugins: |
+            conventional-changelog-conventionalcommits@^8
+            @semantic-release/changelog@^6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Item 5 da Sprint 2C.1: nem todo push em main gera release (docs/chore/
+      # test/ci-only não são elegíveis, ver .releaserc.json releaseRules).
+      # Isto não é uma falha — é o caminho normal e esperado.
+      - name: Report result
+        run: |
+          if [[ "${{ steps.semrel.outputs.new_release_published }}" == "true" ]]; then
+            echo "RESULT=RELEASED (${{ steps.semrel.outputs.new_release_git_tag }})"
+            echo "### ✅ Release ${{ steps.semrel.outputs.new_release_git_tag }} criada" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "RESULT=NO_RELEASE_REQUIRED"
+            echo "### ℹ️ RESULT=NO_RELEASE_REQUIRED" >> "$GITHUB_STEP_SUMMARY"
+            echo "Nenhum commit fix/feat/breaking elegível desde a última release. Nenhuma tag, nenhuma GitHub Release, nenhuma publicação de imagem." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      # Mesma limitação documentada desde a Sprint 2C (não específica do
+      # semantic-release, é uma proteção anti-recursão do próprio GitHub):
+      # a tag + GitHub Release acima, criadas com secrets.GITHUB_TOKEN, NÃO
+      # disparam sozinhas o evento `release: published` em release-publish.yml.
+      # workflow_dispatch é a exceção documentada a essa restrição (requer
+      # actions:write, já concedido acima) — usamos --repo explicitamente
+      # porque este job NUNCA faz checkout de um segundo repositório e o `gh`
+      # CLI não deve depender de autodetecção via git local (bug real da
+      # Sprint 2C.1, ver DT-013 §"Bug real corrigido"). Outputs explícitos
+      # (version/sha), não o tag_name, evitam a segunda causa raiz do mesmo
+      # bug (formato real da tag é "vantry-v1.0.0", não "v1.0.0").
+      - name: Dispatch release-publish.yml
+        if: ${{ steps.semrel.outputs.new_release_published == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh workflow run release-publish.yml \
+            --repo "${{ github.repository }}" \
+            --ref main \
+            -f version="${{ steps.semrel.outputs.new_release_version }}" \
+            -f sha="${{ github.sha }}"

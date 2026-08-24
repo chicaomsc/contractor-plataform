@@ -1,38 +1,42 @@
 name: Release — Publish Images
 
-# Artifact publication (Sprint 2C — ver docs/design/DT-013-release-pipeline.md).
-# Responsabilidade ÚNICA deste workflow: a partir de uma release já criada
-# por release-please.yml, buildar e publicar as três imagens com tag SemVer
-# imutável, capturar os digests reais do GHCR, e gerar o release-manifest.yml
-# (schema platform-ops/v1). NUNCA decide versão, NUNCA cria tag/release —
-# isso é exclusivo de release-please.yml.
+# Artifact publication (Sprint 2C, revisado na 2C.1 — ver DT-013). Responsabilidade
+# ÚNICA deste workflow: a partir de uma release já criada por release.yml, buildar
+# e publicar as três imagens com tag SemVer imutável, capturar os digests reais do
+# GHCR, gerar o release-manifest.yml (schema platform-ops/v1) e abrir a PR de
+# promoção no platform-ops. NUNCA decide versão, NUNCA cria tag/release — isso é
+# exclusivo de release.yml.
 #
 # Gatilhos (dois, deliberados):
-#   - release: published — o gatilho semanticamente correto ("uma release
-#     oficial foi publicada"). Dispara sozinho se a release for criada por
-#     qualquer coisa que NÃO seja o GITHUB_TOKEN padrão (ex.: um humano
-#     publicando manualmente, ou release-please.yml no futuro com um PAT).
-#   - workflow_dispatch (input `tag`) — fallback explícito, usado por
-#     release-please.yml hoje: GITHUB_TOKEN não dispara `release: published`
-#     quando a própria GITHUB_TOKEN criou a release (proteção anti-recursão
-#     do GitHub) — ver comentário em release-please.yml. workflow_dispatch é
-#     a exceção documentada a essa restrição.
+#   - workflow_dispatch (inputs `version`, `sha`) — caminho real usado hoje:
+#     release.yml dispara isto explicitamente após criar a release, com outputs
+#     explícitos (não uma tag_name para fazer parsing — ver DT-013 §"Bug real
+#     corrigido"). GITHUB_TOKEN não dispara `release: published` quando a própria
+#     GITHUB_TOKEN criou a release (proteção anti-recursão do GitHub) —
+#     workflow_dispatch é a exceção documentada a essa restrição.
+#   - release: published — gatilho semanticamente correto para o caso (hoje
+#     hipotético) de uma release ser publicada por um humano ou por um token que
+#     não seja o GITHUB_TOKEN padrão do job de release.yml; dispara sozinho nesse
+#     caso, sem precisar do dispatch explícito.
 #
-# Nunca dispara em push normal para main — isso continua sendo
-# publish-images.yml (SHA/short-SHA/main, inalterado nesta sprint), o
-# caminho técnico/dev independente da release SemVer.
+# Nunca dispara em push normal para main — isso continua sendo publish-images.yml
+# (SHA/short-SHA/main, inalterado), o caminho técnico/dev independente da release
+# SemVer.
 
 on:
   release:
     types: [published]
   workflow_dispatch:
     inputs:
-      tag:
-        description: 'Tag da release a publicar (ex.: v1.2.0). Usado pelo dispatch de release-please.yml ou para reexecução manual.'
+      version:
+        description: 'Versão SemVer a publicar (ex.: 1.2.0), sem prefixo de tag.'
+        required: true
+      sha:
+        description: 'SHA completo (40 chars) do commit de origem da release.'
         required: true
 
 concurrency:
-  group: release-publish-${{ github.event.release.tag_name || github.event.inputs.tag }}
+  group: release-publish-${{ github.event.inputs.version || github.event.release.tag_name }}
   cancel-in-progress: false
 
 permissions:
@@ -42,40 +46,57 @@ env:
   BACKEND_IMAGE: ghcr.io/chicaomsc/contractor-platform-backend
   FRONTEND_IMAGE: ghcr.io/chicaomsc/contractor-platform-frontend
   CADDY_IMAGE: ghcr.io/chicaomsc/contractor-platform-caddy
+  PLATFORM_OPS_REPO: chicaomsc/platform-ops
+  APPLICATION: vantry
+  APP_ENVIRONMENT: production
 
 jobs:
   resolve:
-    name: Resolve tag, version and commit
+    name: Resolve version and commit
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.info.outputs.tag }}
       version: ${{ steps.info.outputs.version }}
       sha: ${{ steps.info.outputs.sha }}
     steps:
-      - name: Checkout release tag
+      # Sempre faz checkout ANTES de qualquer comando git — esta parte nunca foi
+      # a causa do bug real da Sprint 2C.1 (o bug estava em release-please.yml,
+      # num job que nunca fazia checkout algum; aqui o checkout sempre existiu).
+      - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.release.tag_name || github.event.inputs.tag }}
+          ref: ${{ github.event.inputs.sha || github.event.release.tag_name }}
+          fetch-depth: 1
 
-      - name: Resolve
+      - name: Resolve version, commit and tag
         id: info
         run: |
           set -euo pipefail
-          TAG="${{ github.event.release.tag_name || github.event.inputs.tag }}"
-          VERSION="${TAG#v}"
-          # SemVer estrito (MAJOR.MINOR.PATCH) — release-please só gera tags
-          # nesse formato, mas validamos aqui também: nunca confiar cegamente
-          # numa string vinda de input externo (workflow_dispatch é humano-
-          # acionável).
+          if [[ -n "${{ github.event.inputs.version }}" ]]; then
+            # Caminho real: outputs explícitos vindos de release.yml — nenhum
+            # parsing de string de tag necessário (ver DT-013).
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            # Caminho fallback (release: published, sem dispatch): a tag real
+            # criada por semantic-release usa o formato "vantry-v<versão>"
+            # (tagFormat em .releaserc.json) — confirmado empiricamente contra
+            # a release vantry-v1.0.0 real. Nunca assumir prefixo "v" simples.
+            TAG="${{ github.event.release.tag_name }}"
+            VERSION="${TAG#vantry-v}"
+          fi
+
           if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::Tag '${TAG}' não resolve para SemVer válido (esperado vMAJOR.MINOR.PATCH)."
+            echo "::error::Versão resolvida '${VERSION}' não é SemVer válido (esperado MAJOR.MINOR.PATCH)."
             exit 1
           fi
+
           SHA="$(git rev-parse HEAD)"
           if [[ ! "$SHA" =~ ^[0-9a-f]{40}$ ]]; then
             echo "::error::SHA resolvido não tem o formato esperado (40 hex): ${SHA}"
             exit 1
           fi
+
+          TAG="vantry-v${VERSION}"
           {
             echo "tag=${TAG}"
             echo "version=${VERSION}"
@@ -97,10 +118,11 @@ jobs:
     with:
       ref: ${{ needs.resolve.outputs.sha }}
 
-  # Item 8 da Sprint 2C: uma release é imutável. Falha ANTES de gastar tempo
-  # de build se qualquer uma das três tags já existir no GHCR — nunca
-  # sobrescreve 1.0.0/1.0.1/etc. Roda antes dos builds (fail fast), não só
-  # antes do push.
+  # Item 8 da Sprint 2C: uma release é imutável. Falha ANTES de gastar tempo de
+  # build se qualquer uma das três tags já existir no GHCR — nunca sobrescreve
+  # 1.0.0/1.0.1/etc. Roda antes dos builds (fail fast), não só antes do push.
+  # Também cobre idempotência de rerun (item 15): reexecutar este workflow para
+  # uma versão já publicada falha aqui, de forma clara, em vez de sobrescrever.
   check-immutability:
     name: Verify tags don't already exist (immutability)
     needs: resolve
@@ -128,12 +150,9 @@ jobs:
             echo "OK: ${IMAGE}:${VERSION} ainda não existe — livre para publicar."
           done
 
-  # --- Fase de build (SEM push) — valida que os TRÊS Dockerfiles buildam
-  # antes de qualquer push ser tentado (item 17: minimiza a janela de risco
-  # de publicação parcial — a causa mais comum de falha, erro de build/
-  # compilação, nunca chega a publicar nada nesse desenho). O cache
-  # (type=gha) é reaproveitado no job "publish" abaixo: o rebuild lá é cache
-  # hit, não repete o trabalho de verdade.
+  # --- Fase de build (SEM push) — valida que os TRÊS Dockerfiles buildam antes
+  # de qualquer push ser tentado (item 17: minimiza a janela de risco de
+  # publicação parcial). O cache (type=gha) é reaproveitado no job "publish".
 
   build-backend:
     name: Build backend (validate, no push)
@@ -168,8 +187,6 @@ jobs:
         with:
           ref: ${{ needs.resolve.outputs.sha }}
 
-      # Mesma validação de Variables já existente em publish-images.yml —
-      # reaproveitada aqui, não reinventada (item 13 da Sprint 2C).
       - name: Validate required GitHub Actions Variables
         run: |
           missing=()
@@ -200,9 +217,6 @@ jobs:
 
   build-caddy:
     name: Build caddy (validate, no push)
-    # Deliberadamente sem ci-backend/ci-frontend — mesmo raciocínio já
-    # documentado em publish-images.yml: caddy não tem código de
-    # aplicação/testes próprios, só o próprio build precisa passar.
     needs: [resolve, check-immutability]
     runs-on: ubuntu-latest
     steps:
@@ -224,9 +238,7 @@ jobs:
           cache-from: type=gha,scope=caddy
           cache-to: type=gha,mode=max,scope=caddy
 
-  # --- Fase de publicação — só roda se os TRÊS builds acima já tiverem
-  # validado com sucesso (needs). Reaproveita o cache type=gha (cache hit,
-  # não reconstrói de verdade) e então publica de fato.
+  # --- Fase de publicação — só roda se os TRÊS builds acima já validaram.
   publish:
     name: Publish images + release manifest
     needs: [resolve, build-backend, build-frontend, build-caddy]
@@ -238,6 +250,7 @@ jobs:
       backend-digest: ${{ steps.build-backend.outputs.digest }}
       frontend-digest: ${{ steps.build-frontend.outputs.digest }}
       caddy-digest: ${{ steps.build-caddy.outputs.digest }}
+      created-at: ${{ steps.manifest.outputs.created-at }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -254,7 +267,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # --- backend ---
       - name: Docker metadata — backend
         id: meta-backend
         uses: docker/metadata-action@v5
@@ -280,7 +292,6 @@ jobs:
           cache-from: type=gha,scope=backend
           cache-to: type=gha,mode=max,scope=backend
 
-      # --- frontend ---
       - name: Docker metadata — frontend
         id: meta-frontend
         uses: docker/metadata-action@v5
@@ -310,7 +321,6 @@ jobs:
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
 
-      # --- caddy ---
       - name: Docker metadata — caddy
         id: meta-caddy
         uses: docker/metadata-action@v5
@@ -336,37 +346,30 @@ jobs:
           cache-from: type=gha,scope=caddy
           cache-to: type=gha,mode=max,scope=caddy
 
-      # Item 17 — se chegamos até aqui e uma das três falhou, as anteriores
-      # já foram publicadas e não há como desfazer isso com segurança (ver
-      # DT-013 §Failure Strategy). Este passo só roda em falha e deixa isso
-      # explícito no log/summary, sem tentar apagar/reutilizar nada
-      # automaticamente.
+      # Item 16 — se chegamos até aqui e uma das três falhou, as anteriores já
+      # foram publicadas e não há como desfazer isso com segurança. Este passo
+      # só roda em falha e marca a release como contaminada no log/summary —
+      # nunca tenta limpar/reusar automaticamente.
       - name: Partial publish warning (only runs on failure)
         if: failure()
         run: |
-          echo "::warning::Publicação da release ${{ needs.resolve.outputs.tag }} FALHOU no meio do processo. Verifique manualmente no GHCR quais das três imagens (backend/frontend/caddy) foram de fato publicadas com a tag ${{ needs.resolve.outputs.version }}. NUNCA reutilize esta mesma versão — corrija a causa raiz e publique a PRÓXIMA versão (ex.: um PATCH)."
-          echo "### ⚠️ Publicação parcial — ${{ needs.resolve.outputs.tag }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "Verifique manualmente quais imagens foram publicadas no GHCR antes de decidir os próximos passos. Esta versão (${{ needs.resolve.outputs.version }}) nunca deve ser reutilizada — publique a próxima." >> "$GITHUB_STEP_SUMMARY"
+          echo "::warning::Publicação da release ${{ needs.resolve.outputs.tag }} FALHOU no meio do processo. Verifique manualmente no GHCR quais das três imagens (backend/frontend/caddy) foram de fato publicadas com a tag ${{ needs.resolve.outputs.version }}. Esta versão está CONTAMINADA — NUNCA reutilize-a. Corrija a causa raiz e publique a PRÓXIMA versão (ex.: um PATCH)."
+          echo "### ⚠️ Publicação parcial — ${{ needs.resolve.outputs.tag }} CONTAMINADA" >> "$GITHUB_STEP_SUMMARY"
+          echo "Verifique manualmente quais imagens foram publicadas no GHCR. Esta versão (${{ needs.resolve.outputs.version }}) nunca deve ser reutilizada — publique a próxima." >> "$GITHUB_STEP_SUMMARY"
 
-      # --- Release Manifest (schema platform-ops/v1 — ver docs/design/DT-013) ---
-      #
-      # environment: "production" está fixo aqui porque hoje só existe um
-      # ambiente Vantry no platform-ops. Se/quando existirem outros
-      # ambientes, este valor deixa de fazer sentido como constante — ver
-      # nota em DT-013 §10. O manifest gerado aqui NÃO é enviado ao
-      # platform-ops nesta sprint (isso é Sprint 2C.1) — apenas gerado e
-      # anexado a esta execução/release.
       - name: Generate release-manifest.yml
+        id: manifest
         run: |
           set -euo pipefail
           CREATED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "created-at=${CREATED_AT}" >> "$GITHUB_OUTPUT"
           cat > release-manifest.yml <<EOF
           apiVersion: platform-ops/v1
           kind: Release
 
           metadata:
-            application: vantry
-            environment: production
+            application: ${{ env.APPLICATION }}
+            environment: ${{ env.APP_ENVIRONMENT }}
 
           release:
             version: "${{ needs.resolve.outputs.version }}"
@@ -389,12 +392,6 @@ jobs:
           EOF
           cat release-manifest.yml
 
-      # Estratégia dupla e deliberada (item 10/11 da Sprint 2C — ver DT-013):
-      # artifact do Actions (inspecionável a partir da própria execução do
-      # workflow, útil para debugging, expira com a política padrão de
-      # retenção) E asset anexado à GitHub Release (localização durável,
-      # descoberta natural por quem olha a release — "Vantry 1.2.0" — sem
-      # precisar achar a execução do workflow que a gerou).
       - name: Upload release-manifest.yml as workflow artifact
         uses: actions/upload-artifact@v4
         with:
@@ -423,6 +420,161 @@ jobs:
             echo "Source commit: \`${{ needs.resolve.outputs.sha }}\`"
             echo ""
             echo "\`release-manifest.yml\` anexado à [GitHub Release](${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ needs.resolve.outputs.tag }}) e disponível como artifact desta execução."
-            echo ""
-            echo "**Nesta sprint, nenhum PR é aberto no platform-ops** — isso fica para a Sprint 2C.1."
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # Item 12 da Sprint 2C.1: gate de produção. Abre (ou confirma que já existe,
+  # de forma idempotente) uma PR no platform-ops atualizando
+  # apps/vantry/production/release.yml com os valores reais desta release —
+  # aprovação humana dessa PR é o único caminho até produção (deploy-production.yml
+  # continua workflow_dispatch manual no platform-ops, inalterado).
+  promote-platform-ops:
+    name: Open promotion PR in platform-ops
+    needs: [resolve, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    concurrency:
+      # Nunca duas promoções simultâneas do mesmo app/ambiente no platform-ops
+      # (item 17), independente de quantas releases diferentes de vantry
+      # estejam em voo (o group não inclui a versão, deliberadamente).
+      # Valor fixo (não via `env.*`) porque `concurrency` não tem acesso ao
+      # contexto `env` no nível de job — este workflow é específico do vantry.
+      group: promote-platform-ops-vantry-production
+      cancel-in-progress: false
+    steps:
+      - name: Verify PLATFORM_OPS_TOKEN is configured
+        run: |
+          if [[ -z "${TOKEN}" ]]; then
+            echo "::error::secrets.PLATFORM_OPS_TOKEN não está configurado neste repositório. Este token é necessário para abrir a PR de promoção no platform-ops (contents:write + pull-requests:write, restrito ao repositório ${{ env.PLATFORM_OPS_REPO }}). Ver docs/design/DT-013-release-pipeline.md § Autenticação cross-repo e platform-ops/docs/runbooks/setup-platform-ops-token.md para o procedimento de setup manual."
+            exit 1
+          fi
+        env:
+          TOKEN: ${{ secrets.PLATFORM_OPS_TOKEN }}
+
+      - name: Checkout platform-ops
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.PLATFORM_OPS_REPO }}
+          token: ${{ secrets.PLATFORM_OPS_TOKEN }}
+          path: platform-ops
+          fetch-depth: 0
+
+      # Idempotência (item 15): se a branch/PR de promoção para esta versão já
+      # existir (rerun deste workflow, ou re-dispatch manual), não duplica —
+      # apenas reporta e encerra com sucesso.
+      - name: Check for existing promotion branch/PR (idempotency)
+        id: existing
+        working-directory: platform-ops
+        env:
+          GH_TOKEN: ${{ secrets.PLATFORM_OPS_TOKEN }}
+        run: |
+          set -euo pipefail
+          BRANCH="promote/${{ env.APPLICATION }}-${{ needs.resolve.outputs.version }}"
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::Branch ${BRANCH} já existe em ${{ env.PLATFORM_OPS_REPO }} — promoção para ${{ needs.resolve.outputs.version }} já foi iniciada anteriormente. Nenhuma PR duplicada será criada. Verifique manualmente: https://github.com/${{ env.PLATFORM_OPS_REPO }}/pulls?q=head:${BRANCH}"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "branch=${BRANCH}" >> "$GITHUB_OUTPUT"
+
+      - name: Read previous release.yml (if any)
+        if: steps.existing.outputs.exists == 'false'
+        id: previous
+        working-directory: platform-ops
+        run: |
+          set -euo pipefail
+          FILE="apps/${{ env.APPLICATION }}/${{ env.APP_ENVIRONMENT }}/release.yml"
+          if [[ -f "$FILE" ]]; then
+            PREV="$(grep -m1 '^\s*version:' "$FILE" | sed -E 's/.*version:\s*"?([0-9]+\.[0-9]+\.[0-9]+)"?.*/\1/')"
+            echo "version=${PREV}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=(nenhuma — primeira promoção)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Write apps/vantry/production/release.yml
+        if: steps.existing.outputs.exists == 'false'
+        working-directory: platform-ops
+        run: |
+          set -euo pipefail
+          FILE="apps/${{ env.APPLICATION }}/${{ env.APP_ENVIRONMENT }}/release.yml"
+          mkdir -p "$(dirname "$FILE")"
+          cat > "$FILE" <<EOF
+          apiVersion: platform-ops/v1
+          kind: Release
+
+          metadata:
+            application: ${{ env.APPLICATION }}
+            environment: ${{ env.APP_ENVIRONMENT }}
+
+          release:
+            version: "${{ needs.resolve.outputs.version }}"
+            sourceCommit: "${{ needs.resolve.outputs.sha }}"
+            createdAt: "${{ needs.publish.outputs.created-at }}"
+
+          components:
+            backend:
+              image: ${{ env.BACKEND_IMAGE }}
+              tag: "${{ needs.resolve.outputs.version }}"
+              digest: "${{ needs.publish.outputs.backend-digest }}"
+            frontend:
+              image: ${{ env.FRONTEND_IMAGE }}
+              tag: "${{ needs.resolve.outputs.version }}"
+              digest: "${{ needs.publish.outputs.frontend-digest }}"
+            caddy:
+              image: ${{ env.CADDY_IMAGE }}
+              tag: "${{ needs.resolve.outputs.version }}"
+              digest: "${{ needs.publish.outputs.caddy-digest }}"
+          EOF
+          cat "$FILE"
+
+      - name: Commit, push and open PR
+        if: steps.existing.outputs.exists == 'false'
+        working-directory: platform-ops
+        env:
+          GH_TOKEN: ${{ secrets.PLATFORM_OPS_TOKEN }}
+          BRANCH: ${{ steps.existing.outputs.branch }}
+          PREVIOUS_VERSION: ${{ steps.previous.outputs.version }}
+          NEW_VERSION: ${{ needs.resolve.outputs.version }}
+          SOURCE_COMMIT: ${{ needs.resolve.outputs.sha }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add "apps/${{ env.APPLICATION }}/${{ env.APP_ENVIRONMENT }}/release.yml"
+          git commit -m "chore(${{ env.APPLICATION }}): promote ${NEW_VERSION} to ${{ env.APP_ENVIRONMENT }}"
+          git push origin "$BRANCH"
+
+          BODY=$(cat <<EOF
+          ## Promoção de release — ${{ env.APPLICATION }} (${{ env.APP_ENVIRONMENT }})
+
+          | | |
+          |---|---|
+          | Versão anterior | \`${PREVIOUS_VERSION}\` |
+          | **Nova versão** | **\`${NEW_VERSION}\`** |
+          | Source commit | [\`${SOURCE_COMMIT}\`](https://github.com/${{ github.repository }}/commit/${SOURCE_COMMIT}) |
+          | Release notes | https://github.com/${{ github.repository }}/releases/tag/vantry-v${NEW_VERSION} |
+
+          ### Digests
+
+          | Componente | Digest |
+          |---|---|
+          | backend | \`${{ needs.publish.outputs.backend-digest }}\` |
+          | frontend | \`${{ needs.publish.outputs.frontend-digest }}\` |
+          | caddy | \`${{ needs.publish.outputs.caddy-digest }}\` |
+
+          ---
+
+          Gerado automaticamente por [\`release-publish.yml\`](https://github.com/${{ github.repository }}/actions) em \`${{ github.repository }}\`, a partir da release [\`vantry-v${NEW_VERSION}\`](https://github.com/${{ github.repository }}/releases/tag/vantry-v${NEW_VERSION}).
+
+          **Mergear esta PR é o gate de produção.** Nenhum deploy acontece automaticamente ao mergear — isso continua exigindo \`workflow_dispatch\` manual de \`deploy-production.yml\` neste repositório, apontando para o novo \`release.yml\`.
+          EOF
+          )
+
+          gh pr create \
+            --repo "${{ env.PLATFORM_OPS_REPO }}" \
+            --base main \
+            --head "$BRANCH" \
+            --title "chore(${{ env.APPLICATION }}): promote ${NEW_VERSION} to ${{ env.APP_ENVIRONMENT }}" \
+            --body "$BODY"

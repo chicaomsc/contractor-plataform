@@ -116,15 +116,27 @@ caddy) só são publicadas depois de `backend-ci.yml`/`frontend-ci.yml` passarem
 `publish-images.yml` os chama como workflows reutilizáveis e nunca publica se
 qualquer um falhar (RR-08).
 
-**Releases SemVer (Sprint 2C):** além do caminho técnico acima (tags por SHA), o repositório
-agora também publica releases versionadas (`1.2.0`, não só `:<sha>`) via Release Please —
-ver [CONTRIBUTING.md § Fluxo de release](../../CONTRIBUTING.md#fluxo-de-release) para o processo
-e [DT-013](../design/DT-013-release-pipeline.md) para o detalhamento técnico. **O deploy manual
+**Releases SemVer (Sprint 2C, revisado 2C.1):** além do caminho técnico acima (tags por SHA), o
+repositório também publica releases versionadas (`1.2.0`, não só `:<sha>`), automaticamente, a
+partir de um merge normal em `main` — via semantic-release, sem Release PR — ver
+[CONTRIBUTING.md § Fluxo de release](../../CONTRIBUTING.md#fluxo-de-release) para o processo e
+[DT-013](../design/DT-013-release-pipeline.md) para o detalhamento técnico. **O deploy manual
 descrito nas seções 11/13 abaixo continua inalterado** — usa `APP_VERSION` (ou, opcionalmente,
-`BACKEND_VERSION`/`FRONTEND_VERSION`/`CADDY_VERSION`) com o valor que o operador escolher, agora
-podendo ser um SemVer publicado (`1.2.0`) em vez de um SHA, se preferir. Nenhuma automação de
-deploy a partir de uma release foi criada nesta sprint — isso é escopo de sprint futura, do lado
-do `platform-ops`.
+`BACKEND_VERSION`/`FRONTEND_VERSION`/`CADDY_VERSION`) com o valor que o operador escolher.
+
+**Promoção automática para produção (Sprint 2C.1):** cada release SemVer publicada aqui abre
+automaticamente uma Pull Request no repositório `platform-ops`
+(`apps/vantry/production/release.yml`) — a aprovação e o merge dessa PR (fora deste repositório)
+é o gate real de produção. Mergear essa PR **não** dispara deploy sozinho — `deploy-production.yml`
+(em `platform-ops`) continua exigindo `workflow_dispatch` manual, exatamente como hoje. Requer
+`secrets.PLATFORM_OPS_TOKEN` configurado neste repositório — procedimento de setup:
+`platform-ops/docs/runbooks/setup-platform-ops-token.md`.
+
+**Estado real hoje (2026-08-23):** `vantry-v1.0.0` existe como tag/GitHub Release, mas nunca foi
+promovida — `apps/vantry/production/release.yml` não existe em `platform-ops`, e produção continua
+executando o contrato legado `versions.env` (SHA `adbfe3d3451ed372bd55308bbe977dec2d83ed35`). Ver
+[DT-013 § Estado real da versão 1.0.0](../design/DT-013-release-pipeline.md#estado-real-da-versão-100--classificação-explícita)
+para a classificação completa.
 
 ## 7. Startup
 
