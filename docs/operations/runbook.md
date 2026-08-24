@@ -116,6 +116,16 @@ caddy) só são publicadas depois de `backend-ci.yml`/`frontend-ci.yml` passarem
 `publish-images.yml` os chama como workflows reutilizáveis e nunca publica se
 qualquer um falhar (RR-08).
 
+**Releases SemVer (Sprint 2C):** além do caminho técnico acima (tags por SHA), o repositório
+agora também publica releases versionadas (`1.2.0`, não só `:<sha>`) via Release Please —
+ver [CONTRIBUTING.md § Fluxo de release](../../CONTRIBUTING.md#fluxo-de-release) para o processo
+e [DT-013](../design/DT-013-release-pipeline.md) para o detalhamento técnico. **O deploy manual
+descrito nas seções 11/13 abaixo continua inalterado** — usa `APP_VERSION` (ou, opcionalmente,
+`BACKEND_VERSION`/`FRONTEND_VERSION`/`CADDY_VERSION`) com o valor que o operador escolher, agora
+podendo ser um SemVer publicado (`1.2.0`) em vez de um SHA, se preferir. Nenhuma automação de
+deploy a partir de uma release foi criada nesta sprint — isso é escopo de sprint futura, do lado
+do `platform-ops`.
+
 ## 7. Startup
 
 ```bash

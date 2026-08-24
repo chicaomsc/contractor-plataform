@@ -1,0 +1,79 @@
+name: release-please
+
+# Release management (Sprint 2C — ver docs/design/DT-013-release-pipeline.md).
+# Responsabilidade ÚNICA deste workflow: manter o Release PR, calcular a
+# próxima versão SemVer a partir de Conventional Commits, gerar o CHANGELOG,
+# e — quando o Release PR é mergeado — criar a tag Git e a GitHub Release.
+# NUNCA builda, testa ou publica nenhuma imagem — isso é responsabilidade
+# exclusiva de release-publish.yml (separação deliberada, ver DT-013 §5).
+#
+# release-type "simple" + um único pacote em "." (release-please-config.json)
+# — UMA release de produto (Vantry), nunca versões independentes por
+# componente (backend/frontend/caddy). Nenhum arquivo de versão do
+# repositório (frontend/package.json, backend/pom.xml) é tocado por este
+# workflow — release-please "simple" não bumpa version files, só o manifest
+# interno (.release-please-manifest.json) e o CHANGELOG.
+
+on:
+  push:
+    branches:
+      - main
+
+# Evita duas execuções concorrentes mexendo no mesmo Release PR ao mesmo
+# tempo (ex.: dois pushes em main muito próximos).
+concurrency:
+  group: release-please
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  release-please:
+    name: Manage Release PR / cut release
+    runs-on: ubuntu-latest
+    # Permissions mínimas para o que este job realmente faz: contents:write
+    # (criar/atualizar o Release PR, criar tag+GitHub Release no merge),
+    # pull-requests:write (criar/atualizar o Release PR), actions:write
+    # (SOMENTE para o passo de dispatch abaixo — ver comentário lá).
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    steps:
+      - name: Release Please
+        id: release
+        uses: googleapis/release-please-action@v4
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          # Token não especificado deliberadamente — o próprio GITHUB_TOKEN
+          # do job é suficiente para tudo que release-please-action precisa
+          # fazer aqui (criar PR, criar tag, criar Release). Ver o passo
+          # seguinte para a única limitação real disso (item 15 da Sprint 2C).
+
+      # Limitação documentada do GitHub (não específica do release-please):
+      # eventos criados usando o GITHUB_TOKEN padrão (aqui: a criação da tag
+      # + GitHub Release, quando o Release PR é mergeado) NÃO disparam outros
+      # workflows automaticamente — proteção anti-recursão. Isso significa
+      # que release-publish.yml, mesmo escutando `release: published`, NUNCA
+      # dispararia sozinho a partir da release criada aqui.
+      #
+      # Alternativa descartada: adicionar um Personal Access Token dedicado
+      # só para contornar isso — rejeitado por instrução explícita da Sprint
+      # 2C ("não adicionar PAT se GITHUB_TOKEN for suficiente"). A exceção
+      # documentada pelo próprio GitHub é justamente `workflow_dispatch`/
+      # `repository_dispatch` — esses DOIS eventos são deliberadamente
+      # isentos da restrição, desde que o token tenha `actions: write`. É
+      # exatamente o que este passo faz: dispara release-publish.yml
+      # explicitamente, só quando uma release de verdade foi criada,
+      # continuando a usar somente o GITHUB_TOKEN do job.
+      - name: Dispatch release-publish.yml (contorna a limitação acima)
+        if: ${{ steps.release.outputs.release_created == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run release-publish.yml \
+            --ref main \
+            -f tag="${{ steps.release.outputs.tag_name }}"
