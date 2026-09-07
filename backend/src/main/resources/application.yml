@@ -41,8 +41,10 @@ spring:
 app:
   jwt:
     secret: ${JWT_SECRET:dev-only-secret-at-least-32-chars-change-in-prod!}
-    access-token-ttl: 900       # 15 minutes (seconds)
-    refresh-token-ttl: 2592000  # 30 days (seconds)
+    # Defaults unchanged (DT-012) — now overridable per-environment without a rebuild,
+    # same relaxed-binding pattern as every other app.* property in this file.
+    access-token-ttl: ${ACCESS_TOKEN_TTL:900}       # 15 minutes (seconds)
+    refresh-token-ttl: ${REFRESH_TOKEN_TTL:2592000} # 30 days (seconds)
     # Required and checked on every parse (Sprint 11B.6D) — a token minted for a
     # different deployment/environment is rejected even if it has a valid signature.
     issuer: ${JWT_ISSUER:contractor-platform}
@@ -80,6 +82,13 @@ app:
     token-ttl: ${PASSWORD_RESET_TOKEN_TTL:1800}
     # 3 minutes — see DT-011A.10 §7.
     request-cooldown: ${PASSWORD_RESET_REQUEST_COOLDOWN:180}
+  session:
+    # DT-012 (Session Lifecycle, Phase A) — 8 hours. A chain of rotated refresh tokens
+    # may not extend a single login past this many seconds from the original
+    # login/register/invite-accept, regardless of how often it's refreshed or how much
+    # TTL any individual refresh token has left. See RefreshToken#sessionStartedAt /
+    # AuthService#refresh.
+    absolute-lifetime-seconds: ${SESSION_ABSOLUTE_LIFETIME_SECONDS:28800}
   email:
     # Off by default everywhere (local/test/a freshly deployed prod that hasn't
     # configured Resend yet) — password reset keeps working via the admin-assisted

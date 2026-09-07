@@ -1,12 +1,34 @@
 import { getPublicEnv } from "@/lib/env/public-env";
+import {
+  expireSession,
+  hasSessionExpired,
+  notifySessionRefreshed,
+} from "@/features/auth/api/session-lifecycle";
+import {
+  getRefreshToken,
+  persistAuthSession,
+} from "@/features/auth/api/auth-storage";
+import type { AuthResponse } from "@/features/auth/types/auth";
 import { withApiPrefix } from "./api-path";
 import { ApiError, type ApiErrorBody } from "./errors";
 
 const DEFAULT_TIMEOUT_MS = 8000;
+const AUTH_REFRESH_PATH = "/auth/refresh";
+const PUBLIC_AUTH_PATHS = new Set([
+  "/auth/login",
+  AUTH_REFRESH_PATH,
+  "/auth/password/forgot",
+  "/auth/password/reset",
+  "/auth/invites/accept",
+]);
+
+let refreshPromise: Promise<AuthResponse> | null = null;
 
 type AdminRequestOptions = RequestInit & {
   accessToken?: string | null;
   timeoutMs?: number;
+  skipAuthRefresh?: boolean;
+  hasRetriedAfterRefresh?: boolean;
 };
 
 function composeAbortSignal(
@@ -41,6 +63,88 @@ async function parseErrorBody(
   } catch {
     return null;
   }
+}
+
+function createSessionExpiredError() {
+  return new ApiError("Sessão expirada. Inicie sessão novamente.", 401);
+}
+
+function getErrorMessage(status: number) {
+  return status === 401
+    ? "Sessão expirada. Inicie sessão novamente."
+    : "Não foi possível concluir a operação.";
+}
+
+function isAuthResponse(value: unknown): value is AuthResponse {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as Partial<AuthResponse>;
+  return (
+    typeof candidate.accessToken === "string" &&
+    typeof candidate.refreshToken === "string" &&
+    Boolean(candidate.user) &&
+    "company" in candidate
+  );
+}
+
+function shouldSkipAuthRefresh(path: string, options: AdminRequestOptions) {
+  return (
+    options.skipAuthRefresh === true ||
+    PUBLIC_AUTH_PATHS.has(path) ||
+    !options.accessToken
+  );
+}
+
+async function fetchRefreshSession(
+  refreshToken: string,
+): Promise<AuthResponse> {
+  const response = await adminApiRequest<unknown>(AUTH_REFRESH_PATH, {
+    method: "POST",
+    body: JSON.stringify({ refreshToken }),
+    skipAuthRefresh: true,
+  });
+
+  if (!isAuthResponse(response)) {
+    throw new ApiError(
+      "Não foi possível renovar a sessão.",
+      0,
+      null,
+      "invalid-response",
+    );
+  }
+
+  persistAuthSession(response);
+  notifySessionRefreshed(response);
+  return response;
+}
+
+function refreshSessionSingleFlight(): Promise<AuthResponse> {
+  if (hasSessionExpired()) {
+    return Promise.reject(createSessionExpiredError());
+  }
+
+  if (refreshPromise) {
+    return refreshPromise;
+  }
+
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) {
+    expireSession();
+    return Promise.reject(createSessionExpiredError());
+  }
+
+  refreshPromise = fetchRefreshSession(refreshToken)
+    .catch((error) => {
+      expireSession();
+      throw error instanceof ApiError ? error : createSessionExpiredError();
+    })
+    .finally(() => {
+      refreshPromise = null;
+    });
+
+  return refreshPromise;
 }
 
 export type AdminBlobResult = {
@@ -100,19 +204,37 @@ export async function adminApiRequestBlob(
       },
     );
 
+    if (
+      response.status === 401 &&
+      !options.hasRetriedAfterRefresh &&
+      !shouldSkipAuthRefresh(path, options)
+    ) {
+      const auth = await refreshSessionSingleFlight();
+      return adminApiRequestBlob(path, {
+        ...options,
+        accessToken: auth.accessToken,
+        hasRetriedAfterRefresh: true,
+      });
+    }
+
+    if (response.status === 401 && options.hasRetriedAfterRefresh) {
+      expireSession();
+    }
+
     if (!response.ok) {
       const body = await parseErrorBody(response);
       throw new ApiError(
-        response.status === 401
-          ? "Sessão expirada. Inicie sessão novamente."
-          : "Não foi possível concluir a operação.",
+        getErrorMessage(response.status),
         response.status,
         body,
       );
     }
 
     const blob = await response.blob();
-    return { blob, filename: extractFilename(response.headers.get("Content-Disposition")) };
+    return {
+      blob,
+      filename: extractFilename(response.headers.get("Content-Disposition")),
+    };
   } catch (error) {
     if (error instanceof ApiError) {
       throw error;
@@ -175,12 +297,27 @@ export async function adminApiRequest<T>(
       },
     );
 
+    if (
+      response.status === 401 &&
+      !options.hasRetriedAfterRefresh &&
+      !shouldSkipAuthRefresh(path, options)
+    ) {
+      const auth = await refreshSessionSingleFlight();
+      return adminApiRequest<T>(path, {
+        ...options,
+        accessToken: auth.accessToken,
+        hasRetriedAfterRefresh: true,
+      });
+    }
+
+    if (response.status === 401 && options.hasRetriedAfterRefresh) {
+      expireSession();
+    }
+
     if (!response.ok) {
       const body = await parseErrorBody(response);
       throw new ApiError(
-        response.status === 401
-          ? "Sessão expirada. Inicie sessão novamente."
-          : "Não foi possível concluir a operação.",
+        getErrorMessage(response.status),
         response.status,
         body,
       );

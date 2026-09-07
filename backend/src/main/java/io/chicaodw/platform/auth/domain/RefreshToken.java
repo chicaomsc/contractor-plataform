@@ -35,4 +35,16 @@ public class RefreshToken extends BaseEntity {
 
     @Column(nullable = false)
     private boolean revoked = false;
+
+    /**
+     * Timestamp of the ORIGINAL login/register/invite-accept that started this session
+     * — copied forward unchanged onto every token a rotation issues (never recomputed on
+     * refresh). This is what lets {@code AuthService.refresh()} enforce an absolute
+     * session lifetime (DT-012, {@code app.session.absolute-lifetime-seconds}) on top of
+     * this token's own {@link #expiresAt}, independent of how many times it has been
+     * rotated. See migration V15 for the backfill strategy applied to rows that predate
+     * this column.
+     */
+    @Column(name = "session_started_at", nullable = false)
+    private Instant sessionStartedAt;
 }
