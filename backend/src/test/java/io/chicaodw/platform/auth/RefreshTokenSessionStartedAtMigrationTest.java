@@ -13,6 +13,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -44,7 +45,20 @@ class RefreshTokenSessionStartedAtMigrationTest {
         UUID tokenId = UUID.randomUUID();
         // Deliberately not "now" — a pre-existing row's own created_at is what the
         // migration's backfill must copy onto the new column.
-        Instant createdAt = Instant.now().minusSeconds(3600);
+        //
+        // Truncated to microseconds: Postgres' timestamptz has a fixed 6-digit
+        // (microsecond) fractional-seconds precision and ROUNDS on storage — confirmed
+        // directly against a real postgres:17-alpine instance (information_schema
+        // reports datetime_precision = 6). Instant.now() carries nanosecond precision,
+        // so comparing an untouched Instant.now() value against what a round-trip
+        // through the database produced was flaky: whenever the nanosecond remainder
+        // happened to round the 6th fractional digit up (e.g. .534431966 -> .534432),
+        // the raw in-memory value and the value read back after V15's backfill would
+        // legitimately differ, even though the migration behaved correctly. Truncating
+        // here — once, before the value ever reaches the database — makes the asserted
+        // value bit-for-bit identical to what Postgres will actually persist and return,
+        // independent of the wall-clock nanosecond noise on whatever machine runs this.
+        Instant createdAt = Instant.now().minusSeconds(3600).truncatedTo(ChronoUnit.MICROS);
 
         try (Connection conn = connect()) {
             insertMinimalSuperAdminUser(conn, userId);
