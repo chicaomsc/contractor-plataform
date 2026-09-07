@@ -14,6 +14,7 @@ import io.chicaodw.platform.auth.infrastructure.persistence.RefreshTokenReposito
 import io.chicaodw.platform.auth.infrastructure.persistence.UserRepository;
 import io.chicaodw.platform.auth.infrastructure.security.JwtProperties;
 import io.chicaodw.platform.auth.infrastructure.security.PlatformUserDetails;
+import io.chicaodw.platform.auth.infrastructure.security.SessionProperties;
 import io.chicaodw.platform.common.exception.BusinessRuleException;
 import io.chicaodw.platform.common.exception.ConflictException;
 import io.chicaodw.platform.common.exception.ResourceNotFoundException;
@@ -54,6 +55,7 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
     private final AuthMapper authMapper;
     private final JwtProperties jwtProperties;
+    private final SessionProperties sessionProperties;
 
     // ── Register ─────────────────────────────────────────────────────────────
 
@@ -106,7 +108,8 @@ public class AuthService {
         user = userRepository.save(user);
 
         String accessToken  = jwtService.generateAccessToken(user);
-        IssuedRefreshToken refresh = issueRefreshToken(user.getId());
+        // A brand-new session — its absolute lifetime clock (DT-012) starts now.
+        IssuedRefreshToken refresh = issueRefreshToken(user.getId(), Instant.now());
 
         return new AuthResponse(
                 accessToken,
@@ -132,7 +135,8 @@ public class AuthService {
         Company company = loadCompanyAndAssertActive(user);
 
         String accessToken  = jwtService.generateAccessToken(user);
-        IssuedRefreshToken refresh = issueRefreshToken(user.getId());
+        // A brand-new session — its absolute lifetime clock (DT-012) starts now.
+        IssuedRefreshToken refresh = issueRefreshToken(user.getId(), Instant.now());
 
         return new AuthResponse(
                 accessToken,
@@ -151,12 +155,23 @@ public class AuthService {
      * via an atomic conditional UPDATE, same pattern as {@code
      * PasswordResetTokenService}/{@code InviteService.acceptInvite}. At most one
      * concurrent caller ever observes {@code markRevokedIfStillValid} return 1.
+     *
+     * <p>DT-012 — the same atomic UPDATE also enforces the absolute session lifetime
+     * ({@code sessionCutoff}, below): a session started more than {@code
+     * app.session.absolute-lifetime-seconds} ago can no longer be extended by any
+     * refresh, no matter how recently that specific refresh token was issued or how
+     * much of its own TTL remains. Deliberately the same uniform "invalid or expired"
+     * error as every other refresh failure — the caller must not be able to tell
+     * absolute-lifetime expiry apart from a merely-expired or already-used token (no
+     * enumeration of session internals, per DT-012).
      */
     public AuthResponse refresh(String tokenValue) {
         RefreshToken existing = refreshTokenRepository.findByTokenHash(TokenHasher.sha256Hex(tokenValue))
                 .orElseThrow(() -> new BusinessRuleException("Refresh token is invalid or expired"));
 
-        int updated = refreshTokenRepository.markRevokedIfStillValid(existing.getId(), Instant.now());
+        Instant now = Instant.now();
+        Instant sessionCutoff = now.minusSeconds(sessionProperties.getAbsoluteLifetimeSeconds());
+        int updated = refreshTokenRepository.markRevokedIfStillValid(existing.getId(), now, sessionCutoff);
         if (updated == 0) {
             throw new BusinessRuleException("Refresh token is invalid or expired");
         }
@@ -171,7 +186,9 @@ public class AuthService {
         Company company = loadCompanyAndAssertActive(user);
 
         String accessToken  = jwtService.generateAccessToken(user);
-        IssuedRefreshToken newToken = issueRefreshToken(user.getId());
+        // Carries the ORIGINAL session's start forward unchanged — never resets it to
+        // `now`, or every rotation would silently reset the absolute lifetime clock too.
+        IssuedRefreshToken newToken = issueRefreshToken(user.getId(), existing.getSessionStartedAt());
 
         return new AuthResponse(
                 accessToken,
@@ -250,13 +267,20 @@ public class AuthService {
      * value is only ever available here, at issuance; only its hash is persisted. */
     private record IssuedRefreshToken(String rawToken, Instant expiresAt) {}
 
-    private IssuedRefreshToken issueRefreshToken(UUID userId) {
+    /**
+     * @param sessionStartedAt the absolute-lifetime clock's origin (DT-012) for this
+     *                         token — {@code Instant.now()} for a brand-new session
+     *                         (login/register/invite-accept), or the consumed token's
+     *                         own {@code sessionStartedAt} when rotating on refresh.
+     */
+    private IssuedRefreshToken issueRefreshToken(UUID userId, Instant sessionStartedAt) {
         String rawToken = UUID.randomUUID() + "-" + UUID.randomUUID();
 
         RefreshToken token = new RefreshToken();
         token.setUserId(userId);
         token.setTokenHash(TokenHasher.sha256Hex(rawToken));
         token.setExpiresAt(Instant.now().plusSeconds(jwtProperties.getRefreshTokenTtl()));
+        token.setSessionStartedAt(sessionStartedAt);
         refreshTokenRepository.save(token);
 
         return new IssuedRefreshToken(rawToken, token.getExpiresAt());

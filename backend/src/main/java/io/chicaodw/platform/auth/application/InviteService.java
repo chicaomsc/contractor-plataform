@@ -109,7 +109,9 @@ public class InviteService {
                 .orElseThrow(() -> new ResourceNotFoundException("Company", owner.getCompanyId()));
 
         String accessToken = jwtService.generateAccessToken(owner);
-        IssuedRefreshToken refresh = issueRefreshToken(owner.getId());
+        // Accepting an invite is the owner's first session — same as
+        // AuthService.login()/register(), its absolute lifetime clock (DT-012) starts now.
+        IssuedRefreshToken refresh = issueRefreshToken(owner.getId(), Instant.now());
 
         return new AuthResponse(
                 accessToken,
@@ -162,13 +164,16 @@ public class InviteService {
     /** Mirrors AuthService's own private record of the same name/shape — hash-only persistence. */
     private record IssuedRefreshToken(String rawToken, Instant expiresAt) {}
 
-    private IssuedRefreshToken issueRefreshToken(UUID userId) {
+    /** @param sessionStartedAt the absolute-lifetime clock's origin (DT-012) — see
+     *                          AuthService.issueRefreshToken for the full rationale. */
+    private IssuedRefreshToken issueRefreshToken(UUID userId, Instant sessionStartedAt) {
         String rawToken = UUID.randomUUID() + "-" + UUID.randomUUID();
 
         RefreshToken token = new RefreshToken();
         token.setUserId(userId);
         token.setTokenHash(TokenHasher.sha256Hex(rawToken));
         token.setExpiresAt(Instant.now().plusSeconds(jwtProperties.getRefreshTokenTtl()));
+        token.setSessionStartedAt(sessionStartedAt);
         refreshTokenRepository.save(token);
 
         return new IssuedRefreshToken(rawToken, token.getExpiresAt());
