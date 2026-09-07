@@ -79,6 +79,16 @@ class PublicApiIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void publicSite_allowsAlternateLocalDevPortOrigin() throws Exception {
+        // frontend/playwright.config.ts and a `npm run dev` started while 3000 is
+        // already taken both use 3001 — see SecurityConfig's default allowed-origins.
+        mockMvc.perform(get("/public/sites/{companySlug}", companySlug)
+                        .header("Origin", "http://localhost:3001"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:3001"));
+    }
+
+    @Test
     void publicSite_unknownSlug_returns404() throws Exception {
         mockMvc.perform(get("/public/sites/{companySlug}", "nonexistent-company-slug-xyz"))
                 .andExpect(status().isNotFound());

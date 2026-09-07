@@ -489,6 +489,31 @@ reescreve a URL imediatamente (`history.replaceState`) e nunca persiste o token
 em `localStorage`/`sessionStorage` — mesmo padrão já usado por
 `ResetPasswordPage`/`PasswordResetTokenService.buildResetLink`.
 
+**Recuperação de senha por e-mail (Resend) — nova nesta sprint:**
+`PasswordResetTokenService.forgotPassword` agora dispara `EmailService.
+sendPasswordResetEmail(recipient, resetLink, validity)` sempre que — e só quando —
+um token novo é de fato emitido (mesma condição que já populava `debugToken`/
+`debugResetLink` fora de `prod`). `EmailService` (`common/email`) é uma interface;
+`ResendEmailService` é a única implementação, chama `POST https://api.resend.com/
+emails` diretamente via `java.net.http.HttpClient` (sem SDK — ver DT-011A.10,
+notas de implementação). **Nunca lança exceção** — uma falha do Resend (4xx/5xx/
+timeout/erro de rede) é logada (`log.warn`, nunca o token/link/API key) e
+absorvida, sem alterar a resposta pública uniforme de `POST /auth/password/forgot`.
+
+- **`EMAIL_ENABLED=false` por padrão fora de `prod`** (local/test nunca precisam
+  disto — `ProductionReadinessValidator` só roda com profile `prod`).
+- **`EMAIL_ENABLED` é OBRIGATÓRIO (`true`) quando o profile é `prod`** —
+  hardening pós-revisão de go-live: a primeira versão desta feature permitia
+  subir produção com e-mail desligado, deixando a recuperação de senha sem
+  canal de entrega para um OWNER comum, silenciosamente. Corrigido: o boot
+  **falha** se `EMAIL_ENABLED` estiver ausente ou `false` em `prod`. Uma vez
+  `true`, `ProductionReadinessValidator` também exige `EMAIL_FROM`/
+  `RESEND_API_KEY` reais (não vazios, não um placeholder `CHANGE_ME`/
+  `example.com`) — falha o boot se qualquer um estiver ausente/inválido, em
+  vez de falhar silenciosamente no primeiro reset real.
+- **`debugToken`/`debugResetLink` continuam suprimidos em `prod`** independente
+  de `EMAIL_ENABLED` — nada nesta sprint relaxa essa proteção.
+
 **MFA:** não implementado — ver `DT-011B.2` (`SEC-AUTH-12`) para os pontos de
 extensão já identificados no código (emissão de token centralizada, `AuthResponse`
 não precisa mudar de formato, `UserStatus` já modela "não totalmente autenticado

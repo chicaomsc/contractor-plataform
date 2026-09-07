@@ -1,7 +1,15 @@
 "use client";
 
 import { zodResolver } from "@/features/dashboard/utils/zod-resolver";
-import { ArrowLeft, ExternalLink, KeyRound, Plus, RefreshCw, ShieldOff, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  ExternalLink,
+  KeyRound,
+  Plus,
+  RefreshCw,
+  ShieldOff,
+  Trash2,
+} from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
@@ -26,7 +34,12 @@ import {
   type AdminPasswordResetResponse,
   type OwnerInviteResponse,
 } from "../types/admin";
-import { AdminError, AdminLoading, StatusBadge, formatDate } from "./AdminPrimitives";
+import {
+  AdminError,
+  AdminLoading,
+  StatusBadge,
+  formatDate,
+} from "./AdminPrimitives";
 import { InviteLinkPanel } from "./InviteLinkPanel";
 import { PasswordResetLinkPanel } from "./PasswordResetLinkPanel";
 
@@ -75,7 +88,9 @@ export function CompanyDetailPage({ companyId }: { companyId: string }) {
       updateCompanyStatus(accessToken ?? "", companyId, status),
     onSuccess: refreshCompany,
     onError: (error) =>
-      setActionError(getErrorMessage(error, "Não foi possível atualizar status.")),
+      setActionError(
+        getErrorMessage(error, "Não foi possível atualizar status."),
+      ),
   });
 
   const inviteOwnerMutation = useMutation({
@@ -87,7 +102,9 @@ export function CompanyDetailPage({ companyId }: { companyId: string }) {
       refreshCompany();
     },
     onError: (error) =>
-      setActionError(getErrorMessage(error, "Não foi possível convidar owner.")),
+      setActionError(
+        getErrorMessage(error, "Não foi possível convidar owner."),
+      ),
   });
 
   const reissueMutation = useMutation({
@@ -98,7 +115,9 @@ export function CompanyDetailPage({ companyId }: { companyId: string }) {
       refreshCompany();
     },
     onError: (error) =>
-      setActionError(getErrorMessage(error, "Não foi possível gerar novo convite.")),
+      setActionError(
+        getErrorMessage(error, "Não foi possível gerar novo convite."),
+      ),
   });
 
   const revokeMutation = useMutation({
@@ -109,7 +128,9 @@ export function CompanyDetailPage({ companyId }: { companyId: string }) {
       refreshCompany();
     },
     onError: (error) =>
-      setActionError(getErrorMessage(error, "Não foi possível revogar convite.")),
+      setActionError(
+        getErrorMessage(error, "Não foi possível revogar convite."),
+      ),
   });
 
   const passwordResetMutation = useMutation({
@@ -119,14 +140,19 @@ export function CompanyDetailPage({ companyId }: { companyId: string }) {
       setPasswordResetResult(response);
     },
     onError: (error) =>
-      setActionError(getErrorMessage(error, "Não foi possível gerar link de recuperação.")),
+      setActionError(
+        getErrorMessage(error, "Não foi possível gerar link de recuperação."),
+      ),
   });
 
   if (query.isLoading) return <AdminLoading label="A carregar company" />;
   if (query.isError || !query.data) {
     return (
       <AdminError
-        message={getErrorMessage(query.error, "Não foi possível carregar company.")}
+        message={getErrorMessage(
+          query.error,
+          "Não foi possível carregar company.",
+        )}
       />
     );
   }
@@ -161,11 +187,14 @@ export function CompanyDetailPage({ companyId }: { companyId: string }) {
       <header className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
         <div>
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="m-0 font-display text-3xl font-bold">{company.name}</h1>
+            <h1 className="m-0 font-display text-3xl font-bold">
+              {company.name}
+            </h1>
             <StatusBadge status={company.status} />
           </div>
           <p className="m-0 mt-2 text-sm text-[var(--muted-foreground)]">
-            {company.slug} · {company.country ?? "-"} · criada em {formatDate(company.createdAt)}
+            {company.slug} · {company.country ?? "-"} · criada em{" "}
+            {formatDate(company.createdAt)}
           </p>
         </div>
         <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
@@ -192,7 +221,8 @@ export function CompanyDetailPage({ companyId }: { companyId: string }) {
 
       {company.status !== "ACTIVE" ? (
         <p className="m-0 text-sm font-semibold text-[var(--muted-foreground)]">
-          Esta Company está inativa; a landing pública pode retornar indisponível.
+          Esta Company está inativa; a landing pública pode retornar
+          indisponível.
         </p>
       ) : null}
 
@@ -200,19 +230,27 @@ export function CompanyDetailPage({ companyId }: { companyId: string }) {
 
       <section className="grid gap-4 border border-border bg-surface p-5 md:grid-cols-2 lg:grid-cols-4">
         <div>
-          <p className="m-0 text-xs font-bold uppercase text-[var(--muted-foreground)]">Nome comercial</p>
+          <p className="m-0 text-xs font-bold uppercase text-[var(--muted-foreground)]">
+            Nome comercial
+          </p>
           <p className="m-0 mt-1 font-semibold">{company.tradeName ?? "-"}</p>
         </div>
         <div>
-          <p className="m-0 text-xs font-bold uppercase text-[var(--muted-foreground)]">Email</p>
+          <p className="m-0 text-xs font-bold uppercase text-[var(--muted-foreground)]">
+            Email
+          </p>
           <p className="m-0 mt-1 font-semibold">{company.email ?? "-"}</p>
         </div>
         <div>
-          <p className="m-0 text-xs font-bold uppercase text-[var(--muted-foreground)]">Slug</p>
+          <p className="m-0 text-xs font-bold uppercase text-[var(--muted-foreground)]">
+            Slug
+          </p>
           <p className="m-0 mt-1 font-semibold">{company.slug}</p>
         </div>
         <div>
-          <p className="m-0 text-xs font-bold uppercase text-[var(--muted-foreground)]">Status</p>
+          <p className="m-0 text-xs font-bold uppercase text-[var(--muted-foreground)]">
+            Status
+          </p>
           <p className="m-0 mt-1 font-semibold">{company.status}</p>
         </div>
       </section>
@@ -266,7 +304,11 @@ export function CompanyDetailPage({ companyId }: { companyId: string }) {
                             size="sm"
                             disabled={reissueMutation.isPending}
                             onClick={() => {
-                              if (window.confirm("Gerar novo convite e revogar o link anterior?")) {
+                              if (
+                                window.confirm(
+                                  "Gerar novo convite e revogar o link anterior?",
+                                )
+                              ) {
                                 reissueMutation.mutate(owner.id);
                               }
                             }}
@@ -280,7 +322,11 @@ export function CompanyDetailPage({ companyId }: { companyId: string }) {
                             size="sm"
                             disabled={revokeMutation.isPending}
                             onClick={() => {
-                              if (window.confirm("Revogar o convite atual deste owner?")) {
+                              if (
+                                window.confirm(
+                                  "Revogar o convite atual deste owner?",
+                                )
+                              ) {
                                 revokeMutation.mutate(owner.id);
                               }
                             }}
@@ -298,7 +344,11 @@ export function CompanyDetailPage({ companyId }: { companyId: string }) {
                             disabled={passwordResetMutation.isPending}
                             onClick={() => {
                               setPasswordResetResult(null);
-                              if (window.confirm("Gerar um link de recuperação de password para este owner?")) {
+                              if (
+                                window.confirm(
+                                  "Gerar um link de recuperação de senha para este owner?",
+                                )
+                              ) {
                                 passwordResetMutation.mutate(owner.id);
                               }
                             }}
@@ -322,7 +372,9 @@ export function CompanyDetailPage({ companyId }: { companyId: string }) {
 
         <form
           className="space-y-4 border border-border bg-surface p-5"
-          onSubmit={handleSubmit((values) => inviteOwnerMutation.mutate(values))}
+          onSubmit={handleSubmit((values) =>
+            inviteOwnerMutation.mutate(values),
+          )}
           noValidate
         >
           <div>

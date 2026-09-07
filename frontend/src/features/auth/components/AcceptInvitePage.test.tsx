@@ -75,15 +75,12 @@ describe("AcceptInvitePage", () => {
 
     render(<AcceptInvitePage />);
 
-    await user.type(await screen.findByLabelText("Password"), "Password123");
-    await user.type(
-      screen.getByLabelText("Confirmar password"),
-      "Different123",
-    );
+    await user.type(await screen.findByLabelText("Senha"), "Password123");
+    await user.type(screen.getByLabelText("Confirmar senha"), "Different123");
     await user.click(screen.getByRole("button", { name: "Ativar conta" }));
 
     expect(
-      await screen.findByText("As passwords não coincidem."),
+      await screen.findByText("As senhas não coincidem."),
     ).toBeInTheDocument();
     expect(fetch).not.toHaveBeenCalled();
   });
@@ -94,8 +91,8 @@ describe("AcceptInvitePage", () => {
 
     render(<AcceptInvitePage />);
 
-    await user.type(await screen.findByLabelText("Password"), "short1");
-    await user.type(screen.getByLabelText("Confirmar password"), "short1");
+    await user.type(await screen.findByLabelText("Senha"), "short1");
+    await user.type(screen.getByLabelText("Confirmar senha"), "short1");
     await user.click(screen.getByRole("button", { name: "Ativar conta" }));
 
     expect(
@@ -123,11 +120,8 @@ describe("AcceptInvitePage", () => {
     });
 
     try {
-      await user.type(await screen.findByLabelText("Password"), "Password123");
-      await user.type(
-        screen.getByLabelText("Confirmar password"),
-        "Password123",
-      );
+      await user.type(await screen.findByLabelText("Senha"), "Password123");
+      await user.type(screen.getByLabelText("Confirmar senha"), "Password123");
       await user.click(screen.getByRole("button", { name: "Ativar conta" }));
 
       await waitFor(() => expect(fetchMock).toHaveBeenCalled());
@@ -135,9 +129,7 @@ describe("AcceptInvitePage", () => {
         token: "plain-invite-token",
         password: "Password123",
       });
-      await waitFor(() =>
-        expect(assignSpy).toHaveBeenCalledWith("/dashboard"),
-      );
+      await waitFor(() => expect(assignSpy).toHaveBeenCalledWith("/dashboard"));
     } finally {
       Object.defineProperty(window, "location", {
         configurable: true,
@@ -157,15 +149,14 @@ describe("AcceptInvitePage", () => {
 
     render(<AcceptInvitePage />);
 
-    await user.type(await screen.findByLabelText("Password"), "Password123");
-    await user.type(
-      screen.getByLabelText("Confirmar password"),
-      "Password123",
-    );
+    await user.type(await screen.findByLabelText("Senha"), "Password123");
+    await user.type(screen.getByLabelText("Confirmar senha"), "Password123");
     await user.click(screen.getByRole("button", { name: "Ativar conta" }));
 
     expect(
-      await screen.findByText("Este convite expirou, foi revogado ou já foi usado."),
+      await screen.findByText(
+        "Este convite expirou, foi revogado ou já foi usado.",
+      ),
     ).toBeInTheDocument();
   });
 });

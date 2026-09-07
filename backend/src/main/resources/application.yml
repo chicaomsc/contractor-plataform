@@ -80,6 +80,21 @@ app:
     token-ttl: ${PASSWORD_RESET_TOKEN_TTL:1800}
     # 3 minutes — see DT-011A.10 §7.
     request-cooldown: ${PASSWORD_RESET_REQUEST_COOLDOWN:180}
+  email:
+    # Off by default everywhere (local/test/a freshly deployed prod that hasn't
+    # configured Resend yet) — password reset keeps working via the admin-assisted
+    # link exactly as before; this only adds a delivery channel on top, it never
+    # becomes a hard dependency of the reset flow itself. See ResendEmailService /
+    # DT-011A.10 (implementation notes) for the full rationale.
+    enabled: ${EMAIL_ENABLED:false}
+    # Sender address Resend sends as, e.g. "Contractor Platform <no-reply@yourdomain.com>".
+    # Must be a domain verified in the Resend account — see runbook.md.
+    from: ${EMAIL_FROM:}
+    resend:
+      # Never a literal value here or in production.env.example — real key lives only
+      # in infra/env/production.env (gitignored), same handling as JWT_SECRET/
+      # CLOUDFLARE_API_TOKEN.
+      api-key: ${RESEND_API_KEY:}
   admin-bootstrap:
     # Read once at startup by PlatformAdminBootstrapRunner to create the first
     # SUPER_ADMIN — idempotent, fails fast if only one of the two is set. See DT §8.

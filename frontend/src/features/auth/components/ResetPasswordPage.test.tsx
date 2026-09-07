@@ -13,6 +13,14 @@ function mockResetResponse(response: Response) {
   );
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((nextResolve) => {
+    resolve = nextResolve;
+  });
+  return { promise, resolve };
+}
+
 describe("ResetPasswordPage", () => {
   beforeEach(() => {
     process.env.NEXT_PUBLIC_API_BASE_URL = "http://localhost:3001";
@@ -41,6 +49,7 @@ describe("ResetPasswordPage", () => {
     expect(window.location.pathname).toBe("/reset-password");
     expect(localStorage.getItem("plain-token")).toBeNull();
     expect(sessionStorage.getItem("plain-token")).toBeNull();
+    expect(document.cookie).not.toContain("plain-token");
     expect(document.body).not.toHaveTextContent("plain-token");
   });
 
@@ -54,8 +63,24 @@ describe("ResetPasswordPage", () => {
       screen.getByRole("link", { name: /voltar para esqueci minha senha/i }),
     ).toHaveAttribute("href", "/forgot-password");
     expect(
-      screen.queryByRole("button", { name: /atualizar password/i }),
+      screen.queryByRole("button", { name: /atualizar senha/i }),
     ).not.toBeInTheDocument();
+  });
+
+  it("rejects a password shorter than the shared policy minimum", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal("fetch", vi.fn());
+
+    render(<ResetPasswordPage />);
+
+    await user.type(await screen.findByLabelText(/nova senha/i), "short1");
+    await user.type(screen.getByLabelText(/confirmar senha/i), "short1");
+    await user.click(screen.getByRole("button", { name: /atualizar senha/i }));
+
+    expect(
+      await screen.findByText("Use pelo menos 8 caracteres."),
+    ).toBeInTheDocument();
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("validates divergent password confirmation client-side", async () => {
@@ -103,6 +128,33 @@ describe("ResetPasswordPage", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows a loading state while reset is pending", async () => {
+    const user = userEvent.setup();
+    const request = deferred<Response>();
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit) => request.promise,
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ResetPasswordPage />);
+
+    await user.type(await screen.findByLabelText(/nova senha/i), "Password123");
+    await user.type(screen.getByLabelText(/confirmar senha/i), "Password123");
+    await user.click(screen.getByRole("button", { name: /atualizar senha/i }));
+
+    expect(screen.getByRole("button", { name: /a atualizar/i })).toBeDisabled();
+
+    request.resolve(
+      Response.json({
+        message: "Senha atualizada. Acesse sua conta novamente.",
+      }),
+    );
+
+    expect(
+      await screen.findByText("Senha atualizada. Acesse sua conta novamente."),
+    ).toBeInTheDocument();
+  });
+
   it("maps generic 422 reset failures to the generic message", async () => {
     const user = userEvent.setup();
     vi.stubGlobal(
@@ -128,6 +180,26 @@ describe("ResetPasswordPage", () => {
       await screen.findByText(
         "O link de recuperação é inválido ou não está mais disponível.",
       ),
+    ).toBeInTheDocument();
+  });
+
+  it("maps network reset failures to a generic reset error", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("network down");
+      }),
+    );
+
+    render(<ResetPasswordPage />);
+
+    await user.type(await screen.findByLabelText(/nova senha/i), "Password123");
+    await user.type(screen.getByLabelText(/confirmar senha/i), "Password123");
+    await user.click(screen.getByRole("button", { name: /atualizar senha/i }));
+
+    expect(
+      await screen.findByText("Não foi possível atualizar a senha."),
     ).toBeInTheDocument();
   });
 

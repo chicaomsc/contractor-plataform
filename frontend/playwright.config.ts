@@ -28,16 +28,13 @@ export default defineConfig({
   },
   webServer: [
     {
-      // app.rate-limit.register/refresh: the smoke suite calls POST /auth/register
-      // several times per run (once per project × once per test that needs a fresh
-      // account) — well within what a real signup abuse guard should allow per real
-      // caller, but easily more than the production default (5/hour, Sprint 12.4.2
-      // RR-06) across a single suite run. Raised here only, same pattern already
-      // used for app.password-reset.request-cooldown=0 below — the production
-      // default in application.yml is untouched.
-      command: `docker compose -f ../docker/docker-compose.yml up -d postgres && cd ../backend && PLATFORM_ADMIN_BOOTSTRAP_EMAIL=${platformAdminEmail} PLATFORM_ADMIN_BOOTSTRAP_PASSWORD=${platformAdminPassword} ./mvnw spring-boot:run -Dspring-boot.run.profiles=local -Dspring-boot.run.arguments="--server.port=${backendPort} --app.cors.allowed-origins=${frontendUrl} --app.platform.base-domain=localhost --app.platform.default-tenant-slug=jr-pinturas --app.platform.frontend-base-url=${frontendUrl} --app.password-reset.request-cooldown=0 --app.rate-limit.register.capacity=100 --app.rate-limit.refresh.capacity=100"`,
+      // Auth/password-recovery E2E intentionally exercises several throttled endpoints
+      // from the same local caller in quick succession. Raise those local-only limits
+      // here (and disable real email delivery) so the suite remains deterministic while
+      // production defaults in application.yml stay untouched.
+      command: `docker compose -f ../docker/docker-compose.yml up -d postgres && cd ../backend && PLATFORM_ADMIN_BOOTSTRAP_EMAIL=${platformAdminEmail} PLATFORM_ADMIN_BOOTSTRAP_PASSWORD=${platformAdminPassword} ./mvnw spring-boot:run -Dspring-boot.run.profiles=local -Dspring-boot.run.arguments="--server.port=${backendPort} --app.cors.allowed-origins=${frontendUrl} --app.platform.base-domain=localhost --app.platform.default-tenant-slug=jr-pinturas --app.platform.frontend-base-url=${frontendUrl} --app.email.enabled=false --app.password-reset.request-cooldown=0 --app.rate-limit.register.capacity=100 --app.rate-limit.refresh.capacity=100 --app.rate-limit.forgot-password.capacity=100 --app.rate-limit.reset-password.capacity=100 --app.rate-limit.admin-password-reset.capacity=100"`,
       url: `${backendUrl}/actuator/health`,
-      reuseExistingServer: true,
+      reuseExistingServer: false,
       timeout: 120_000,
       stdout: "ignore",
       stderr: "pipe",
@@ -50,9 +47,9 @@ export default defineConfig({
       // stripping, so API_PROXY_TARGET tells next.config.ts's dev-only rewrite where
       // the real backend is — see next.config.ts for why this is safe in production
       // (API_PROXY_TARGET is never set there, so the rewrite is a no-op).
-      command: `NEXT_PUBLIC_API_BASE_URL=${frontendUrl} NEXT_PUBLIC_SITE_URL=${frontendUrl} API_PROXY_TARGET=${backendUrl} npm run dev -- --hostname 0.0.0.0 --port ${frontendPort}`,
+      command: `rm -rf .next && NEXT_PUBLIC_API_BASE_URL=${frontendUrl} NEXT_PUBLIC_SITE_URL=${frontendUrl} API_PROXY_TARGET=${backendUrl} npm run dev -- --hostname 0.0.0.0 --port ${frontendPort}`,
       url: `${frontendUrl}/login`,
-      reuseExistingServer: true,
+      reuseExistingServer: false,
       timeout: 120_000,
       stdout: "ignore",
       stderr: "pipe",

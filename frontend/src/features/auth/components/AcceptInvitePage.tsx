@@ -14,11 +14,11 @@ import { passwordFieldSchema } from "../types/auth";
 const acceptInviteFormSchema = z
   .object({
     password: passwordFieldSchema,
-    passwordConfirmation: z.string().min(1, "Confirme a password."),
+    passwordConfirmation: z.string().min(1, "Confirme a senha."),
   })
   .refine((value) => value.password === value.passwordConfirmation, {
     path: ["passwordConfirmation"],
-    message: "As passwords não coincidem.",
+    message: "As senhas não coincidem.",
   });
 
 type AcceptInviteFormValues = z.infer<typeof acceptInviteFormSchema>;
@@ -33,7 +33,7 @@ function getInviteErrorMessage(error: unknown) {
   }
 
   if (error instanceof ApiError && error.status === 400) {
-    return "Verifique a password indicada.";
+    return "Verifique a senha indicada.";
   }
 
   return "Não foi possível aceitar o convite.";
@@ -103,17 +103,15 @@ export function AcceptInvitePage() {
           <p className="text-sm font-semibold uppercase tracking-[0.18em] text-primary">
             Convite
           </p>
-          <h1 className="m-0 font-display text-3xl font-bold">
-            Definir password
-          </h1>
+          <h1 className="m-0 font-display text-3xl font-bold">Definir senha</h1>
           <p className="m-0 text-sm text-[var(--muted-foreground)]">
-            Crie a password da conta OWNER para entrar no dashboard.
+            Crie a senha da conta OWNER para entrar no dashboard.
           </p>
         </div>
 
         <div className="mt-8 space-y-5">
           <label className="block space-y-2">
-            <span className="text-sm font-semibold">Password</span>
+            <span className="text-sm font-semibold">Senha</span>
             <input
               type="password"
               autoComplete="new-password"
@@ -129,7 +127,7 @@ export function AcceptInvitePage() {
           </label>
 
           <label className="block space-y-2">
-            <span className="text-sm font-semibold">Confirmar password</span>
+            <span className="text-sm font-semibold">Confirmar senha</span>
             <input
               type="password"
               autoComplete="new-password"

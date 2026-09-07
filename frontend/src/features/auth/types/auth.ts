@@ -65,7 +65,7 @@ export const meResponseSchema = z.object({
 
 export const loginFormSchema = z.object({
   email: z.string().email("Indique um email válido."),
-  password: z.string().min(1, "Indique a password."),
+  password: z.string().min(1, "Indique a senha."),
 });
 
 export const forgotPasswordFormSchema = z.object({

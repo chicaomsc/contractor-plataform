@@ -101,8 +101,8 @@ test("SUPER_ADMIN provisiona company e OWNER aceita convite", async ({
   await expect(page.getByText("ACTIVE").first()).toBeVisible();
 
   await page.goto(inviteLink);
-  await page.getByLabel("Password", { exact: true }).fill(ownerPassword);
-  await page.getByLabel("Confirmar password").fill(ownerPassword);
+  await page.getByLabel("Senha", { exact: true }).fill(ownerPassword);
+  await page.getByLabel("Confirmar senha").fill(ownerPassword);
   await page.getByRole("button", { name: "Ativar conta" }).click();
   await expect(page).toHaveURL(/\/dashboard/);
   await expect(page.getByText("Status do site")).toBeVisible();

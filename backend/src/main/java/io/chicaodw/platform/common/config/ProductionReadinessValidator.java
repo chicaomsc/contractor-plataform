@@ -1,6 +1,7 @@
 package io.chicaodw.platform.common.config;
 
 import io.chicaodw.platform.auth.infrastructure.security.JwtProperties;
+import io.chicaodw.platform.common.email.EmailProperties;
 import io.chicaodw.platform.common.storage.StorageProperties;
 import io.chicaodw.platform.company.infrastructure.config.TenantProperties;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * Fails application startup with a clear, secret-free message when the "prod" profile
@@ -60,10 +62,18 @@ public class ProductionReadinessValidator implements ApplicationRunner {
 
     private static final String DEV_DB_PASSWORD_DEFAULT = "platform";
 
+    // Deliberately not a full RFC 5322 parser — same "light, good-enough" philosophy as
+    // validateAbsoluteHttpUrl above (java.net.URI, no dedicated validation library).
+    // Accepts a bare address ("no-reply@domain.tld") or Resend's "Display Name
+    // <address@domain.tld>" form; only guards against an EMAIL_FROM that plainly isn't
+    // an email address at all (e.g. a copy-paste mistake), not exotic-but-legal syntax.
+    private static final Pattern SIMPLE_EMAIL_PATTERN = Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
+
     private final Environment environment;
     private final JwtProperties jwtProperties;
     private final StorageProperties storageProperties;
     private final TenantProperties tenantProperties;
+    private final EmailProperties emailProperties;
 
     @Override
     public void run(ApplicationArguments args) {
@@ -77,6 +87,7 @@ public class ProductionReadinessValidator implements ApplicationRunner {
         validatePlatformBaseDomain();
         validatePlatformFrontendBaseUrl();
         validateDatabasePassword();
+        validateEmailConfiguration();
         validateStoragePath();
 
         log.info("Production readiness checks passed (profile '{}').", PROD_PROFILE);
@@ -261,6 +272,62 @@ public class ProductionReadinessValidator implements ApplicationRunner {
         }
 
         rejectIfPlaceholder(password, "DB_PASSWORD");
+    }
+
+    // ── Email (password-reset delivery via Resend) ──────────────────────────────
+
+    /**
+     * Mandatory in "prod" — hardened after go-live review: self-service password
+     * recovery has no other delivery channel for a regular OWNER today (the
+     * admin-assisted link, DT-011A.10 §3, is not a substitute at the current product
+     * stage), so a production boot with email delivery silently off is a functional
+     * regression, not a valid deployment state. {@code app.email.enabled} still
+     * defaults to {@code false} — that default is what keeps local/test environments
+     * unaffected (this whole check is skipped outside "prod", see {@link #run}) — but
+     * "prod" now requires it explicitly set to {@code true}, plus a real
+     * {@code EMAIL_FROM}/{@code RESEND_API_KEY}, exactly like every other required
+     * secret this validator already enforces (JWT_SECRET, DB_PASSWORD, etc.).
+     */
+    private void validateEmailConfiguration() {
+        if (!emailProperties.isEnabled()) {
+            throw new IllegalStateException(
+                    "EMAIL_ENABLED is missing or false. Password recovery has no delivery channel for a regular "
+                            + "OWNER without it — required when profile '" + PROD_PROFILE + "' is active.");
+        }
+
+        String from = emailProperties.getFrom();
+        if (from == null || from.isBlank()) {
+            throw new IllegalStateException(
+                    "EMAIL_FROM is missing. Required when profile '" + PROD_PROFILE
+                            + "' is active and EMAIL_ENABLED=true.");
+        }
+        rejectIfPlaceholder(from, "EMAIL_FROM");
+        if (!SIMPLE_EMAIL_PATTERN.matcher(extractEmailAddress(from)).matches()) {
+            throw new IllegalStateException(
+                    "EMAIL_FROM (\"" + from + "\") does not look like a valid sender address. Expected "
+                            + "\"user@domain.tld\" or \"Display Name <user@domain.tld>\".");
+        }
+
+        String apiKey = emailProperties.getResend().getApiKey();
+        if (apiKey == null || apiKey.isBlank()) {
+            throw new IllegalStateException(
+                    "RESEND_API_KEY is missing. Required when profile '" + PROD_PROFILE
+                            + "' is active and EMAIL_ENABLED=true.");
+        }
+        rejectIfPlaceholder(apiKey, "RESEND_API_KEY");
+    }
+
+    /** Resend accepts either a bare address or {@code "Display Name <address>"} — pulls
+     * out just the address part so the format check below applies to the same string
+     * either way. EMAIL_FROM is not a secret (it's shown to every email recipient), so
+     * unlike the API key it's safe to echo back in an error message. */
+    private String extractEmailAddress(String from) {
+        int start = from.indexOf('<');
+        int end = from.indexOf('>');
+        if (start >= 0 && end > start) {
+            return from.substring(start + 1, end).trim();
+        }
+        return from.trim();
     }
 
     // ── Storage ──────────────────────────────────────────────────────────────
