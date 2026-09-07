@@ -178,7 +178,7 @@ export function ResetPasswordPage() {
         </div>
 
         {formError ? (
-          <p className="mt-5 border border-error bg-background px-4 py-3 text-sm font-semibold text-erro rounded-lg">
+          <p className="mt-5 border border-error bg-background px-4 py-3 text-sm font-semibold text-error rounded-lg">
             {formError}
           </p>
         ) : null}

@@ -27,7 +27,17 @@ import java.util.List;
 @EnableMethodSecurity
 public class SecurityConfig {
 
-    @Value("${app.cors.allowed-origins:http://localhost:3000,http://127.0.0.1:3000}")
+    // Default (used whenever APP_CORS_ALLOWED_ORIGINS/app.cors.allowed-origins isn't
+    // set by any profile/env — i.e. a bare `./mvnw spring-boot:run` per README.md, and
+    // the shared integration-test context, AbstractIntegrationTest, which doesn't
+    // override this either) covers both ports the frontend dev server actually runs
+    // on locally: 3000 (npm run dev default) and 3001 (used when 3000 is already
+    // taken, and by Playwright's E2E config, playwright.config.ts). Both localhost and
+    // 127.0.0.1 for each, matching the pair already present for 3000. Production always
+    // overrides this via APP_CORS_ALLOWED_ORIGINS — ProductionReadinessValidator
+    // requires it non-blank and rejects a localhost/127.0.0.1 host outright when
+    // profile 'prod' is active, so this default is never reachable there.
+    @Value("${app.cors.allowed-origins:http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001}")
     private List<String> allowedOrigins;
 
     @Bean

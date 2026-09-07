@@ -1,5 +1,6 @@
 package io.chicaodw.platform.auth.application;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
@@ -21,6 +22,7 @@ import io.chicaodw.platform.auth.infrastructure.persistence.PasswordResetTokenRe
 import io.chicaodw.platform.auth.infrastructure.persistence.RefreshTokenRepository;
 import io.chicaodw.platform.auth.infrastructure.persistence.UserRepository;
 import io.chicaodw.platform.auth.infrastructure.security.PasswordResetProperties;
+import io.chicaodw.platform.common.email.EmailService;
 import io.chicaodw.platform.common.exception.BusinessRuleException;
 import io.chicaodw.platform.common.exception.ConflictException;
 import io.chicaodw.platform.common.exception.ResourceNotFoundException;
@@ -30,6 +32,7 @@ import io.chicaodw.platform.company.domain.CompanyStatus;
 import io.chicaodw.platform.company.infrastructure.config.TenantProperties;
 import io.chicaodw.platform.company.infrastructure.persistence.CompanyRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Owns the full lifecycle of password-reset tokens (DT-011A.10 §1/§2/§4/§15): creation
@@ -38,7 +41,14 @@ import lombok.RequiredArgsConstructor;
  * (forgot/reset) that build the response DTOs directly — same split as InviteService,
  * whose acceptInvite/createInvite/reissueInvite are the direct template for the
  * matching methods here.
+ *
+ * <p>Email delivery (added on top of the above, no change to the mechanism itself):
+ * {@code forgotPassword} dispatches {@link EmailService#sendPasswordResetEmail} whenever
+ * — and only when — a new token was genuinely issued. {@code EmailService} never throws
+ * (see its Javadoc), so a Resend outage can never change this method's return value or
+ * leak through the uniform public response.
  */
+@Slf4j
 @Service
 @Transactional
 @RequiredArgsConstructor
@@ -61,8 +71,9 @@ public class PasswordResetTokenService {
     private final PasswordResetProperties passwordResetProperties;
     private final TenantProperties tenantProperties;
     private final Environment environment;
+    private final EmailService emailService;
 
-    public record IssuedToken(String rawToken, Instant expiresAt) {}
+    public record IssuedToken(String rawToken, Instant expiresAt, String recipientEmail) {}
 
     // ── Self-service: POST /auth/password/forgot ───────────────────────────────
 
@@ -74,11 +85,32 @@ public class PasswordResetTokenService {
      */
     public ForgotPasswordResponse forgotPassword(String email) {
         Optional<IssuedToken> issued = requestReset(email);
-        if (issued.isEmpty() || isProdActive()) {
+        if (issued.isEmpty()) {
             return new ForgotPasswordResponse(FORGOT_PASSWORD_MESSAGE, null, null);
         }
-        String rawToken = issued.get().rawToken();
-        return new ForgotPasswordResponse(FORGOT_PASSWORD_MESSAGE, rawToken, buildResetLink(rawToken));
+
+        IssuedToken token = issued.get();
+        String resetLink = buildResetLink(token.rawToken());
+        sendResetEmail(token, resetLink);
+
+        if (isProdActive()) {
+            return new ForgotPasswordResponse(FORGOT_PASSWORD_MESSAGE, null, null);
+        }
+        return new ForgotPasswordResponse(FORGOT_PASSWORD_MESSAGE, token.rawToken(), resetLink);
+    }
+
+    /**
+     * Defense in depth on top of {@link EmailService}'s own never-throw contract: even a
+     * misbehaving future implementation can never turn a delivery failure into a
+     * different HTTP response or a propagated exception here — see the class Javadoc.
+     */
+    private void sendResetEmail(IssuedToken token, String resetLink) {
+        try {
+            Duration validity = Duration.between(Instant.now(), token.expiresAt());
+            emailService.sendPasswordResetEmail(token.recipientEmail(), resetLink, validity);
+        } catch (RuntimeException e) {
+            log.warn("EmailService threw despite its never-throw contract — ignored, response stays uniform", e);
+        }
     }
 
     private Optional<IssuedToken> requestReset(String email) {
@@ -89,7 +121,7 @@ public class PasswordResetTokenService {
         if (isWithinCooldown(user.getId())) {
             return Optional.empty();
         }
-        return Optional.of(issueNewToken(user.getId(), null));
+        return Optional.of(issueNewToken(user.getId(), user.getEmail(), null));
     }
 
     // ── Self-service: POST /auth/password/reset ─────────────────────────────────
@@ -145,7 +177,7 @@ public class PasswordResetTokenService {
         if (owner.getStatus() != UserStatus.ACTIVE) {
             throw new ConflictException("Owner is not active — reactivate the account before generating a reset link");
         }
-        return issueNewToken(owner.getId(), actingSuperAdminId);
+        return issueNewToken(owner.getId(), owner.getEmail(), actingSuperAdminId);
     }
 
     public String buildResetLink(String rawToken) {
@@ -173,7 +205,7 @@ public class PasswordResetTokenService {
                 .orElse(false);
     }
 
-    private IssuedToken issueNewToken(UUID userId, UUID createdBy) {
+    private IssuedToken issueNewToken(UUID userId, String recipientEmail, UUID createdBy) {
         revokeValidTokensForUser(userId);
 
         String rawToken = SecureTokenGenerator.generate();
@@ -184,7 +216,7 @@ public class PasswordResetTokenService {
         token.setCreatedBy(createdBy);
         passwordResetTokenRepository.save(token);
 
-        return new IssuedToken(rawToken, token.getExpiresAt());
+        return new IssuedToken(rawToken, token.getExpiresAt(), recipientEmail);
     }
 
     private void revokeValidTokensForUser(UUID userId) {

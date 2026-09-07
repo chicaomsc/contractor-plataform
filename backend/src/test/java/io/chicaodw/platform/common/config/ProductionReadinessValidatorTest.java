@@ -1,6 +1,7 @@
 package io.chicaodw.platform.common.config;
 
 import io.chicaodw.platform.auth.infrastructure.security.JwtProperties;
+import io.chicaodw.platform.common.email.EmailProperties;
 import io.chicaodw.platform.common.storage.StorageProperties;
 import io.chicaodw.platform.company.infrastructure.config.TenantProperties;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,6 +31,8 @@ class ProductionReadinessValidatorTest {
     private static final String VALID_BASE_DOMAIN = "example.pt";
     private static final String VALID_FRONTEND_BASE_URL = "https://app.example.pt";
     private static final String VALID_DB_PASSWORD = "a-real-generated-database-password";
+    private static final String VALID_EMAIL_FROM = "no-reply@example.pt";
+    private static final String VALID_RESEND_API_KEY = "re_a-real-looking-key";
 
     @Mock
     Environment environment;
@@ -37,6 +40,7 @@ class ProductionReadinessValidatorTest {
     JwtProperties jwtProperties;
     StorageProperties storageProperties;
     TenantProperties tenantProperties;
+    EmailProperties emailProperties;
     Path writableStorageDir;
 
     ProductionReadinessValidator validator;
@@ -54,12 +58,24 @@ class ProductionReadinessValidatorTest {
         tenantProperties.setBaseDomain(VALID_BASE_DOMAIN);
         tenantProperties.setFrontendBaseUrl(VALID_FRONTEND_BASE_URL);
 
+        // Valid AND enabled by default — email delivery is now mandatory in "prod"
+        // (hardening pass after go-live review: password recovery has no other
+        // delivery channel for a regular OWNER), so every test that expects run() to
+        // succeed needs this to already be in a passing state, same as jwtProperties/
+        // tenantProperties above. Tests exercising the email-specific rejections
+        // override individual fields below.
+        emailProperties = new EmailProperties();
+        emailProperties.setEnabled(true);
+        emailProperties.setFrom(VALID_EMAIL_FROM);
+        emailProperties.getResend().setApiKey(VALID_RESEND_API_KEY);
+
         // lenient(): only reached by tests whose validation chain gets this far (e.g.
         // storage-path tests) — tests that throw earlier (JWT/CORS/platform-domain)
         // never call this stub, which strict-stubbing would otherwise flag as unused.
         lenient().when(environment.getProperty("spring.datasource.password")).thenReturn(VALID_DB_PASSWORD);
 
-        validator = new ProductionReadinessValidator(environment, jwtProperties, storageProperties, tenantProperties);
+        validator = new ProductionReadinessValidator(
+                environment, jwtProperties, storageProperties, tenantProperties, emailProperties);
     }
 
     private void activeProfiles(String... profiles) {
@@ -477,6 +493,150 @@ class ProductionReadinessValidatorTest {
             Files.createDirectories(writableStorageDir);
             validator.run(null);
         }).doesNotThrowAnyException();
+    }
+
+    // ── Email / Resend (password-reset delivery — mandatory in "prod") ──────────
+
+    @Test
+    void run_prodWithEmailEnabledMissing_throws() {
+        // Simulates the real EMAIL_ENABLED default (false) rather than overriding the
+        // valid setUp() default — this is exactly the "ausente" case from the hardening
+        // requirement, not a hand-picked bad value.
+        emailProperties = new EmailProperties();
+        validator = new ProductionReadinessValidator(
+                environment, jwtProperties, storageProperties, tenantProperties, emailProperties);
+        activeProfiles("prod");
+        when(environment.getProperty("app.cors.allowed-origins")).thenReturn(VALID_CORS);
+
+        assertThatThrownBy(() -> validator.run(null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("EMAIL_ENABLED is missing or false");
+    }
+
+    @Test
+    void run_prodWithEmailExplicitlyDisabled_throws() {
+        activeProfiles("prod");
+        when(environment.getProperty("app.cors.allowed-origins")).thenReturn(VALID_CORS);
+        emailProperties.setEnabled(false);
+
+        assertThatThrownBy(() -> validator.run(null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("EMAIL_ENABLED is missing or false");
+    }
+
+    @Test
+    void run_localOrTestProfile_emailDisabled_doesNotThrow() {
+        // The whole validator is a no-op outside "prod" (see run()) — email being
+        // mandatory in prod must never affect local/test, regardless of its value.
+        activeProfiles("local");
+        emailProperties.setEnabled(false);
+
+        assertThatCode(() -> validator.run(null)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void run_prodWithEmailEnabledAndMissingFrom_throws() {
+        activeProfiles("prod");
+        when(environment.getProperty("app.cors.allowed-origins")).thenReturn(VALID_CORS);
+        emailProperties.setFrom("");
+
+        assertThatThrownBy(() -> validator.run(null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("EMAIL_FROM is missing");
+    }
+
+    @Test
+    void run_prodWithEmailEnabledAndBlankFrom_throws() {
+        activeProfiles("prod");
+        when(environment.getProperty("app.cors.allowed-origins")).thenReturn(VALID_CORS);
+        emailProperties.setFrom("   ");
+
+        assertThatThrownBy(() -> validator.run(null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("EMAIL_FROM is missing");
+    }
+
+    @Test
+    void run_prodWithEmailEnabledAndInvalidFromFormat_throws() {
+        activeProfiles("prod");
+        when(environment.getProperty("app.cors.allowed-origins")).thenReturn(VALID_CORS);
+        emailProperties.setFrom("not-an-email-address");
+
+        assertThatThrownBy(() -> validator.run(null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("EMAIL_FROM")
+                .hasMessageContaining("does not look like a valid sender address");
+    }
+
+    @Test
+    void run_prodWithEmailEnabledAndDisplayNameFromFormat_doesNotThrow() throws IOException {
+        // Resend accepts "Display Name <address>" as well as a bare address — must not
+        // be rejected as "invalid".
+        activeProfiles("prod");
+        when(environment.getProperty("app.cors.allowed-origins")).thenReturn(VALID_CORS);
+        Files.createDirectories(writableStorageDir);
+        emailProperties.setFrom("Contractor Platform <no-reply@example.pt>");
+
+        assertThatCode(() -> validator.run(null)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void run_prodWithEmailEnabledAndMissingApiKey_throws() {
+        activeProfiles("prod");
+        when(environment.getProperty("app.cors.allowed-origins")).thenReturn(VALID_CORS);
+        emailProperties.getResend().setApiKey("");
+
+        assertThatThrownBy(() -> validator.run(null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("RESEND_API_KEY is missing");
+    }
+
+    @Test
+    void run_prodWithEmailEnabledAndUneditedExampleEnvFromPlaceholder_throws() {
+        activeProfiles("prod");
+        when(environment.getProperty("app.cors.allowed-origins")).thenReturn(VALID_CORS);
+        emailProperties.setFrom("CHANGE_ME@example.com");
+
+        assertThatThrownBy(() -> validator.run(null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("EMAIL_FROM")
+                .hasMessageContaining("placeholder");
+    }
+
+    @Test
+    void run_prodWithEmailEnabledAndPlaceholderApiKey_throws() {
+        activeProfiles("prod");
+        when(environment.getProperty("app.cors.allowed-origins")).thenReturn(VALID_CORS);
+        emailProperties.getResend().setApiKey("CHANGE_ME_RESEND_API_KEY");
+
+        assertThatThrownBy(() -> validator.run(null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("RESEND_API_KEY")
+                .hasMessageContaining("placeholder");
+    }
+
+    @Test
+    void run_apiKeyRejection_neverLeaksTheValue() {
+        activeProfiles("prod");
+        when(environment.getProperty("app.cors.allowed-origins")).thenReturn(VALID_CORS);
+        String keyThatMustNotLeak = "re_super_secret_key_that_must_never_appear_in_logs";
+        emailProperties.getResend().setApiKey(keyThatMustNotLeak);
+
+        // Valid (not blank, not a placeholder) — proves the key was accepted and never
+        // had a reason to be printed, same pattern as run_dbPasswordRejection_neverLeaksTheValue.
+        assertThatCode(() -> {
+            Files.createDirectories(writableStorageDir);
+            validator.run(null);
+        }).doesNotThrowAnyException();
+    }
+
+    @Test
+    void run_prodWithEmailEnabledAndValidConfig_doesNotThrow() throws IOException {
+        activeProfiles("prod");
+        when(environment.getProperty("app.cors.allowed-origins")).thenReturn(VALID_CORS);
+        Files.createDirectories(writableStorageDir);
+
+        assertThatCode(() -> validator.run(null)).doesNotThrowAnyException();
     }
 
     // ── STORAGE_PATH ─────────────────────────────────────────────────────────

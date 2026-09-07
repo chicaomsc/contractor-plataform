@@ -28,10 +28,58 @@ async function requestForgotPasswordViaUi(
   });
   await expect(debugLink).toBeVisible();
   const href = await debugLink.getAttribute("href");
-  expect(href).toContain(
-    admin ? "/reset-password?variant=admin#token=" : "/reset-password#token=",
-  );
+  expect(
+    href?.includes(
+      admin ? "/reset-password?variant=admin#token=" : "/reset-password#token=",
+    ),
+  ).toBe(true);
+  expect(
+    href?.includes(
+      admin ? "/reset-password?variant=admin?token=" : "/reset-password?token=",
+    ),
+  ).toBe(false);
   return href as string;
+}
+
+async function expectResetTokenRemovedFromUrl(
+  page: import("@playwright/test").Page,
+) {
+  await page.waitForFunction(() => window.location.hash === "");
+  expect(
+    await page.evaluate(() => window.location.href.includes("#token=")),
+  ).toBe(false);
+}
+
+async function expectResetLinkShape(resetLink: string, admin = false) {
+  expect(
+    resetLink.includes(
+      admin ? "/reset-password?variant=admin#token=" : "/reset-password#token=",
+    ),
+  ).toBe(true);
+  expect(
+    resetLink.includes(
+      admin ? "/reset-password?variant=admin?token=" : "/reset-password?token=",
+    ),
+  ).toBe(false);
+}
+
+async function expectResetLinkCannotBeReused(
+  page: import("@playwright/test").Page,
+  resetLink: string,
+) {
+  await page.goto("/login");
+  await page.goto(resetLink);
+  await expectResetTokenRemovedFromUrl(page);
+  await expectResetTokenNotPersisted(page, resetLink);
+  await page.getByLabel("Nova senha").fill("ReusedLinkPass123!");
+  await page.getByLabel("Confirmar senha").fill("ReusedLinkPass123!");
+  await page.getByRole("button", { name: /Atualizar senha/ }).click();
+  await expect(
+    page.getByText(
+      "O link de recuperação é inválido ou não está mais disponível.",
+    ),
+  ).toBeVisible();
+  await expectResetTokenNotPersisted(page, resetLink);
 }
 
 async function resetPasswordViaUi(
@@ -40,13 +88,42 @@ async function resetPasswordViaUi(
   newPassword: string,
 ) {
   await page.goto(resetLink);
-  await expect(page).toHaveURL((url) => url.hash === "");
+  await expectResetTokenRemovedFromUrl(page);
+  await expectResetTokenNotPersisted(page, resetLink);
   await page.getByLabel("Nova senha").fill(newPassword);
-  await page.getByLabel("Confirmar password").fill(newPassword);
-  await page.getByRole("button", { name: /Atualizar password/ }).click();
+  await page.getByLabel("Confirmar senha").fill(newPassword);
+  await page.getByRole("button", { name: /Atualizar senha/ }).click();
   await expect(
     page.getByText("Senha atualizada. Acesse sua conta novamente."),
   ).toBeVisible();
+  await expectResetTokenNotPersisted(page, resetLink);
+}
+
+async function expectResetTokenNotPersisted(
+  page: import("@playwright/test").Page,
+  resetLink: string,
+) {
+  const parsedResetLink = new URL(resetLink, "http://localhost");
+  const token = parsedResetLink.hash
+    ? new URLSearchParams(parsedResetLink.hash.slice(1)).get("token")
+    : null;
+
+  expect(token).toBeTruthy();
+  const persisted = await page.evaluate((capturedToken) => {
+    if (!capturedToken) return true;
+    const storageValues = (storage: Storage) =>
+      Array.from({ length: storage.length }, (_, index) => {
+        const key = storage.key(index);
+        return key ? `${key}:${storage.getItem(key) ?? ""}` : "";
+      });
+
+    return [
+      ...storageValues(window.localStorage),
+      ...storageValues(window.sessionStorage),
+      document.cookie,
+    ].some((value) => value.includes(capturedToken));
+  }, token);
+  expect(persisted).toBe(false);
 }
 
 test("OWNER solicita reset, define nova senha e login antigo falha", async ({
@@ -59,6 +136,7 @@ test("OWNER solicita reset, define nova senha e login antigo falha", async ({
 
   const resetLink = await requestForgotPasswordViaUi(page, email);
   await resetPasswordViaUi(page, resetLink, newPassword);
+  await expectResetLinkCannotBeReused(page, resetLink);
 
   await page.goto("/login");
   await page.getByLabel("Email").fill(email);
@@ -114,7 +192,7 @@ test("SUPER_ADMIN gera link manual para OWNER ACTIVE no detalhe da Company", asy
   const resetLink = await page
     .getByRole("textbox", { name: "Link de recuperação" })
     .inputValue();
-  expect(resetLink).toContain("/reset-password#token=");
+  await expectResetLinkShape(resetLink);
 
   await resetPasswordViaUi(page, resetLink, newPassword);
 
