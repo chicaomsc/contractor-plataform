@@ -6,6 +6,10 @@ import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/Button";
 import { ApiError } from "@/lib/api/errors";
+import { BrandColorFields } from "./branding/BrandColorFields";
+import { BrandPaletteSelector } from "./branding/BrandPaletteSelector";
+import { BrandPreview } from "./branding/BrandPreview";
+import type { BrandPalette } from "./branding/brand-palettes";
 import {
   useBranding,
   useCompany,
@@ -19,6 +23,7 @@ import {
   type UpdateBrandingInput,
 } from "../types/admin";
 import { resolveAdminAssetUrl } from "../utils/assets";
+import { isValidHexColor, normalizeHexColor } from "../utils/colors";
 import { nullableText } from "../utils/forms";
 import { zodResolver } from "../utils/zod-resolver";
 import { ErrorState, LoadingState, SaveFeedback } from "./DashboardState";
@@ -61,6 +66,23 @@ function toFormValues(branding: BrandingDto): UpdateBrandingInput {
   };
 }
 
+function normalizeColorFields(
+  values: UpdateBrandingInput,
+): UpdateBrandingInput {
+  return {
+    ...values,
+    primaryColor: isValidHexColor(values.primaryColor)
+      ? normalizeHexColor(values.primaryColor)
+      : values.primaryColor,
+    secondaryColor: isValidHexColor(values.secondaryColor)
+      ? normalizeHexColor(values.secondaryColor)
+      : values.secondaryColor,
+    accentColor: isValidHexColor(values.accentColor)
+      ? normalizeHexColor(values.accentColor)
+      : values.accentColor,
+  };
+}
+
 export function BrandingPage() {
   const brandingQuery = useBranding();
   const companyQuery = useCompany();
@@ -71,8 +93,10 @@ export function BrandingPage() {
   const [logoError, setLogoError] = useState<string | null>(null);
   const {
     register,
+    control,
     handleSubmit,
     reset,
+    setValue,
     watch,
     formState: { errors, isDirty },
   } = useForm<UpdateBrandingInput>({
@@ -86,8 +110,25 @@ export function BrandingPage() {
   }, [brandingQuery.data, reset]);
 
   async function onSubmit(values: UpdateBrandingInput) {
-    const branding = await updateMutation.mutateAsync(values);
+    const branding = await updateMutation.mutateAsync(
+      normalizeColorFields(values),
+    );
     reset(toFormValues(branding));
+  }
+
+  function applyPalette(palette: BrandPalette) {
+    setValue("primaryColor", palette.primaryColor, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+    setValue("secondaryColor", palette.secondaryColor, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+    setValue("accentColor", palette.accentColor, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
   }
 
   async function handleLogoSelected(event: ChangeEvent<HTMLInputElement>) {
@@ -112,7 +153,9 @@ export function BrandingPage() {
     try {
       await uploadLogoMutation.mutateAsync(file);
     } catch (error) {
-      setLogoError(getLogoErrorMessage(error, "Não foi possível enviar a logo."));
+      setLogoError(
+        getLogoErrorMessage(error, "Não foi possível enviar a logo."),
+      );
     }
   }
 
@@ -126,7 +169,9 @@ export function BrandingPage() {
     try {
       await deleteLogoMutation.mutateAsync();
     } catch (error) {
-      setLogoError(getLogoErrorMessage(error, "Não foi possível remover a logo."));
+      setLogoError(
+        getLogoErrorMessage(error, "Não foi possível remover a logo."),
+      );
     }
   }
 
@@ -149,8 +194,6 @@ export function BrandingPage() {
   const companyName = companyQuery.data?.name ?? "Empresa";
   const isLogoMutationPending =
     uploadLogoMutation.isPending || deleteLogoMutation.isPending;
-  const primary = values.primaryColor || "#1c1c1a";
-  const accent = values.accentColor || "#b43f08";
 
   return (
     <form className="space-y-8" onSubmit={handleSubmit(onSubmit)} noValidate>
@@ -159,10 +202,7 @@ export function BrandingPage() {
         title="Editar identidade visual"
         description="Cores e textos institucionais consumidos pela landing multi-tenant."
         action={
-          <Button
-            type="submit"
-            disabled={!isDirty || updateMutation.isPending}
-          >
+          <Button type="submit" disabled={!isDirty || updateMutation.isPending}>
             <Save size={16} aria-hidden="true" />
             {updateMutation.isPending ? "A guardar" : "Guardar"}
           </Button>
@@ -182,7 +222,8 @@ export function BrandingPage() {
                 Logo da empresa
               </h2>
               <p className="m-0 mt-2 text-sm text-[var(--muted-foreground)]">
-                PNG, JPG ou WebP até 5 MB. A landing usa o nome da empresa quando não há logo.
+                PNG, JPG ou WebP até 5 MB. A landing usa o nome da empresa
+                quando não há logo.
               </p>
             </div>
 
@@ -235,7 +276,9 @@ export function BrandingPage() {
                       disabled={isLogoMutationPending}
                     >
                       <Trash2 size={16} aria-hidden="true" />
-                      {deleteLogoMutation.isPending ? "A remover" : "Remover logo"}
+                      {deleteLogoMutation.isPending
+                        ? "A remover"
+                        : "Remover logo"}
                     </Button>
                   ) : null}
                 </div>
@@ -244,7 +287,8 @@ export function BrandingPage() {
                     {logoError}
                   </p>
                 ) : null}
-                {uploadLogoMutation.isSuccess || deleteLogoMutation.isSuccess ? (
+                {uploadLogoMutation.isSuccess ||
+                deleteLogoMutation.isSuccess ? (
                   <p className="m-0 mt-3 text-sm font-semibold text-success">
                     Logo atualizada.
                   </p>
@@ -254,30 +298,8 @@ export function BrandingPage() {
           </section>
 
           <section className="grid gap-6 border border-border bg-surface p-6 lg:grid-cols-3">
-            <Field label="Cor primária" error={errors.primaryColor}>
-              <input
-                type="text"
-                className={inputClassName}
-                placeholder="#1E40AF"
-                {...register("primaryColor")}
-              />
-            </Field>
-            <Field label="Cor secundária" error={errors.secondaryColor}>
-              <input
-                type="text"
-                className={inputClassName}
-                placeholder="#3B82F6"
-                {...register("secondaryColor")}
-              />
-            </Field>
-            <Field label="Cor de acento" error={errors.accentColor}>
-              <input
-                type="text"
-                className={inputClassName}
-                placeholder="#F59E0B"
-                {...register("accentColor")}
-              />
-            </Field>
+            <BrandColorFields control={control} />
+            <BrandPaletteSelector onApply={applyPalette} />
             <div className="lg:col-span-3">
               <Field label="Tagline" error={errors.tagline}>
                 <input className={inputClassName} {...register("tagline")} />
@@ -316,53 +338,11 @@ export function BrandingPage() {
           </section>
         </div>
 
-        <aside className="border border-border bg-surface p-6">
-          <h2 className="m-0 font-display text-2xl font-semibold">
-            Preview
-          </h2>
-          <div className="mt-6 overflow-hidden border border-border">
-            <div className="flex min-h-16 items-center justify-between gap-4 bg-background px-5">
-              {logoUrl ? (
-                <Image
-                  src={logoUrl}
-                  alt="Logo atual"
-                  width={72}
-                  height={40}
-                  className="h-10 w-auto object-contain"
-                />
-              ) : (
-                <span className="font-display text-lg font-bold">
-                  {companyName}
-                </span>
-              )}
-              <span
-                className="px-4 py-2 text-sm font-semibold text-white"
-                style={{ backgroundColor: primary }}
-              >
-                WhatsApp
-              </span>
-            </div>
-            <div className="space-y-4 bg-background p-6">
-              <div
-                className="h-1 w-20"
-                style={{ backgroundColor: primary }}
-                aria-hidden="true"
-              />
-              <h3 className="m-0 font-display text-3xl font-bold leading-tight">
-                {values.tagline || companyQuery.data?.name}
-              </h3>
-              <p className="m-0 text-sm text-[var(--muted-foreground)]">
-                {values.aboutText || "Texto institucional ainda não definido."}
-              </p>
-              <div
-                className="inline-flex min-h-11 items-center px-5 text-sm font-semibold text-white"
-                style={{ backgroundColor: accent }}
-              >
-                Pedir orçamento
-              </div>
-            </div>
-          </div>
-        </aside>
+        <BrandPreview
+          values={values}
+          logoUrl={logoUrl}
+          companyName={companyName}
+        />
       </div>
     </form>
   );
