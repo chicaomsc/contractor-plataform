@@ -1,10 +1,11 @@
 import { z } from "zod";
+import { HEX_COLOR_PATTERN } from "../utils/colors";
 
 const nullableString = z.string().nullable();
 const nullableNumber = z.number().nullable();
 const hexColor = z
   .string()
-  .regex(/^#[0-9A-Fa-f]{6}$/, "Use uma cor HEX válida, ex. #1E40AF.");
+  .regex(HEX_COLOR_PATTERN, "Use uma cor HEX válida, ex. #1E40AF.");
 const emptyToNull = (value: unknown) => (value === "" ? null : value);
 const nullableTextInput = (max: number) =>
   z.preprocess(emptyToNull, z.string().max(max).nullable());
