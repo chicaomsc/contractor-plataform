@@ -32,7 +32,10 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/estimates")
-@PreAuthorize("hasRole('OWNER')")
+// DT-017A: everyday operational area — all three tenant roles (matrix in
+// docs/design/DT-017A-roles-authorization-foundation.md). SUPER_ADMIN is a platform
+// role, never a tenant one, and is deliberately not included here.
+@PreAuthorize("hasAnyRole('OWNER','MANAGER','MEMBER')")
 @RequiredArgsConstructor
 @Tag(name = "Estimates", description = "Estimate management — admin endpoints. All financial calculations are backend-owned.")
 public class EstimateController {

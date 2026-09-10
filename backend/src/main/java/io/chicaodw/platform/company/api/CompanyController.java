@@ -30,8 +30,12 @@ public class CompanyController {
 
     private final CompanyService companyService;
 
+    // DT-017A: Company profile — read is open to all three tenant roles, but every
+    // write below stays OWNER-only (matrix in
+    // docs/design/DT-017A-roles-authorization-foundation.md — "Empresa" splits read
+    // from change, unlike every other controller in this file/module).
     @GetMapping("/me")
-    @PreAuthorize("hasRole('OWNER')")
+    @PreAuthorize("hasAnyRole('OWNER','MANAGER','MEMBER')")
     public CompanyResponse getProfile(@AuthenticationPrincipal JwtPrincipal principal) {
         return companyService.getProfile(principal.companyId());
     }

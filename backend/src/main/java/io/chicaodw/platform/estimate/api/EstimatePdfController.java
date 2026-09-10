@@ -24,7 +24,10 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/estimates")
-@PreAuthorize("hasRole('OWNER')")
+// DT-017A: downloading the PDF is part of normal estimate operation — same three
+// tenant roles as EstimateController (matrix in
+// docs/design/DT-017A-roles-authorization-foundation.md).
+@PreAuthorize("hasAnyRole('OWNER','MANAGER','MEMBER')")
 @RequiredArgsConstructor
 @Tag(name = "Estimates", description = "Estimate management — admin endpoints. All financial calculations are backend-owned.")
 public class EstimatePdfController {

@@ -33,4 +33,33 @@ class UserRoleInvariantTest {
         assertThatThrownBy(() -> UserRoleInvariant.validate(UserRole.OWNER, null))
                 .isInstanceOf(BusinessRuleException.class);
     }
+
+    // DT-017A — MANAGER/MEMBER are tenant roles exactly like OWNER as far as this
+    // invariant is concerned: the check is already role-agnostic (only branches on
+    // SUPER_ADMIN vs. everything else), so these are regression tests confirming that
+    // genericity held after adding the two new enum values, not a behavior change.
+
+    @Test
+    void managerWithCompany_isValid() {
+        assertThatCode(() -> UserRoleInvariant.validate(UserRole.MANAGER, UUID.randomUUID()))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void managerWithoutCompany_isRejected() {
+        assertThatThrownBy(() -> UserRoleInvariant.validate(UserRole.MANAGER, null))
+                .isInstanceOf(BusinessRuleException.class);
+    }
+
+    @Test
+    void memberWithCompany_isValid() {
+        assertThatCode(() -> UserRoleInvariant.validate(UserRole.MEMBER, UUID.randomUUID()))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void memberWithoutCompany_isRejected() {
+        assertThatThrownBy(() -> UserRoleInvariant.validate(UserRole.MEMBER, null))
+                .isInstanceOf(BusinessRuleException.class);
+    }
 }
