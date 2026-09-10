@@ -4,10 +4,14 @@ import io.chicaodw.platform.admin.api.dto.UpdateCompanyStatusRequest;
 import io.chicaodw.platform.auth.api.dto.ForgotPasswordRequest;
 import io.chicaodw.platform.auth.api.dto.ForgotPasswordResponse;
 import io.chicaodw.platform.auth.api.dto.ResetPasswordRequest;
+import io.chicaodw.platform.auth.domain.User;
+import io.chicaodw.platform.auth.domain.UserRole;
 import io.chicaodw.platform.auth.domain.UserStatus;
 import io.chicaodw.platform.auth.infrastructure.persistence.UserRepository;
 import io.chicaodw.platform.company.infrastructure.persistence.CompanyRepository;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 
@@ -90,6 +94,41 @@ class ActiveAccountFilterTest extends AbstractAdminIntegrationTest {
 
         // Same access token, no new login — auth_version bump must reject it immediately.
         mockMvc.perform(get("/company/me").header("Authorization", "Bearer " + ownerToken))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.title").value("Account Disabled"));
+    }
+
+    /**
+     * DT-017A — MANAGER/MEMBER must get exactly the same account/company validation
+     * OWNER already had (§3 of the phase spec): company deactivation rejects their
+     * access token immediately too, not just OWNER's. OWNER's own case stays covered
+     * by {@link #accessTokenIssuedBeforeCompanyDeactivation_isRejectedOnNextRequest()}
+     * above, untouched — this only adds the two new tenant roles.
+     */
+    @ParameterizedTest
+    @EnumSource(value = UserRole.class, names = {"MANAGER", "MEMBER"})
+    void accessTokenIssuedBeforeCompanyDeactivation_isRejectedOnNextRequest_forNewTenantRoles(UserRole role)
+            throws Exception {
+        var owner = registerOwner();
+        User user = userRepository.findByEmail(owner.email()).orElseThrow();
+        user.setRole(role);
+        userRepository.save(user);
+        String token = login(owner.email(), owner.password());
+
+        // GET /company/me is open to every tenant role (DT-017A) — safe as the probe
+        // endpoint for MANAGER/MEMBER, unlike OWNER-only endpoints.
+        mockMvc.perform(get("/company/me").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+
+        String adminToken = createSuperAdminAndLogin();
+        UUID companyId = companyRepository.findBySlug(owner.companySlug()).orElseThrow().getId();
+        mockMvc.perform(patch("/admin/companies/" + companyId + "/status")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new UpdateCompanyStatusRequest("INACTIVE"))))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/company/me").header("Authorization", "Bearer " + token))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.title").value("Account Disabled"));
     }

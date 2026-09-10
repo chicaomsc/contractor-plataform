@@ -33,7 +33,9 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/gallery")
-@PreAuthorize("hasRole('OWNER')")
+// DT-017A: portfolio management — OWNER + MANAGER only, MEMBER excluded (matrix in
+// docs/design/DT-017A-roles-authorization-foundation.md).
+@PreAuthorize("hasAnyRole('OWNER','MANAGER')")
 @RequiredArgsConstructor
 @Tag(name = "Gallery", description = "Portfolio gallery — admin endpoints")
 public class GalleryController {

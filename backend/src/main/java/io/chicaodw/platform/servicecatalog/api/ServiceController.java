@@ -29,7 +29,9 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/services")
-@PreAuthorize("hasRole('OWNER')")
+// DT-017A: catalogue management — OWNER + MANAGER only, MEMBER excluded (matrix in
+// docs/design/DT-017A-roles-authorization-foundation.md).
+@PreAuthorize("hasAnyRole('OWNER','MANAGER')")
 @RequiredArgsConstructor
 @Tag(name = "Services", description = "Company service catalogue — admin endpoints")
 public class ServiceController {

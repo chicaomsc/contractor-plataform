@@ -27,7 +27,10 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/customers")
-@PreAuthorize("hasRole('OWNER')")
+// DT-017A: everyday operational area — all three tenant roles (matrix in
+// docs/design/DT-017A-roles-authorization-foundation.md). SUPER_ADMIN is a platform
+// role, never a tenant one, and is deliberately not included here.
+@PreAuthorize("hasAnyRole('OWNER','MANAGER','MEMBER')")
 @RequiredArgsConstructor
 @Tag(name = "Customers", description = "Company customer portfolio — admin endpoints")
 public class CustomerController {

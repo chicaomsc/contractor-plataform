@@ -21,14 +21,18 @@ public class BrandingController {
 
     private final BrandingService brandingService;
 
+    // DT-017A: branding management — OWNER + MANAGER only, MEMBER excluded (matrix in
+    // docs/design/DT-017A-roles-authorization-foundation.md). Both read and write are
+    // the same rule here (unlike CompanyController), so one annotation per method is
+    // enough — no need to split the class differently.
     @GetMapping("/me")
-    @PreAuthorize("hasRole('OWNER')")
+    @PreAuthorize("hasAnyRole('OWNER','MANAGER')")
     public BrandingResponse getBranding(@AuthenticationPrincipal JwtPrincipal principal) {
         return brandingService.getBranding(principal.companyId());
     }
 
     @PutMapping("/me")
-    @PreAuthorize("hasRole('OWNER')")
+    @PreAuthorize("hasAnyRole('OWNER','MANAGER')")
     public BrandingResponse updateBranding(
             @AuthenticationPrincipal JwtPrincipal principal,
             @Valid @RequestBody UpdateBrandingRequest request) {
