@@ -51,6 +51,11 @@ class ResendEmailServiceTest {
     private static final String RESET_LINK = "https://app.example.pt/reset-password#token=abc123";
     private static final Duration VALIDITY = Duration.ofMinutes(30);
 
+    // DT-017B
+    private static final String ACCEPT_LINK = "https://app.example.pt/invite/team#token=abc123";
+    private static final String COMPANY_NAME = "Acme Contractors";
+    private static final Duration INVITATION_VALIDITY = Duration.ofDays(7);
+
     @Mock
     HttpClient httpClient;
 
@@ -183,6 +188,101 @@ class ResendEmailServiceTest {
         service.sendPasswordResetEmail(RECIPIENT, RESET_LINK, VALIDITY);
 
         verify(httpClient, times(1)).send(any(), any());
+    }
+
+    // ── sendTeamInvitationEmail (DT-017B) — same shared `send` helper as
+    // sendPasswordResetEmail above, exercised through its own public method to prove
+    // the refactor didn't change either method's observable behavior. ─────────────
+
+    @Test
+    void teamInvitation_disabled_neverCallsHttpClient() throws Exception {
+        properties.setEnabled(false);
+
+        service.sendTeamInvitationEmail(RECIPIENT, COMPANY_NAME, "Administrador", ACCEPT_LINK, INVITATION_VALIDITY);
+
+        verifyNoInteractions(httpClient);
+    }
+
+    @Test
+    void teamInvitation_enabled_success_callsHttpClientOnceWithExpectedRequest() throws Exception {
+        when(httpResponse.statusCode()).thenReturn(200);
+        doReturn(httpResponse).when(httpClient).send(any(), any());
+
+        assertThatCode(() -> service.sendTeamInvitationEmail(
+                RECIPIENT, COMPANY_NAME, "Administrador", ACCEPT_LINK, INVITATION_VALIDITY))
+                .doesNotThrowAnyException();
+
+        ArgumentCaptor<HttpRequest> captor = ArgumentCaptor.forClass(HttpRequest.class);
+        verify(httpClient, times(1)).send(captor.capture(), any());
+
+        HttpRequest sent = captor.getValue();
+        assertThat(sent.headers().firstValue("Authorization")).contains("Bearer re_test_key_not_real");
+        assertThat(sent.uri().toString()).isEqualTo("https://api.resend.com/emails");
+        assertThat(sent.method()).isEqualTo("POST");
+    }
+
+    @Test
+    void teamInvitation_requestBody_containsRecipientCompanyRoleAndAcceptLink() throws Exception {
+        when(httpResponse.statusCode()).thenReturn(200);
+        doReturn(httpResponse).when(httpClient).send(any(), any());
+
+        ArgumentCaptor<HttpRequest> captor = ArgumentCaptor.forClass(HttpRequest.class);
+        service.sendTeamInvitationEmail(RECIPIENT, COMPANY_NAME, "Colaborador", ACCEPT_LINK, INVITATION_VALIDITY);
+        verify(httpClient).send(captor.capture(), any());
+
+        Map<?, ?> json = new ObjectMapper().readValue(bodyAsString(captor.getValue()), Map.class);
+
+        assertThat(json.get("to")).isEqualTo(List.of(RECIPIENT));
+        assertThat((String) json.get("html")).contains(ACCEPT_LINK).contains(COMPANY_NAME).contains("Colaborador");
+        assertThat((String) json.get("text")).contains(ACCEPT_LINK).contains(COMPANY_NAME).contains("Colaborador");
+        assertThat(json.get("from")).isEqualTo(properties.getFrom());
+        assertThat(json.get("subject")).isEqualTo("Convite para equipe");
+    }
+
+    @Test
+    void teamInvitation_providerReturns4xx_doesNotThrow() throws Exception {
+        when(httpResponse.statusCode()).thenReturn(422);
+        doReturn(httpResponse).when(httpClient).send(any(), any());
+
+        assertThatCode(() -> service.sendTeamInvitationEmail(
+                RECIPIENT, COMPANY_NAME, "Administrador", ACCEPT_LINK, INVITATION_VALIDITY))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void teamInvitation_providerReturns5xx_doesNotThrow() throws Exception {
+        when(httpResponse.statusCode()).thenReturn(503);
+        doReturn(httpResponse).when(httpClient).send(any(), any());
+
+        assertThatCode(() -> service.sendTeamInvitationEmail(
+                RECIPIENT, COMPANY_NAME, "Administrador", ACCEPT_LINK, INVITATION_VALIDITY))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void teamInvitation_providerNetworkError_doesNotThrow() throws Exception {
+        doThrow(new IOException("connection refused")).when(httpClient).send(any(), any());
+
+        assertThatCode(() -> service.sendTeamInvitationEmail(
+                RECIPIENT, COMPANY_NAME, "Administrador", ACCEPT_LINK, INVITATION_VALIDITY))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void teamInvitation_providerInterrupted_doesNotThrow_andRestoresInterruptFlag() throws Exception {
+        doThrow(new InterruptedException("interrupted")).when(httpClient).send(any(), any());
+
+        try {
+            assertThatCode(() -> service.sendTeamInvitationEmail(
+                    RECIPIENT, COMPANY_NAME, "Administrador", ACCEPT_LINK, INVITATION_VALIDITY))
+                    .doesNotThrowAnyException();
+
+            assertThat(Thread.interrupted())
+                    .as("interrupt flag must be restored, not silently swallowed")
+                    .isTrue();
+        } finally {
+            Thread.interrupted();
+        }
     }
 
     /** Drains the request's {@code BodyPublisher} synchronously so the test can assert on it. */

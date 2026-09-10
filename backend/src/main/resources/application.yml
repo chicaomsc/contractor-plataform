@@ -82,6 +82,11 @@ app:
     token-ttl: ${PASSWORD_RESET_TOKEN_TTL:1800}
     # 3 minutes — see DT-011A.10 §7.
     request-cooldown: ${PASSWORD_RESET_REQUEST_COOLDOWN:180}
+  team-invitation:
+    # 7 days — DT-017B. Its own named property rather than reusing OwnerInvite's
+    # hardcoded 7-day constant, so the two flows can be tuned independently even
+    # though they start at the same default.
+    ttl-seconds: ${TEAM_INVITATION_TTL_SECONDS:604800}
   session:
     # DT-012 (Session Lifecycle, Phase A) — 8 hours. A chain of rotated refresh tokens
     # may not extend a single login past this many seconds from the original
@@ -139,6 +144,18 @@ app:
     admin-password-reset:
       capacity: ${AUTH_RATE_LIMIT_ADMIN_PASSWORD_RESET_CAPACITY:10}
       window-seconds: ${AUTH_RATE_LIMIT_ADMIN_PASSWORD_RESET_WINDOW_SECONDS:60}
+    # DT-017B — POST /team/invitations, OWNER-authenticated, sends an email per call.
+    team-invitation-create:
+      capacity: ${AUTH_RATE_LIMIT_TEAM_INVITATION_CREATE_CAPACITY:20}
+      window-seconds: ${AUTH_RATE_LIMIT_TEAM_INVITATION_CREATE_WINDOW_SECONDS:3600}
+    # POST /team/invitations/{id}/resend.
+    team-invitation-resend:
+      capacity: ${AUTH_RATE_LIMIT_TEAM_INVITATION_RESEND_CAPACITY:10}
+      window-seconds: ${AUTH_RATE_LIMIT_TEAM_INVITATION_RESEND_WINDOW_SECONDS:3600}
+    # POST /auth/team-invitations/accept — public, same shape/capacity as invite-accept above.
+    team-invitation-accept:
+      capacity: ${AUTH_RATE_LIMIT_TEAM_INVITATION_ACCEPT_CAPACITY:10}
+      window-seconds: ${AUTH_RATE_LIMIT_TEAM_INVITATION_ACCEPT_WINDOW_SECONDS:60}
 
 server:
   port: ${PORT:8080}

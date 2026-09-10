@@ -31,6 +31,17 @@ public class RateLimitProperties {
     // at most 4/hour; 20 leaves headroom for multiple tabs/devices) while still bounding
     // sustained abuse of a leaked/guessed token.
     private Rule refresh = new Rule(20, 3600);
+    // DT-017B — OWNER-authenticated, sends an email per call: 20/hour comfortably
+    // covers onboarding a real team in one sitting while bounding email-spam abuse of
+    // a compromised OWNER account (same reasoning as forgotPassword below, scaled up
+    // since this one requires authentication first).
+    private Rule teamInvitationCreate = new Rule(20, 3600);
+    // Rarer than create in normal use — an OWNER resending one invitation someone
+    // missed, not onboarding a whole team at once.
+    private Rule teamInvitationResend = new Rule(10, 3600);
+    // Public, token-based, single expected use per real invitation — same shape and
+    // same capacity as inviteAccept below (owner-invite acceptance).
+    private Rule teamInvitationAccept = new Rule(10, 60);
 
     @Getter
     @Setter

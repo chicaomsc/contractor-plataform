@@ -33,6 +33,8 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
 
     private static final AntPathMatcher PATH_MATCHER = new AntPathMatcher();
     private static final String ADMIN_PASSWORD_RESET_PATTERN = "/admin/companies/*/owners/*/password-reset";
+    // DT-017B
+    private static final String TEAM_INVITATION_RESEND_PATTERN = "/team/invitations/*/resend";
 
     private final RateLimitProperties properties;
     private final InMemoryRateLimiter rateLimiter;
@@ -69,8 +71,20 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
             case "/auth/password/forgot" -> properties.getForgotPassword();
             case "/auth/password/reset" -> properties.getResetPassword();
             case "/auth/invites/accept" -> properties.getInviteAccept();
-            default -> PATH_MATCHER.match(ADMIN_PASSWORD_RESET_PATTERN, path) ? properties.getAdminPasswordReset() : null;
+            case "/auth/team-invitations/accept" -> properties.getTeamInvitationAccept(); // DT-017B
+            case "/team/invitations" -> properties.getTeamInvitationCreate(); // DT-017B
+            default -> matchParameterizedRule(path);
         };
+    }
+
+    private RateLimitProperties.Rule matchParameterizedRule(String path) {
+        if (PATH_MATCHER.match(ADMIN_PASSWORD_RESET_PATTERN, path)) {
+            return properties.getAdminPasswordReset();
+        }
+        if (PATH_MATCHER.match(TEAM_INVITATION_RESEND_PATTERN, path)) { // DT-017B
+            return properties.getTeamInvitationResend();
+        }
+        return null;
     }
 
     private void writeTooManyRequests(HttpServletResponse response, long retryAfterSeconds) throws IOException {
