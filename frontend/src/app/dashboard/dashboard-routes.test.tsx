@@ -7,6 +7,7 @@ import DashboardEstimatesPage from "./estimates/page";
 import DashboardGalleryPage from "./gallery/page";
 import DashboardServicesPage from "./services/page";
 import DashboardSettingsPage from "./settings/page";
+import DashboardTeamPage from "./team/page";
 
 let role: UserRole = "OWNER";
 
@@ -39,6 +40,10 @@ vi.mock("@/features/dashboard/components/services/ServicesPage", () => ({
 
 vi.mock("@/features/dashboard/components/SettingsPage", () => ({
   SettingsPage: () => <div>Settings allowed</div>,
+}));
+
+vi.mock("@/features/dashboard/components/team/TeamPage", () => ({
+  TeamPage: () => <div>Team allowed</div>,
 }));
 
 function tenantSession(nextRole: UserRole): MeResponse {
@@ -137,4 +142,24 @@ describe("dashboard direct route permissions", () => {
 
     expect(screen.getByText("Estimates allowed")).toBeInTheDocument();
   });
+
+  it("allows OWNER access to team by direct URL", () => {
+    role = "OWNER";
+
+    render(<DashboardTeamPage />);
+
+    expect(screen.getByText("Team allowed")).toBeInTheDocument();
+  });
+
+  it.each(["MANAGER", "MEMBER"] as UserRole[])(
+    "denies %s access to team by direct URL",
+    (nextRole) => {
+      role = nextRole;
+
+      render(<DashboardTeamPage />);
+
+      expect(screen.queryByText("Team allowed")).not.toBeInTheDocument();
+      expectAccessDenied();
+    },
+  );
 });

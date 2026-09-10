@@ -90,6 +90,7 @@ describe("DashboardShell", () => {
       "Serviços",
       "Galeria",
       "Orçamentos",
+      "Equipe",
     ]);
   });
 
@@ -105,13 +106,14 @@ describe("DashboardShell", () => {
       "Orçamentos",
     ]);
     expectHiddenLinks(["Settings"]);
+    expectHiddenLinks(["Equipe"]);
   });
 
   it("shows only allowed areas for MEMBER navigation", () => {
     renderShell("MEMBER");
 
     expectVisibleLinks(["Início", "Empresa", "Orçamentos"]);
-    expectHiddenLinks(["Branding", "Settings", "Serviços", "Galeria"]);
+    expectHiddenLinks(["Branding", "Settings", "Serviços", "Galeria", "Equipe"]);
   });
 
   it("uses the same navigation filtering in the mobile sidebar", async () => {
@@ -129,6 +131,7 @@ describe("DashboardShell", () => {
     expect(mobileNav).not.toHaveTextContent("Settings");
     expect(mobileNav).not.toHaveTextContent("Serviços");
     expect(mobileNav).not.toHaveTextContent("Galeria");
+    expect(mobileNav).not.toHaveTextContent("Equipe");
   });
 
   it("shows the friendly role label in the user menu", () => {

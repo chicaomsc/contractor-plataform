@@ -11,6 +11,7 @@ import {
   Palette,
   Settings,
   Wrench,
+  Users,
   UserCircle,
   X,
   type LucideIcon,
@@ -27,6 +28,7 @@ import {
   canManageGallery,
   canManageServices,
   canManageSettings,
+  canManageTeam,
   canViewCompany,
   getUserRoleLabel,
 } from "@/features/auth/permissions";
@@ -87,6 +89,12 @@ const navItems: DashboardNavItem[] = [
     icon: FileText,
     canView: canAccessEstimates,
   },
+  {
+    href: "/dashboard/team",
+    label: "Equipe",
+    icon: Users,
+    canView: canManageTeam,
+  },
 ];
 
 const breadcrumbLabels = new Map([
@@ -97,6 +105,7 @@ const breadcrumbLabels = new Map([
   ["services", "Serviços"],
   ["gallery", "Galeria"],
   ["estimates", "Orçamentos"],
+  ["team", "Equipe"],
   ["new", "Novo"],
 ]);
 

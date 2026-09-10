@@ -14,4 +14,7 @@ export const dashboardQueryKeys = {
     [...dashboardQueryKeys.all, "estimates", "detail", id] as const,
   estimateShare: (id: string) =>
     [...dashboardQueryKeys.all, "estimates", "share", id] as const,
+  teamMembers: () => [...dashboardQueryKeys.all, "team", "members"] as const,
+  teamInvitations: () =>
+    [...dashboardQueryKeys.all, "team", "invitations"] as const,
 };

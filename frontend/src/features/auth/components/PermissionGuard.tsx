@@ -9,6 +9,7 @@ import {
   canManageGallery,
   canManageServices,
   canManageSettings,
+  canManageTeam,
   canViewCompany,
 } from "../permissions";
 import type { UserRole } from "../types/auth";
@@ -129,4 +130,8 @@ export function RequireEstimatesAccess({ children }: { children: ReactNode }) {
   return (
     <PermissionGuard canAccess={canAccessEstimates}>{children}</PermissionGuard>
   );
+}
+
+export function RequireTeamManagement({ children }: { children: ReactNode }) {
+  return <PermissionGuard canAccess={canManageTeam}>{children}</PermissionGuard>;
 }
