@@ -36,6 +36,32 @@ abstract class AbstractAdminIntegrationTest extends AbstractIntegrationTest {
 
     record RegisteredOwner(String email, String password, String companySlug, String accessToken, String refreshToken) {}
 
+    /** DT-017C — an ACTIVE tenant User (MANAGER/MEMBER) inserted directly into an
+     * existing company and logged in. Same "insert row + login" pattern as
+     * {@link #createSuperAdminAndLogin(String)}. */
+    record TenantMember(UUID userId, String email, String password, String accessToken, String refreshToken) {}
+
+    TenantMember addMember(UUID companyId, UserRole role) throws Exception {
+        String email = role.name().toLowerCase(java.util.Locale.ROOT) + "-member-" + System.nanoTime() + "@example.com";
+        String password = "MemberPass123";
+        User user = new User();
+        user.setCompanyId(companyId);
+        user.setEmail(email);
+        user.setPasswordHash(passwordEncoder.encode(password));
+        user.setName("Test " + role.name());
+        user.setRole(role);
+        user.setStatus(UserStatus.ACTIVE);
+        user = userRepository.save(user);
+
+        String body = mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new LoginRequest(email, password))))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        AuthResponse auth = objectMapper.readValue(body, AuthResponse.class);
+        return new TenantMember(user.getId(), email, password, auth.accessToken(), auth.refreshToken());
+    }
+
     /** Bypasses PlatformAdminBootstrapRunner (env vars aren't set in tests) by inserting the row directly. */
     String createSuperAdminAndLogin() throws Exception {
         return createSuperAdminAndLogin("super-admin-" + System.nanoTime() + "@example.com");
