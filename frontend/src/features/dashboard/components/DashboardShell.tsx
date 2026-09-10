@@ -13,26 +13,80 @@ import {
   Wrench,
   UserCircle,
   X,
+  type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useMemo, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/features/auth/hooks/auth-context";
+import {
+  canAccessDashboard,
+  canAccessEstimates,
+  canManageBranding,
+  canManageGallery,
+  canManageServices,
+  canManageSettings,
+  canViewCompany,
+  getUserRoleLabel,
+} from "@/features/auth/permissions";
+import type { UserRole } from "@/features/auth/types/auth";
 import { cn } from "@/lib/utils/cn";
 
 type DashboardShellProps = {
   children: ReactNode;
 };
 
-const navItems = [
-  { href: "/dashboard", label: "Início", icon: Home },
-  { href: "/dashboard/company", label: "Empresa", icon: Building2 },
-  { href: "/dashboard/branding", label: "Branding", icon: Palette },
-  { href: "/dashboard/settings", label: "Settings", icon: Settings },
-  { href: "/dashboard/services", label: "Serviços", icon: Wrench },
-  { href: "/dashboard/gallery", label: "Galeria", icon: Images },
-  { href: "/dashboard/estimates", label: "Orçamentos", icon: FileText },
+type DashboardNavItem = {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  canView: (role: UserRole) => boolean;
+};
+
+const navItems: DashboardNavItem[] = [
+  {
+    href: "/dashboard",
+    label: "Início",
+    icon: Home,
+    canView: canAccessDashboard,
+  },
+  {
+    href: "/dashboard/company",
+    label: "Empresa",
+    icon: Building2,
+    canView: canViewCompany,
+  },
+  {
+    href: "/dashboard/branding",
+    label: "Branding",
+    icon: Palette,
+    canView: canManageBranding,
+  },
+  {
+    href: "/dashboard/settings",
+    label: "Settings",
+    icon: Settings,
+    canView: canManageSettings,
+  },
+  {
+    href: "/dashboard/services",
+    label: "Serviços",
+    icon: Wrench,
+    canView: canManageServices,
+  },
+  {
+    href: "/dashboard/gallery",
+    label: "Galeria",
+    icon: Images,
+    canView: canManageGallery,
+  },
+  {
+    href: "/dashboard/estimates",
+    label: "Orçamentos",
+    icon: FileText,
+    canView: canAccessEstimates,
+  },
 ];
 
 const breadcrumbLabels = new Map([
@@ -80,6 +134,9 @@ function Breadcrumb() {
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const { logout, session } = useAuth();
+  const visibleNavItems = navItems.filter(
+    (item) => session?.user.role && item.canView(session.user.role),
+  );
 
   return (
     <div className="flex h-full flex-col bg-[var(--surface-dark)] text-[var(--surface-dark-fg)]">
@@ -99,7 +156,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         aria-label="Navegação do dashboard"
       >
         <ul className="m-0 space-y-1 p-0">
-          {navItems.map((item) => {
+          {visibleNavItems.map((item) => {
             const Icon = item.icon;
             const active =
               pathname === item.href ||
@@ -159,7 +216,7 @@ function UserMenu() {
       <div className="hidden text-right sm:block">
         <p className="m-0 text-sm font-semibold">{session?.user.name}</p>
         <p className="m-0 text-xs text-[var(--muted-foreground)]">
-          {session?.user.role}
+          {session?.user.role ? getUserRoleLabel(session.user.role) : null}
         </p>
       </div>
       <UserCircle size={28} aria-hidden="true" />

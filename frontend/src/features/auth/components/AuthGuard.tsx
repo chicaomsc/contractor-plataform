@@ -4,6 +4,7 @@ import { Loader2 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 import { ApiError } from "@/lib/api/errors";
+import { canAccessDashboard, canAccessPlatformAdmin } from "../permissions";
 import { useAuth } from "../hooks/auth-context";
 
 export function AuthGuard({ children }: { children: ReactNode }) {
@@ -31,7 +32,7 @@ export function AuthGuard({ children }: { children: ReactNode }) {
   }, [accessToken, isCheckingSession, isSessionExpired, logout, session]);
 
   useEffect(() => {
-    if (session?.user.role === "SUPER_ADMIN") {
+    if (canAccessPlatformAdmin(session?.user.role)) {
       router.replace("/admin");
     }
   }, [router, session?.user.role]);
@@ -40,7 +41,7 @@ export function AuthGuard({ children }: { children: ReactNode }) {
     !accessToken ||
     isCheckingSession ||
     !isAuthenticated ||
-    session?.user.role !== "OWNER" ||
+    !canAccessDashboard(session?.user.role) ||
     !session.company
   ) {
     return (
@@ -81,7 +82,7 @@ export function AdminGuard({ children }: { children: ReactNode }) {
   }, [accessToken, isCheckingSession, isSessionExpired, logout, session]);
 
   useEffect(() => {
-    if (session?.user.role === "OWNER") {
+    if (canAccessDashboard(session?.user.role)) {
       router.replace("/dashboard");
     }
   }, [router, session?.user.role]);
@@ -90,7 +91,7 @@ export function AdminGuard({ children }: { children: ReactNode }) {
     !accessToken ||
     isCheckingSession ||
     !isAuthenticated ||
-    session?.user.role !== "SUPER_ADMIN"
+    !canAccessPlatformAdmin(session?.user.role)
   ) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-background px-6">

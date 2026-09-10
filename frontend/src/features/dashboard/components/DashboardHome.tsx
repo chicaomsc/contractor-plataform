@@ -11,6 +11,13 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { buildTenantLandingUrl } from "@/lib/tenant/tenant-landing-url";
+import { useAuth } from "@/features/auth/hooks/auth-context";
+import {
+  canManageBranding,
+  canManageGallery,
+  canManageServices,
+  canManageSettings,
+} from "@/features/auth/permissions";
 import {
   useBranding,
   useCompany,
@@ -45,18 +52,24 @@ function StatCard({
 }
 
 export function DashboardHome() {
+  const { session } = useAuth();
+  const role = session?.user.role;
+  const canLoadBranding = canManageBranding(role);
+  const canLoadSettings = canManageSettings(role);
+  const canLoadServices = canManageServices(role);
+  const canLoadGallery = canManageGallery(role);
   const companyQuery = useCompany();
-  const brandingQuery = useBranding();
-  const settingsQuery = useSettings();
-  const servicesQuery = useServices();
-  const galleryQuery = useGallery();
+  const brandingQuery = useBranding({ enabled: canLoadBranding });
+  const settingsQuery = useSettings({ enabled: canLoadSettings });
+  const servicesQuery = useServices({ enabled: canLoadServices });
+  const galleryQuery = useGallery({ enabled: canLoadGallery });
 
   const queries = [
     companyQuery,
-    brandingQuery,
-    settingsQuery,
-    servicesQuery,
-    galleryQuery,
+    ...(canLoadBranding ? [brandingQuery] : []),
+    ...(canLoadSettings ? [settingsQuery] : []),
+    ...(canLoadServices ? [servicesQuery] : []),
+    ...(canLoadGallery ? [galleryQuery] : []),
   ];
   const isLoading = queries.some((query) => query.isLoading);
   const hasError = queries.some((query) => query.isError);
@@ -80,9 +93,11 @@ export function DashboardHome() {
   const company = companyQuery.data;
   const branding = brandingQuery.data;
   const settings = settingsQuery.data;
-  const services = servicesQuery.data ?? [];
-  const gallery = galleryQuery.data ?? [];
-  const publicSiteUrl = company?.slug ? buildTenantLandingUrl(company.slug) : null;
+  const services = canLoadServices ? (servicesQuery.data ?? []) : [];
+  const gallery = canLoadGallery ? (galleryQuery.data ?? []) : [];
+  const publicSiteUrl = company?.slug
+    ? buildTenantLandingUrl(company.slug)
+    : null;
   const lastUpdated = latestIsoDate([
     ...services.map((service) => service.updatedAt),
     ...gallery.map((item) => item.updatedAt),
@@ -102,12 +117,16 @@ export function DashboardHome() {
           value={company?.name ?? "Sem empresa"}
           icon={Building2}
         />
-        <StatCard
-          label="Serviços publicados"
-          value={services.length}
-          icon={Wrench}
-        />
-        <StatCard label="Imagens" value={gallery.length} icon={Image} />
+        {canLoadServices ? (
+          <StatCard
+            label="Serviços publicados"
+            value={services.length}
+            icon={Wrench}
+          />
+        ) : null}
+        {canLoadGallery ? (
+          <StatCard label="Imagens" value={gallery.length} icon={Image} />
+        ) : null}
         <StatCard
           label="Status do site"
           value={company?.status ?? "Indefinido"}
@@ -140,7 +159,11 @@ export function DashboardHome() {
                 Branding
               </dt>
               <dd className="m-0 mt-1 font-semibold">
-                {branding?.primaryColor ? "Configurado" : "Parcial"}
+                {canLoadBranding
+                  ? branding?.primaryColor
+                    ? "Configurado"
+                    : "Parcial"
+                  : "Sem acesso"}
               </dd>
             </div>
             <div>
@@ -148,7 +171,9 @@ export function DashboardHome() {
                 Moeda
               </dt>
               <dd className="m-0 mt-1 font-semibold">
-                {settings?.defaultCurrency ?? "Não configurada"}
+                {canLoadSettings
+                  ? (settings?.defaultCurrency ?? "Não configurada")
+                  : "Sem acesso"}
               </dd>
             </div>
             <div className="md:col-span-2">
@@ -185,34 +210,42 @@ export function DashboardHome() {
               <Building2 size={18} aria-hidden="true" />
               Editar empresa
             </Link>
-            <Link
-              href="/dashboard/branding"
-              className="flex items-center gap-3 border border-border px-4 py-3 text-sm font-semibold no-underline hover:border-primary"
-            >
-              <Palette size={18} aria-hidden="true" />
-              Rever branding
-            </Link>
-            <Link
-              href="/dashboard/services"
-              className="flex items-center gap-3 border border-border px-4 py-3 text-sm font-semibold no-underline hover:border-primary"
-            >
-              <Wrench size={18} aria-hidden="true" />
-              Gerenciar serviços
-            </Link>
-            <Link
-              href="/dashboard/gallery"
-              className="flex items-center gap-3 border border-border px-4 py-3 text-sm font-semibold no-underline hover:border-primary"
-            >
-              <Images size={18} aria-hidden="true" />
-              Gerenciar galeria
-            </Link>
-            <Link
-              href="/dashboard/settings"
-              className="flex items-center gap-3 border border-border px-4 py-3 text-sm font-semibold no-underline hover:border-primary"
-            >
-              <Settings size={18} aria-hidden="true" />
-              Ajustar settings
-            </Link>
+            {canLoadBranding ? (
+              <Link
+                href="/dashboard/branding"
+                className="flex items-center gap-3 border border-border px-4 py-3 text-sm font-semibold no-underline hover:border-primary"
+              >
+                <Palette size={18} aria-hidden="true" />
+                Rever branding
+              </Link>
+            ) : null}
+            {canLoadServices ? (
+              <Link
+                href="/dashboard/services"
+                className="flex items-center gap-3 border border-border px-4 py-3 text-sm font-semibold no-underline hover:border-primary"
+              >
+                <Wrench size={18} aria-hidden="true" />
+                Gerenciar serviços
+              </Link>
+            ) : null}
+            {canLoadGallery ? (
+              <Link
+                href="/dashboard/gallery"
+                className="flex items-center gap-3 border border-border px-4 py-3 text-sm font-semibold no-underline hover:border-primary"
+              >
+                <Images size={18} aria-hidden="true" />
+                Gerenciar galeria
+              </Link>
+            ) : null}
+            {canLoadSettings ? (
+              <Link
+                href="/dashboard/settings"
+                className="flex items-center gap-3 border border-border px-4 py-3 text-sm font-semibold no-underline hover:border-primary"
+              >
+                <Settings size={18} aria-hidden="true" />
+                Ajustar settings
+              </Link>
+            ) : null}
           </div>
         </div>
       </section>

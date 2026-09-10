@@ -8,6 +8,9 @@ import {
   useServices,
   useSettings,
 } from "../hooks/dashboard-hooks";
+import type { UserRole } from "@/features/auth/types/auth";
+
+let role: UserRole = "OWNER";
 
 vi.mock("../hooks/dashboard-hooks", () => ({
   useBranding: vi.fn(),
@@ -15,6 +18,31 @@ vi.mock("../hooks/dashboard-hooks", () => ({
   useGallery: vi.fn(),
   useServices: vi.fn(),
   useSettings: vi.fn(),
+}));
+
+vi.mock("@/features/auth/hooks/auth-context", () => ({
+  useAuth: () => ({
+    session: {
+      user: {
+        id: "user-1",
+        companyId: "company-1",
+        email: "user@example.test",
+        name: "User",
+        role,
+        status: "ACTIVE",
+      },
+      company: {
+        id: "company-1",
+        name: "JR Pinturas",
+        slug: "jr-pinturas",
+        email: "contato@example.com",
+        country: "BR",
+        status: "ACTIVE",
+      },
+      branding: null,
+      settings: null,
+    },
+  }),
 }));
 
 function queryResult<T>(data: T) {
@@ -28,6 +56,7 @@ function queryResult<T>(data: T) {
 
 describe("DashboardHome", () => {
   beforeEach(() => {
+    role = "OWNER";
     process.env.NEXT_PUBLIC_API_BASE_URL = "http://localhost:8080";
     process.env.NEXT_PUBLIC_SITE_URL = "http://localhost:3001";
     process.env.NEXT_PUBLIC_PLATFORM_BASE_DOMAIN = "localhost";
@@ -100,5 +129,38 @@ describe("DashboardHome", () => {
     expect(publicSiteLink).toHaveAttribute("target", "_blank");
     expect(publicSiteLink).toHaveAttribute("rel", "noopener noreferrer");
     expect(publicSiteLink).toHaveClass("bg-primary");
+  });
+
+  it("does not request OWNER-only settings for MANAGER", () => {
+    role = "MANAGER";
+
+    render(<DashboardHome />);
+
+    expect(useBranding).toHaveBeenCalledWith({ enabled: true });
+    expect(useServices).toHaveBeenCalledWith({ enabled: true });
+    expect(useGallery).toHaveBeenCalledWith({ enabled: true });
+    expect(useSettings).toHaveBeenCalledWith({ enabled: false });
+    expect(screen.queryByRole("link", { name: "Ajustar settings" })).toBeNull();
+  });
+
+  it("does not request restricted dashboard resources for MEMBER", () => {
+    role = "MEMBER";
+
+    render(<DashboardHome />);
+
+    expect(useBranding).toHaveBeenCalledWith({ enabled: false });
+    expect(useSettings).toHaveBeenCalledWith({ enabled: false });
+    expect(useServices).toHaveBeenCalledWith({ enabled: false });
+    expect(useGallery).toHaveBeenCalledWith({ enabled: false });
+    expect(screen.getByRole("link", { name: "Editar empresa" })).toBeVisible();
+    expect(
+      screen.queryByRole("link", { name: "Rever branding" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Gerenciar serviços" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Gerenciar galeria" }),
+    ).not.toBeInTheDocument();
   });
 });

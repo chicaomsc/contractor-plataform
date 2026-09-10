@@ -2,7 +2,12 @@ import { z } from "zod";
 
 const nullableString = z.string().nullable();
 
-export const userRoleSchema = z.enum(["OWNER", "SUPER_ADMIN"]);
+export const userRoleSchema = z.enum([
+  "SUPER_ADMIN",
+  "OWNER",
+  "MANAGER",
+  "MEMBER",
+]);
 export const userStatusSchema = z.enum(["ACTIVE", "INACTIVE", "PENDING"]);
 export const companyStatusSchema = z.enum(["ACTIVE", "INACTIVE"]);
 
