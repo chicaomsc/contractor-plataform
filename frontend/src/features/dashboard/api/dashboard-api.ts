@@ -17,12 +17,25 @@ import {
   type UpdateCompanyInput,
   type UpdateSettingsInput,
 } from "../types/admin";
+import {
+  onboardingStatusSchema,
+  type OnboardingStatus,
+} from "../types/onboarding";
 
 export async function fetchCompany(accessToken: string): Promise<CompanyDto> {
   const response = await adminApiRequest<unknown>("/company/me", {
     accessToken,
   });
   return companyDtoSchema.parse(response);
+}
+
+export async function fetchOnboardingStatus(
+  accessToken: string,
+): Promise<OnboardingStatus> {
+  const response = await adminApiRequest<unknown>("/onboarding/status", {
+    accessToken,
+  });
+  return onboardingStatusSchema.parse(response);
 }
 
 export async function updateCompany(

@@ -9,6 +9,7 @@ import {
   fetchBranding,
   fetchCompany,
   fetchGallery,
+  fetchOnboardingStatus,
   fetchServices,
   fetchSettings,
   createService,
@@ -56,6 +57,16 @@ export function useCompany(options: DashboardQueryOptions = {}) {
   return useQuery({
     queryKey: dashboardQueryKeys.company(),
     queryFn: () => fetchCompany(accessToken),
+    enabled: options.enabled ?? true,
+  });
+}
+
+export function useOnboardingStatus(options: DashboardQueryOptions = {}) {
+  const accessToken = useAccessToken();
+
+  return useQuery({
+    queryKey: dashboardQueryKeys.onboardingStatus(),
+    queryFn: () => fetchOnboardingStatus(accessToken),
     enabled: options.enabled ?? true,
   });
 }
