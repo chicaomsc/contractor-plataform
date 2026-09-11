@@ -64,6 +64,13 @@ public class SecurityConfig {
                                 "/auth/invites/accept",
                                 "/auth/password/forgot",
                                 "/auth/password/reset",
+                                // DT-017B — the person accepting a team invitation has no
+                                // account/session yet, same reasoning as /auth/invites/accept
+                                // above. Every validation (token exists, unexpired, unused,
+                                // unrevoked, Company active) still happens inside
+                                // TeamInvitationService.acceptInvitation — "public" here only
+                                // means "no JWT required to reach it" (DT-017B §21).
+                                "/auth/team-invitations/accept",
                                 "/public/**",
                                 "/uploads/**",
                                 "/actuator/health",

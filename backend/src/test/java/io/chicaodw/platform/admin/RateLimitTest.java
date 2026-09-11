@@ -23,8 +23,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * DT-011B.5 §9 HARD-01 (SEC-AUTH-03) — in-memory rate limiting on exactly the five
- * authentication endpoints named in the DT, never a global limiter. Runs in its own
+ * DT-011B.5 §9 HARD-01 (SEC-AUTH-03) — in-memory rate limiting on the explicit
+ * allowlist of authentication/invitation endpoints (never a global limiter); one 429
+ * test per limited endpoint (register/login/refresh/forgot/reset/invite-accept/
+ * admin-password-reset, plus DT-017B's three team-invitation endpoints). Runs in its own
  * Spring context (distinct {@code @SpringBootTest(properties = ...)} from the shared
  * one used by every other test class) so its tight, test-only capacities can never
  * leak into — or be polluted by — the rest of the suite, which shares one loopback
@@ -48,6 +50,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "app.rate-limit.invite-accept.window-seconds=60",
         "app.rate-limit.admin-password-reset.capacity=3",
         "app.rate-limit.admin-password-reset.window-seconds=60",
+        // DT-017B
+        "app.rate-limit.team-invitation-create.capacity=3",
+        "app.rate-limit.team-invitation-create.window-seconds=60",
+        "app.rate-limit.team-invitation-resend.capacity=3",
+        "app.rate-limit.team-invitation-resend.window-seconds=60",
+        "app.rate-limit.team-invitation-accept.capacity=3",
+        "app.rate-limit.team-invitation-accept.window-seconds=60",
 })
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class RateLimitTest extends AbstractAdminIntegrationTest {
@@ -57,6 +66,7 @@ class RateLimitTest extends AbstractAdminIntegrationTest {
     @Autowired CompanyRepository companyRepository;
 
     private String superAdminToken;
+    private String ownerToken;
     private UUID companyId;
     private UUID ownerId;
 
@@ -68,6 +78,7 @@ class RateLimitTest extends AbstractAdminIntegrationTest {
     void setUpFixtures() throws Exception {
         superAdminToken = createSuperAdminAndLogin();
         var owner = registerOwner();
+        ownerToken = owner.accessToken();
         companyId = companyRepository.findBySlug(owner.companySlug()).orElseThrow().getId();
         ownerId = userRepository.findByEmail(owner.email()).orElseThrow().getId();
     }
@@ -146,6 +157,44 @@ class RateLimitTest extends AbstractAdminIntegrationTest {
         for (int i = 0; i < ATTEMPTS; i++) {
             last = mockMvc.perform(post("/admin/companies/" + companyId + "/owners/" + ownerId + "/password-reset")
                     .header("Authorization", "Bearer " + superAdminToken));
+        }
+        assertTooManyRequests(last);
+    }
+
+    @Test
+    void teamInvitationCreate_rateLimited_returns429AfterCapacityExceeded() throws Exception {
+        ResultActions last = null;
+        for (int i = 0; i < ATTEMPTS; i++) {
+            last = mockMvc.perform(post("/team/invitations")
+                    .header("Authorization", "Bearer " + ownerToken)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"email\":\"rate-limit-team-" + i + "@example.com\",\"role\":\"MEMBER\"}"));
+        }
+        assertTooManyRequests(last);
+    }
+
+    @Test
+    void teamInvitationResend_rateLimited_returns429AfterCapacityExceeded() throws Exception {
+        // The limiter matches /team/invitations/*/resend and keys on remoteAddr + the
+        // exact request URI, so every attempt must hit the SAME id to share one bucket —
+        // it rejects at the filter, before routing, so the id needn't be a real
+        // invitation (each unblocked attempt would 404 from the controller).
+        UUID sameId = UUID.randomUUID();
+        ResultActions last = null;
+        for (int i = 0; i < ATTEMPTS; i++) {
+            last = mockMvc.perform(post("/team/invitations/" + sameId + "/resend")
+                    .header("Authorization", "Bearer " + ownerToken));
+        }
+        assertTooManyRequests(last);
+    }
+
+    @Test
+    void teamInvitationAccept_rateLimited_returns429AfterCapacityExceeded() throws Exception {
+        ResultActions last = null;
+        for (int i = 0; i < ATTEMPTS; i++) {
+            last = mockMvc.perform(post("/auth/team-invitations/accept")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"token\":\"bogus-token\",\"name\":\"Someone\",\"password\":\"NewPassword1\"}"));
         }
         assertTooManyRequests(last);
     }

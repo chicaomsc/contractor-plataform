@@ -36,6 +36,10 @@ import type {
   UpdateSettingsInput,
 } from "../types/admin";
 
+type DashboardQueryOptions = {
+  enabled?: boolean;
+};
+
 function useAccessToken() {
   const { accessToken } = useAuth();
 
@@ -46,12 +50,13 @@ function useAccessToken() {
   return accessToken;
 }
 
-export function useCompany() {
+export function useCompany(options: DashboardQueryOptions = {}) {
   const accessToken = useAccessToken();
 
   return useQuery({
     queryKey: dashboardQueryKeys.company(),
     queryFn: () => fetchCompany(accessToken),
+    enabled: options.enabled ?? true,
   });
 }
 
@@ -69,12 +74,13 @@ export function useUpdateCompany() {
   });
 }
 
-export function useBranding() {
+export function useBranding(options: DashboardQueryOptions = {}) {
   const accessToken = useAccessToken();
 
   return useQuery({
     queryKey: dashboardQueryKeys.branding(),
     queryFn: () => fetchBranding(accessToken),
+    enabled: options.enabled ?? true,
   });
 }
 
@@ -113,25 +119,29 @@ export function useDeleteCompanyLogo() {
   return useMutation({
     mutationFn: () => deleteCompanyLogo(accessToken),
     onSuccess: () => {
-      queryClient.setQueryData<BrandingDto | undefined>(dashboardQueryKeys.branding(), (current) => {
-        if (!current) {
-          return current;
-        }
+      queryClient.setQueryData<BrandingDto | undefined>(
+        dashboardQueryKeys.branding(),
+        (current) => {
+          if (!current) {
+            return current;
+          }
 
-        return { ...current, logoUrl: null };
-      });
+          return { ...current, logoUrl: null };
+        },
+      );
       queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
       queryClient.invalidateQueries({ queryKey: publicSiteQueryKeys.all });
     },
   });
 }
 
-export function useSettings() {
+export function useSettings(options: DashboardQueryOptions = {}) {
   const accessToken = useAccessToken();
 
   return useQuery({
     queryKey: dashboardQueryKeys.settings(),
     queryFn: () => fetchSettings(accessToken),
+    enabled: options.enabled ?? true,
   });
 }
 
@@ -149,12 +159,13 @@ export function useUpdateSettings() {
   });
 }
 
-export function useServices() {
+export function useServices(options: DashboardQueryOptions = {}) {
   const accessToken = useAccessToken();
 
   return useQuery({
     queryKey: dashboardQueryKeys.services(),
     queryFn: () => fetchServices(accessToken),
+    enabled: options.enabled ?? true,
   });
 }
 
@@ -166,7 +177,9 @@ export function useCreateService() {
     mutationFn: (payload: ServiceFormInput) =>
       createService(accessToken, payload),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.services() });
+      queryClient.invalidateQueries({
+        queryKey: dashboardQueryKeys.services(),
+      });
     },
   });
 }
@@ -184,7 +197,9 @@ export function useUpdateService() {
       payload: ServiceFormInput;
     }) => updateService(accessToken, serviceId, payload),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.services() });
+      queryClient.invalidateQueries({
+        queryKey: dashboardQueryKeys.services(),
+      });
     },
   });
 }
@@ -196,7 +211,9 @@ export function useDeleteService() {
   return useMutation({
     mutationFn: (serviceId: string) => deleteService(accessToken, serviceId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.services() });
+      queryClient.invalidateQueries({
+        queryKey: dashboardQueryKeys.services(),
+      });
     },
   });
 }
@@ -214,17 +231,20 @@ export function useReorderService() {
       displayOrder: number;
     }) => reorderService(accessToken, serviceId, displayOrder),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.services() });
+      queryClient.invalidateQueries({
+        queryKey: dashboardQueryKeys.services(),
+      });
     },
   });
 }
 
-export function useGallery() {
+export function useGallery(options: DashboardQueryOptions = {}) {
   const accessToken = useAccessToken();
 
   return useQuery({
     queryKey: dashboardQueryKeys.gallery(),
     queryFn: () => fetchGallery(accessToken),
+    enabled: options.enabled ?? true,
   });
 }
 

@@ -236,6 +236,7 @@ function isAuthEntryPath(pathname: string) {
     pathname === "/admin/login" ||
     pathname === "/forgot-password" ||
     pathname === "/reset-password" ||
-    pathname === "/invite"
+    pathname === "/invite" ||
+    pathname === "/invite/team"
   );
 }

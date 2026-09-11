@@ -7,12 +7,18 @@ import io.chicaodw.platform.customer.api.dto.CreateCustomerRequest;
 import io.chicaodw.platform.customer.api.dto.CustomerResponse;
 import io.chicaodw.platform.estimate.api.dto.CreateEstimateRequest;
 import io.chicaodw.platform.estimate.api.dto.EstimateResponse;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.http.MediaType;
 
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -81,7 +87,7 @@ class TeamRoleAuthorizationMatrixTest extends AbstractAdminIntegrationTest {
         // at 403 before ever reaching that lookup — a permitted role reaching the
         // lookup (and 404ing on a made-up id) still proves it cleared authorization.
         String token = tokenFor(roleName);
-        var result = mockMvc.perform(get("/estimates/" + java.util.UUID.randomUUID() + "/share")
+        var result = mockMvc.perform(get("/estimates/" + UUID.randomUUID() + "/share")
                         .header("Authorization", "Bearer " + token))
                 .andReturn().getResponse().getStatus();
         if (expectedStatus == 403) {
@@ -213,5 +219,164 @@ class TeamRoleAuthorizationMatrixTest extends AbstractAdminIntegrationTest {
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         return objectMapper.readValue(body, EstimateResponse.class).id().toString();
+    }
+
+    // ── Equipe (DT-017B — team invitations, OWNER-only) ─────────────────────────
+
+    @ParameterizedTest(name = "{0} on GET /team/invitations -> {1}")
+    @CsvSource({"OWNER,200", "MANAGER,403", "MEMBER,403", "SUPER_ADMIN,403"})
+    void teamInvitationsList_matrix(String roleName, int expectedStatus) throws Exception {
+        mockMvc.perform(get("/team/invitations").header("Authorization", "Bearer " + tokenFor(roleName)))
+                .andExpect(status().is(expectedStatus));
+    }
+
+    @ParameterizedTest(name = "{0} on POST /team/invitations -> {1}")
+    @CsvSource({"OWNER,201", "MANAGER,403", "MEMBER,403", "SUPER_ADMIN,403"})
+    void teamInvitationsCreate_matrix(String roleName, int expectedStatus) throws Exception {
+        String body = "{\"email\":\"matrix-create-" + System.nanoTime() + "@example.com\",\"role\":\"MEMBER\"}";
+
+        mockMvc.perform(post("/team/invitations")
+                        .header("Authorization", "Bearer " + tokenFor(roleName))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().is(expectedStatus));
+    }
+
+    @ParameterizedTest(name = "{0} on DELETE /team/invitations/id -> {1}")
+    @CsvSource({"OWNER,204", "MANAGER,403", "MEMBER,403", "SUPER_ADMIN,403"})
+    void teamInvitationsRevoke_matrix(String roleName, int expectedStatus) throws Exception {
+        String token;
+        String invitationId;
+        if ("OWNER".equals(roleName)) {
+            TenantSession session = tenantSession(UserRole.OWNER);
+            token = session.token();
+            invitationId = createTeamInvitation(token, "matrix-revoke-" + System.nanoTime() + "@example.com");
+        } else {
+            token = tokenFor(roleName);
+            // A not-permitted role must be stopped at 403 before any lookup — the id
+            // doesn't need to be real (same reasoning as estimateShare_matrix above).
+            invitationId = UUID.randomUUID().toString();
+        }
+
+        mockMvc.perform(delete("/team/invitations/" + invitationId).header("Authorization", "Bearer " + token))
+                .andExpect(status().is(expectedStatus));
+    }
+
+    @ParameterizedTest(name = "{0} on POST /team/invitations/id/resend -> {1}")
+    @CsvSource({"OWNER,201", "MANAGER,403", "MEMBER,403", "SUPER_ADMIN,403"})
+    void teamInvitationsResend_matrix(String roleName, int expectedStatus) throws Exception {
+        String token;
+        String invitationId;
+        if ("OWNER".equals(roleName)) {
+            TenantSession session = tenantSession(UserRole.OWNER);
+            token = session.token();
+            invitationId = createTeamInvitation(token, "matrix-resend-" + System.nanoTime() + "@example.com");
+        } else {
+            token = tokenFor(roleName);
+            invitationId = UUID.randomUUID().toString();
+        }
+
+        mockMvc.perform(post("/team/invitations/" + invitationId + "/resend")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().is(expectedStatus));
+    }
+
+    // ── Equipe — cross-tenant (§22) ──────────────────────────────────────────
+
+    @Test
+    void crossTenant_teamInvitationOfAnotherCompany_revokeIsNotFound() throws Exception {
+        RegisteredOwner ownerB = registerOwner();
+        String invitationIdInCompanyB = createTeamInvitation(ownerB.accessToken(), "cross-team-revoke-" + System.nanoTime() + "@example.com");
+
+        TenantSession sessionA = tenantSession(UserRole.OWNER);
+
+        mockMvc.perform(delete("/team/invitations/" + invitationIdInCompanyB)
+                        .header("Authorization", "Bearer " + sessionA.token()))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void crossTenant_teamInvitationOfAnotherCompany_resendIsNotFound() throws Exception {
+        RegisteredOwner ownerB = registerOwner();
+        String invitationIdInCompanyB = createTeamInvitation(ownerB.accessToken(), "cross-team-resend-" + System.nanoTime() + "@example.com");
+
+        TenantSession sessionA = tenantSession(UserRole.OWNER);
+
+        mockMvc.perform(post("/team/invitations/" + invitationIdInCompanyB + "/resend")
+                        .header("Authorization", "Bearer " + sessionA.token()))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void crossTenant_listNeverLeaksAnotherCompanysInvitations() throws Exception {
+        RegisteredOwner ownerB = registerOwner();
+        createTeamInvitation(ownerB.accessToken(), "cross-team-list-" + System.nanoTime() + "@example.com");
+
+        TenantSession sessionA = tenantSession(UserRole.OWNER);
+        createTeamInvitation(sessionA.token(), "own-company-" + System.nanoTime() + "@example.com");
+
+        String body = mockMvc.perform(get("/team/invitations").header("Authorization", "Bearer " + sessionA.token()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(body).doesNotContain("cross-team-list-");
+    }
+
+    private String createTeamInvitation(String ownerToken, String email) throws Exception {
+        String body = mockMvc.perform(post("/team/invitations")
+                        .header("Authorization", "Bearer " + ownerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"" + email + "\",\"role\":\"MEMBER\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return objectMapper.readTree(body).get("id").asText();
+    }
+
+    // ── Equipe (DT-017C — team members, OWNER-only) ─────────────────────────────
+
+    @ParameterizedTest(name = "{0} on GET /team/members -> {1}")
+    @CsvSource({"OWNER,200", "MANAGER,403", "MEMBER,403", "SUPER_ADMIN,403"})
+    void teamMembersList_matrix(String roleName, int expectedStatus) throws Exception {
+        mockMvc.perform(get("/team/members").header("Authorization", "Bearer " + tokenFor(roleName)))
+                .andExpect(status().is(expectedStatus));
+    }
+
+    @ParameterizedTest(name = "{0} on PATCH /team/members/id/role -> {1}")
+    @CsvSource({"OWNER,404", "MANAGER,403", "MEMBER,403", "SUPER_ADMIN,403"})
+    void teamMembersRoleChange_matrix(String roleName, int expectedStatus) throws Exception {
+        // A not-permitted role is stopped at 403 before any lookup; OWNER clears
+        // authorization and then 404s on the made-up target id (proving it got past
+        // @PreAuthorize) — 404, never 403.
+        mockMvc.perform(patch("/team/members/" + UUID.randomUUID() + "/role")
+                        .header("Authorization", "Bearer " + tokenFor(roleName))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"role\":\"MEMBER\"}"))
+                .andExpect(status().is(expectedStatus));
+    }
+
+    @ParameterizedTest(name = "{0} on DELETE /team/members/id -> {1}")
+    @CsvSource({"OWNER,404", "MANAGER,403", "MEMBER,403", "SUPER_ADMIN,403"})
+    void teamMembersRemove_matrix(String roleName, int expectedStatus) throws Exception {
+        mockMvc.perform(delete("/team/members/" + UUID.randomUUID())
+                        .header("Authorization", "Bearer " + tokenFor(roleName)))
+                .andExpect(status().is(expectedStatus));
+    }
+
+    @Test
+    void crossTenant_roleChangeOfAnotherCompanysMember_isNotFound() throws Exception {
+        RegisteredOwner ownerB = registerOwner();
+        UUID companyIdB = userRepository.findByEmail(ownerB.email()).orElseThrow().getCompanyId();
+        TenantMember memberB = addMember(companyIdB, UserRole.MANAGER);
+
+        TenantSession sessionA = tenantSession(UserRole.OWNER);
+
+        mockMvc.perform(patch("/team/members/" + memberB.userId() + "/role")
+                        .header("Authorization", "Bearer " + sessionA.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"role\":\"MEMBER\"}"))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(delete("/team/members/" + memberB.userId())
+                        .header("Authorization", "Bearer " + sessionA.token()))
+                .andExpect(status().isNotFound());
     }
 }

@@ -20,6 +20,7 @@ const PUBLIC_AUTH_PATHS = new Set([
   "/auth/password/forgot",
   "/auth/password/reset",
   "/auth/invites/accept",
+  "/auth/team-invitations/accept",
 ]);
 
 let refreshPromise: Promise<AuthResponse> | null = null;

@@ -1,5 +1,10 @@
 import { DashboardHome } from "@/features/dashboard/components/DashboardHome";
+import { RequireDashboardAccess } from "@/features/auth/components/PermissionGuard";
 
 export default function DashboardPage() {
-  return <DashboardHome />;
+  return (
+    <RequireDashboardAccess>
+      <DashboardHome />
+    </RequireDashboardAccess>
+  );
 }

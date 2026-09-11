@@ -10,7 +10,7 @@ export type AuthSession = {
     companyId: string | null;
     email: string;
     name: string;
-    role: "OWNER" | "SUPER_ADMIN";
+    role: "SUPER_ADMIN" | "OWNER" | "MANAGER" | "MEMBER";
     status: "ACTIVE" | "INACTIVE" | "PENDING";
   };
   company: {

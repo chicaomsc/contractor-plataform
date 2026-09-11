@@ -32,4 +32,26 @@ public interface EmailService {
      * @param validity        how long the link remains usable, for display in the email body only
      */
     void sendPasswordResetEmail(String recipientEmail, String resetLink, Duration validity);
+
+    /**
+     * Sends the team-invitation email (DT-017B). Same never-throw contract as {@link
+     * #sendPasswordResetEmail} — {@code TeamInvitationService} relies on it the same
+     * way {@code PasswordResetTokenService} does: a Resend outage must never turn
+     * invitation creation into a different HTTP response, and must never leave the
+     * caller having to handle an exception from this call.
+     *
+     * @param recipientEmail   the invited person's email — exactly {@code
+     *                          TeamInvitation.email}, never anything client-supplied
+     * @param companyName      the inviting Company's display name, shown as free text in
+     *                          the email body (implementations must treat it as untrusted
+     *                          — see {@code TeamInvitationEmailTemplate})
+     * @param friendlyRoleName a human-facing label for the invited role (e.g.
+     *                          "Administrador"/"Colaborador") — never the technical enum
+     *                          name, and never SUPER_ADMIN/OWNER (DT-017B §10)
+     * @param acceptLink       the exact link built by {@code TeamInvitationService} —
+     *                          never reconstructed here
+     * @param validity         how long the link remains usable, for display only
+     */
+    void sendTeamInvitationEmail(String recipientEmail, String companyName, String friendlyRoleName,
+            String acceptLink, Duration validity);
 }

@@ -105,7 +105,7 @@ export function AcceptInvitePage() {
           </p>
           <h1 className="m-0 font-display text-3xl font-bold">Definir senha</h1>
           <p className="m-0 text-sm text-[var(--muted-foreground)]">
-            Crie a senha da conta OWNER para entrar no dashboard.
+            Crie a senha da conta para entrar no dashboard.
           </p>
         </div>
 

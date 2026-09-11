@@ -4,10 +4,9 @@ import { Save } from "lucide-react";
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/Button";
-import {
-  useCompany,
-  useUpdateCompany,
-} from "../hooks/dashboard-hooks";
+import { useAuth } from "@/features/auth/hooks/auth-context";
+import { canEditCompany } from "@/features/auth/permissions";
+import { useCompany, useUpdateCompany } from "../hooks/dashboard-hooks";
 import {
   updateCompanySchema,
   type CompanyDto,
@@ -40,8 +39,10 @@ function toFormValues(company: CompanyDto): UpdateCompanyInput {
 }
 
 export function CompanyPage() {
+  const { session } = useAuth();
   const companyQuery = useCompany();
   const updateMutation = useUpdateCompany();
+  const canEdit = canEditCompany(session?.user.role);
   const {
     register,
     handleSubmit,
@@ -58,6 +59,10 @@ export function CompanyPage() {
   }, [companyQuery.data, reset]);
 
   async function onSubmit(values: UpdateCompanyInput) {
+    if (!canEdit) {
+      return;
+    }
+
     const company = await updateMutation.mutateAsync(values);
     reset(toFormValues(company));
   }
@@ -83,13 +88,15 @@ export function CompanyPage() {
         title="Editar dados da empresa"
         description="Dados administrativos usados pela plataforma e pela landing pública quando disponíveis."
         action={
-          <Button
-            type="submit"
-            disabled={!isDirty || updateMutation.isPending}
-          >
-            <Save size={16} aria-hidden="true" />
-            {updateMutation.isPending ? "A guardar" : "Guardar"}
-          </Button>
+          canEdit ? (
+            <Button
+              type="submit"
+              disabled={!isDirty || updateMutation.isPending}
+            >
+              <Save size={16} aria-hidden="true" />
+              {updateMutation.isPending ? "A guardar" : "Guardar"}
+            </Button>
+          ) : null
         }
       />
 
@@ -100,34 +107,60 @@ export function CompanyPage() {
 
       <section className="grid gap-6 border border-border bg-surface p-6 lg:grid-cols-2">
         <Field label="Nome legal" error={errors.name}>
-          <input className={inputClassName} {...register("name")} />
+          <input
+            className={inputClassName}
+            disabled={!canEdit}
+            {...register("name")}
+          />
         </Field>
         <Field label="Nome comercial" error={errors.tradeName}>
-          <input className={inputClassName} {...register("tradeName")} />
+          <input
+            className={inputClassName}
+            disabled={!canEdit}
+            {...register("tradeName")}
+          />
         </Field>
         <Field label="Email" error={errors.email}>
           <input
             type="email"
             className={inputClassName}
+            disabled={!canEdit}
             {...register("email")}
           />
         </Field>
         <Field label="Telefone" error={errors.phone}>
-          <input className={inputClassName} {...register("phone")} />
+          <input
+            className={inputClassName}
+            disabled={!canEdit}
+            {...register("phone")}
+          />
         </Field>
         <Field label="WhatsApp" error={errors.whatsapp}>
-          <input className={inputClassName} {...register("whatsapp")} />
+          <input
+            className={inputClassName}
+            disabled={!canEdit}
+            {...register("whatsapp")}
+          />
         </Field>
         <Field label="Website" error={errors.website}>
-          <input className={inputClassName} {...register("website")} />
+          <input
+            className={inputClassName}
+            disabled={!canEdit}
+            {...register("website")}
+          />
         </Field>
         <Field label="NIF / Tax number" error={errors.taxNumber}>
-          <input className={inputClassName} {...register("taxNumber")} />
+          <input
+            className={inputClassName}
+            disabled={!canEdit}
+            {...register("taxNumber")}
+          />
         </Field>
         <Field label="País da empresa" error={errors.country}>
           <input
             className={inputClassName}
             maxLength={2}
+            disabled={!canEdit}
             {...register("country")}
           />
         </Field>
@@ -137,24 +170,38 @@ export function CompanyPage() {
         <h2 className="m-0 font-display text-2xl font-semibold">Morada</h2>
         <div className="grid gap-6 lg:grid-cols-2">
           <Field label="Rua" error={errors.address?.street}>
-            <input className={inputClassName} {...register("address.street")} />
+            <input
+              className={inputClassName}
+              disabled={!canEdit}
+              {...register("address.street")}
+            />
           </Field>
           <Field label="Cidade" error={errors.address?.city}>
-            <input className={inputClassName} {...register("address.city")} />
+            <input
+              className={inputClassName}
+              disabled={!canEdit}
+              {...register("address.city")}
+            />
           </Field>
           <Field label="Código postal" error={errors.address?.postalCode}>
             <input
               className={inputClassName}
+              disabled={!canEdit}
               {...register("address.postalCode")}
             />
           </Field>
           <Field label="Região" error={errors.address?.region}>
-            <input className={inputClassName} {...register("address.region")} />
+            <input
+              className={inputClassName}
+              disabled={!canEdit}
+              {...register("address.region")}
+            />
           </Field>
           <Field label="País da morada" error={errors.address?.country}>
             <input
               className={inputClassName}
               maxLength={2}
+              disabled={!canEdit}
               {...register("address.country")}
             />
           </Field>

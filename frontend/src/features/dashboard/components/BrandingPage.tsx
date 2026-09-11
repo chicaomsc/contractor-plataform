@@ -40,7 +40,7 @@ function getLogoErrorMessage(error: unknown, fallback: string) {
     }
 
     if (error.status === 403) {
-      return "Apenas OWNER pode alterar a logo da empresa.";
+      return "Você não tem permissão para alterar a logo da empresa.";
     }
 
     if (error.status === 400 || error.status === 422) {
