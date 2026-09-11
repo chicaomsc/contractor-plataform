@@ -19,6 +19,11 @@ public interface TeamInvitationRepository extends JpaRepository<TeamInvitation, 
 
     List<TeamInvitation> findByCompanyIdOrderByCreatedAtDesc(UUID companyId);
 
+    /** DT-018A — "has invited at least one collaborator" for the onboarding checklist,
+     * regardless of status (PENDING/used/revoked/expired all count — the act of inviting
+     * is the signal, not whether it was ever accepted). EXISTS, not a list load / COUNT. */
+    boolean existsByCompanyId(UUID companyId);
+
     /** Duplicate-invitation check (DT-017B §5) — a still-valid, not-yet-consumed
      * invitation for the same Company + email blocks a new {@code POST /team/invitations}
      * (the client must use resend/revoke instead of implicitly creating a second one).

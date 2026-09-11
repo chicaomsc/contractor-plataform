@@ -17,4 +17,5 @@ export const dashboardQueryKeys = {
   teamMembers: () => [...dashboardQueryKeys.all, "team", "members"] as const,
   teamInvitations: () =>
     [...dashboardQueryKeys.all, "team", "invitations"] as const,
+  onboardingStatus: () => [...dashboardQueryKeys.all, "onboarding"] as const,
 };

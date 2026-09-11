@@ -22,12 +22,14 @@ import {
   useBranding,
   useCompany,
   useGallery,
+  useOnboardingStatus,
   useServices,
   useSettings,
 } from "../hooks/dashboard-hooks";
 import { formatDateTime, latestIsoDate } from "../utils/forms";
 import { ErrorState, LoadingState } from "./DashboardState";
 import { PageHeader } from "./PageHeader";
+import { OnboardingChecklist } from "./onboarding/OnboardingChecklist";
 
 function StatCard({
   label,
@@ -58,11 +60,13 @@ export function DashboardHome() {
   const canLoadSettings = canManageSettings(role);
   const canLoadServices = canManageServices(role);
   const canLoadGallery = canManageGallery(role);
+  const isOwner = role === "OWNER";
   const companyQuery = useCompany();
   const brandingQuery = useBranding({ enabled: canLoadBranding });
   const settingsQuery = useSettings({ enabled: canLoadSettings });
   const servicesQuery = useServices({ enabled: canLoadServices });
   const galleryQuery = useGallery({ enabled: canLoadGallery });
+  const onboardingQuery = useOnboardingStatus({ enabled: isOwner });
 
   const queries = [
     companyQuery,
@@ -110,6 +114,10 @@ export function DashboardHome() {
         title="Visão geral"
         description="Estado administrativo da empresa e da landing pública sem métricas fictícias."
       />
+
+      {isOwner && onboardingQuery.data ? (
+        <OnboardingChecklist status={onboardingQuery.data} />
+      ) : null}
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard

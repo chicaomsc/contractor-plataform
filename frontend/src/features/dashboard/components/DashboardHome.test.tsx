@@ -5,6 +5,7 @@ import {
   useBranding,
   useCompany,
   useGallery,
+  useOnboardingStatus,
   useServices,
   useSettings,
 } from "../hooks/dashboard-hooks";
@@ -16,6 +17,7 @@ vi.mock("../hooks/dashboard-hooks", () => ({
   useBranding: vi.fn(),
   useCompany: vi.fn(),
   useGallery: vi.fn(),
+  useOnboardingStatus: vi.fn(),
   useServices: vi.fn(),
   useSettings: vi.fn(),
 }));
@@ -52,6 +54,19 @@ function queryResult<T>(data: T) {
     isError: false,
     refetch: vi.fn(),
   };
+}
+
+function onboardingResult(
+  data = {
+    companyCompleted: false,
+    brandingCompleted: false,
+    servicesCompleted: false,
+    customerCompleted: false,
+    estimateCompleted: false,
+    teamCompleted: false,
+  },
+) {
+  return queryResult(data) as unknown as ReturnType<typeof useOnboardingStatus>;
 }
 
 describe("DashboardHome", () => {
@@ -112,6 +127,7 @@ describe("DashboardHome", () => {
     vi.mocked(useGallery).mockReturnValue(
       queryResult([]) as unknown as ReturnType<typeof useGallery>,
     );
+    vi.mocked(useOnboardingStatus).mockReturnValue(onboardingResult());
   });
 
   it("shows the public site link as the first next action", () => {
@@ -129,6 +145,140 @@ describe("DashboardHome", () => {
     expect(publicSiteLink).toHaveAttribute("target", "_blank");
     expect(publicSiteLink).toHaveAttribute("rel", "noopener noreferrer");
     expect(publicSiteLink).toHaveClass("bg-primary");
+  });
+
+  it("loads and renders onboarding only for OWNER", () => {
+    render(<DashboardHome />);
+
+    expect(useOnboardingStatus).toHaveBeenCalledWith({ enabled: true });
+    expect(
+      screen.getByRole("heading", { name: "Configure sua empresa" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("0 de 5")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar")).toHaveAttribute(
+      "aria-valuenow",
+      "0",
+    );
+  });
+
+  it("does not request or render onboarding for tenant roles other than OWNER", () => {
+    role = "MANAGER";
+
+    render(<DashboardHome />);
+
+    expect(useOnboardingStatus).toHaveBeenCalledWith({ enabled: false });
+    expect(
+      screen.queryByRole("heading", { name: "Configure sua empresa" }),
+    ).not.toBeInTheDocument();
+
+    role = "MEMBER";
+    render(<DashboardHome />);
+
+    expect(useOnboardingStatus).toHaveBeenLastCalledWith({ enabled: false });
+    expect(
+      screen.queryByRole("heading", { name: "Configure sua empresa" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("calculates required progress without counting team", () => {
+    vi.mocked(useOnboardingStatus).mockReturnValue(
+      onboardingResult({
+        companyCompleted: true,
+        brandingCompleted: true,
+        servicesCompleted: true,
+        customerCompleted: false,
+        estimateCompleted: false,
+        teamCompleted: true,
+      }),
+    );
+
+    render(<DashboardHome />);
+
+    expect(screen.getByText("3 de 5")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar")).toHaveAttribute(
+      "aria-valuenow",
+      "60",
+    );
+    expect(screen.getByText("Convide sua equipe")).toBeInTheDocument();
+    expect(screen.getByText("Opcional")).toBeInTheDocument();
+  });
+
+  it("shows completed state when all required steps are complete", () => {
+    vi.mocked(useOnboardingStatus).mockReturnValue(
+      onboardingResult({
+        companyCompleted: true,
+        brandingCompleted: true,
+        servicesCompleted: true,
+        customerCompleted: true,
+        estimateCompleted: true,
+        teamCompleted: false,
+      }),
+    );
+
+    render(<DashboardHome />);
+
+    expect(screen.getByText("5 de 5")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar")).toHaveAttribute(
+      "aria-valuenow",
+      "100",
+    );
+    expect(
+      screen.getByText("Configuração essencial concluída."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Convidar colaboradores" }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps the dashboard usable while onboarding is loading or fails", () => {
+    vi.mocked(useOnboardingStatus).mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      isError: false,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useOnboardingStatus>);
+
+    const { rerender } = render(<DashboardHome />);
+    expect(
+      screen.getByRole("heading", { name: "Visão geral" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Configure sua empresa" }),
+    ).not.toBeInTheDocument();
+
+    vi.mocked(useOnboardingStatus).mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useOnboardingStatus>);
+    rerender(<DashboardHome />);
+    expect(
+      screen.getByRole("heading", { name: "Visão geral" }),
+    ).toBeInTheDocument();
+  });
+
+  it("uses the defined destinations for checklist actions", () => {
+    render(<DashboardHome />);
+
+    expect(
+      screen.getByRole("link", { name: "Configurar Dados da empresa" }),
+    ).toHaveAttribute("href", "/dashboard/company");
+    expect(
+      screen.getByRole("link", { name: "Configurar Identidade visual" }),
+    ).toHaveAttribute("href", "/dashboard/branding");
+    expect(
+      screen.getByRole("link", { name: "Configurar Serviços" }),
+    ).toHaveAttribute("href", "/dashboard/services");
+    expect(
+      screen.getByRole("link", { name: "Configurar Primeiro cliente" }),
+    ).toHaveAttribute("href", "/dashboard/estimates/new");
+    expect(
+      screen.getByRole("link", { name: "Configurar Primeiro orçamento" }),
+    ).toHaveAttribute("href", "/dashboard/estimates/new");
+    expect(
+      screen.getByRole("link", { name: "Convidar colaboradores" }),
+    ).toHaveAttribute("href", "/dashboard/team");
   });
 
   it("does not request OWNER-only settings for MANAGER", () => {

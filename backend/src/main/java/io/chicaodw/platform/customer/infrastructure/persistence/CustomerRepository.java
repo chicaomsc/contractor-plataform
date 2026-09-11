@@ -14,4 +14,8 @@ public interface CustomerRepository extends JpaRepository<Customer, UUID> {
     List<Customer> findByCompanyIdOrderByNameAsc(UUID companyId);
 
     Optional<Customer> findByIdAndCompanyId(UUID id, UUID companyId);
+
+    /** DT-018A — "has at least one Customer" for the onboarding checklist, regardless of
+     * {@code active}. EXISTS, not a list load / COUNT. */
+    boolean existsByCompanyId(UUID companyId);
 }
