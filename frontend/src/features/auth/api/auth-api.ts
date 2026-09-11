@@ -5,6 +5,7 @@ import {
   meResponseSchema,
   resetPasswordResponseSchema,
   type AuthResponse,
+  type AcceptTeamInvitationRequest,
   type ForgotPasswordRequest,
   type ForgotPasswordResponse,
   type LoginFormValues,
@@ -58,6 +59,20 @@ export async function acceptInvite(request: {
     method: "POST",
     body: JSON.stringify(request),
   });
+
+  return authResponseSchema.parse(response);
+}
+
+export async function acceptTeamInvitation(
+  request: AcceptTeamInvitationRequest,
+): Promise<AuthResponse> {
+  const response = await adminApiRequest<unknown>(
+    "/auth/team-invitations/accept",
+    {
+      method: "POST",
+      body: JSON.stringify(request),
+    },
+  );
 
   return authResponseSchema.parse(response);
 }

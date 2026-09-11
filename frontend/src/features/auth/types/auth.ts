@@ -108,6 +108,21 @@ export const resetPasswordResponseSchema = z.object({
   message: z.string(),
 });
 
+export const acceptTeamInvitationFormSchema = z
+  .object({
+    name: z
+      .string()
+      .trim()
+      .min(2, "Indique pelo menos 2 caracteres.")
+      .max(255, "Use no máximo 255 caracteres."),
+    password: passwordFieldSchema,
+    passwordConfirmation: z.string().min(1, "Confirme a senha."),
+  })
+  .refine((value) => value.password === value.passwordConfirmation, {
+    path: ["passwordConfirmation"],
+    message: "As senhas não coincidem.",
+  });
+
 export type AuthUserDto = z.infer<typeof authUserDtoSchema>;
 export type AuthCompanyDto = z.infer<typeof authCompanyDtoSchema>;
 export type UserRole = z.infer<typeof userRoleSchema>;
@@ -126,3 +141,11 @@ export type ResetPasswordRequest = {
   newPassword: string;
 };
 export type ResetPasswordResponse = z.infer<typeof resetPasswordResponseSchema>;
+export type AcceptTeamInvitationFormValues = z.infer<
+  typeof acceptTeamInvitationFormSchema
+>;
+export type AcceptTeamInvitationRequest = {
+  token: string;
+  name: string;
+  password: string;
+};
