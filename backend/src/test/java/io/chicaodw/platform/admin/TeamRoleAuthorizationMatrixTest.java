@@ -362,6 +362,15 @@ class TeamRoleAuthorizationMatrixTest extends AbstractAdminIntegrationTest {
                 .andExpect(status().is(expectedStatus));
     }
 
+    // ── Onboarding (DT-018A — derived status, OWNER-only) ───────────────────────
+
+    @ParameterizedTest(name = "{0} on GET /onboarding/status -> {1}")
+    @CsvSource({"OWNER,200", "MANAGER,403", "MEMBER,403", "SUPER_ADMIN,403"})
+    void onboardingStatus_matrix(String roleName, int expectedStatus) throws Exception {
+        mockMvc.perform(get("/onboarding/status").header("Authorization", "Bearer " + tokenFor(roleName)))
+                .andExpect(status().is(expectedStatus));
+    }
+
     @Test
     void crossTenant_roleChangeOfAnotherCompanysMember_isNotFound() throws Exception {
         RegisteredOwner ownerB = registerOwner();

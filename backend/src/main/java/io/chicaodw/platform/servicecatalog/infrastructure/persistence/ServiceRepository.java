@@ -19,5 +19,10 @@ public interface ServiceRepository extends JpaRepository<Service, UUID> {
 
     boolean existsByCompanyIdAndSlug(UUID companyId, String slug);
 
+    /** DT-018A — "has at least one Service" for the onboarding checklist, regardless of
+     * {@code active}: a since-deactivated Service is still evidence the OWNER completed
+     * this step once. EXISTS, not a list load / COUNT. */
+    boolean existsByCompanyId(UUID companyId);
+
     List<Service> findByCompanyIdAndActiveTrueOrderByDisplayOrderAsc(UUID companyId);
 }

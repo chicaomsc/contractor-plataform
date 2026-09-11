@@ -18,6 +18,10 @@ public interface EstimateRepository extends JpaRepository<Estimate, UUID> {
 
     boolean existsByCompanyIdAndCustomerId(UUID companyId, UUID customerId);
 
+    /** DT-018A — "has at least one Estimate" for the onboarding checklist, any status
+     * (DRAFT counts). EXISTS, not a list load / COUNT. */
+    boolean existsByCompanyId(UUID companyId);
+
     /** Fetch-joins items to avoid N+1 on the detail endpoint; materials load lazily (still a single extra query). */
     @Query("""
             select distinct e from Estimate e
